@@ -1,0 +1,672 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum AuthProvider {
+  GOOGLE
+  TELEGRAM
+  LOCAL_DEV
+}
+
+enum EnrollmentStatus {
+  PENDING_CLAIM
+  CLAIMED
+  VERIFIED
+  ARCHIVED
+}
+
+enum SourceType {
+  OFFICIAL_DOCUMENT
+  TEACHER_STATEMENT
+  HEADMAN_RECORD
+  CLASS_SESSION
+  TRANSCRIPT_SEGMENT
+  STUDENT_PERSONAL
+}
+
+enum ConfidenceLevel {
+  CONFIRMED
+  INFERRED
+  DISPUTED
+}
+
+enum TeacherCourseStatus {
+  CONFIRMED
+  CANDIDATE_UNVERIFIED
+  DISPUTED
+}
+
+enum TaskType {
+  LABORATORY
+  HOMEWORK
+  EXERCISE
+  CALCULATION_WORK
+  PRACTICAL
+  COURSEWORK
+  TEST
+  EXAM_PREPARATION
+  CREATIVE_WORK
+  OPTIONAL
+  OTHER
+}
+
+enum TaskStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+  CANCELLED
+}
+
+enum TaskAudienceType {
+  ALL_COURSE
+  GROUP
+  SUBGROUP
+  INDIVIDUAL
+}
+
+enum DeadlineType {
+  HARD
+  SOFT
+}
+
+enum DeadlineStatus {
+  ACTIVE
+  POSTPONED
+  SUPERSEDED
+  CANCELLED
+}
+
+enum StudentTaskProgressStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  READY
+  SUBMITTED
+  ACCEPTED
+  NEEDS_FIX
+}
+
+enum CalendarSyncStatus {
+  PENDING
+  SYNCED
+  FAILED
+}
+
+enum MaterialType {
+  FILE
+  EXTERNAL_LINK
+  METHODOLOGY
+  TEXTBOOK
+  PRESENTATION
+  ASSIGNMENT_SPEC
+  TRANSCRIPT
+  RECORDING_LINK
+  SOURCE_CODE
+  OTHER
+}
+
+enum SessionType {
+  LECTURE
+  PRACTICE
+  LAB
+  ORGANIZATIONAL
+  OTHER
+}
+
+model User {
+  id            String         @id @default(uuid())
+  nickname      String         @unique
+  avatarUrl     String?
+  bio           String?
+  isSystemAdmin Boolean        @default(false)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  identities    AuthIdentity[]
+  sessions      Session[]
+  memberships   GroupMember[]
+  enrollments   Enrollment[]
+  progress      StudentTaskProgress[]
+  createdTasks  Task[]         @relation("TaskCreatedBy")
+  updatedTasks  Task[]         @relation("TaskUpdatedBy")
+  deadlines     Deadline[]     @relation("DeadlineCreatedBy")
+  announcements Announcement[] @relation("AnnouncementAuthor")
+  auditLogs     AuditLog[]
+  securityLogs  SecurityAccessLog[]
+  sourceRefs    SourceReference[]
+  verifiedProgress StudentTaskProgress[] @relation("ProgressVerifiedBy")
+  verifiedEnrollments Enrollment[]       @relation("EnrollmentVerifiedBy")
+}
+
+model AuthIdentity {
+  id             String       @id @default(uuid())
+  userId         String
+  provider       AuthProvider
+  providerUserId String
+  email          String?
+  metadata       Json         @default("{}")
+  createdAt      DateTime     @default(now())
+
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerUserId])
+  @@index([userId])
+}
+
+model Session {
+  id         String   @id @default(uuid())
+  userId     String
+  tokenHash  String   @unique
+  expiresAt  DateTime
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model StudyGroup {
+  id           String               @id @default(uuid())
+  code         String               @unique
+  name         String
+  department   String?
+  program      String?
+  calendarId   String?
+  createdAt    DateTime             @default(now())
+
+  members      GroupMember[]
+  enrollments  Enrollment[]
+  courses      CourseOfferingGroup[]
+  announcements Announcement[]
+  sources      Source[]
+  audiences    TaskAudience[]
+  roles        Role[]
+}
+
+model Enrollment {
+  id              String           @id @default(uuid())
+  groupId         String
+  userId          String?
+  fullName        String
+  subgroup        Int?
+  studentIdNumber String?
+  status          EnrollmentStatus @default(PENDING_CLAIM)
+  claimToken      String?          @unique
+  verifiedById    String?
+  verifiedAt      DateTime?
+  createdAt       DateTime         @default(now())
+
+  group           StudyGroup       @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user            User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
+  verifiedBy      User?            @relation("EnrollmentVerifiedBy", fields: [verifiedById], references: [id], onDelete: SetNull)
+  variants        VariantAssignment[]
+  audiences       TaskAudience[]
+
+  @@unique([groupId, fullName])
+  @@unique([groupId, userId])
+  @@index([groupId])
+  @@index([userId])
+}
+
+model GroupMember {
+  id        String          @id @default(uuid())
+  groupId   String
+  userId    String
+  isOwner   Boolean         @default(false)
+  joinedAt  DateTime        @default(now())
+
+  group     StudyGroup      @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userRoles UserGroupRole[]
+
+  @@unique([groupId, userId])
+  @@index([groupId])
+  @@index([userId])
+}
+
+model Role {
+  id          String           @id @default(uuid())
+  groupId     String
+  name        String
+  isDefault   Boolean          @default(false)
+
+  group       StudyGroup       @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  permissions RolePermission[]
+  userRoles   UserGroupRole[]
+
+  @@unique([groupId, name])
+  @@index([groupId])
+}
+
+model RolePermission {
+  id         String   @id @default(uuid())
+  roleId     String
+  permission String
+
+  role       Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permission])
+  @@index([roleId])
+}
+
+model UserGroupRole {
+  id            String      @id @default(uuid())
+  groupMemberId String
+  roleId        String
+
+  groupMember   GroupMember @relation(fields: [groupMemberId], references: [id], onDelete: Cascade)
+  role          Role        @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([groupMemberId, roleId])
+  @@index([groupMemberId])
+  @@index([roleId])
+}
+
+model Semester {
+  id        String           @id @default(uuid())
+  name      String
+  number    Int
+  startDate DateTime
+  endDate   DateTime
+  isCurrent Boolean          @default(true)
+
+  offerings CourseOffering[]
+}
+
+model CourseDefinition {
+  id          String           @id @default(uuid())
+  code        String           @unique
+  title       String
+  shortTitle  String
+  description String?
+
+  offerings   CourseOffering[]
+}
+
+model Teacher {
+  id        String          @id @default(uuid())
+  fullName  String
+  email     String?
+  telegram  String?
+  notes     String?
+  createdAt DateTime        @default(now())
+
+  courses   CourseTeacher[]
+  sessions  ClassSession[]
+  sources   Source[]
+}
+
+model CourseOffering {
+  id                 String                @id @default(uuid())
+  courseDefinitionId String
+  semesterId         String
+  format             String?
+  creditCondition    String?
+  softwareRequired   String?
+  status             String                @default("ACTIVE")
+  createdAt          DateTime              @default(now())
+
+  courseDefinition   CourseDefinition      @relation(fields: [courseDefinitionId], references: [id], onDelete: Cascade)
+  semester           Semester              @relation(fields: [semesterId], references: [id], onDelete: Cascade)
+  groups             CourseOfferingGroup[]
+  teachers           CourseTeacher[]
+  tasks              Task[]
+  deadlines          Deadline[]
+  materials          CourseMaterial[]
+  sessions           ClassSession[]
+  announcements      Announcement[]
+
+  @@index([courseDefinitionId])
+  @@index([semesterId])
+}
+
+model CourseOfferingGroup {
+  id               String         @id @default(uuid())
+  courseOfferingId String
+  groupId          String
+
+  courseOffering   CourseOffering @relation(fields: [courseOfferingId], references: [id], onDelete: Cascade)
+  group            StudyGroup     @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@unique([courseOfferingId, groupId])
+  @@index([courseOfferingId])
+  @@index([groupId])
+}
+
+model CourseTeacher {
+  id                String              @id @default(uuid())
+  courseOfferingId  String
+  teacherId         String
+  role              String?
+  status            TeacherCourseStatus @default(CONFIRMED)
+  sourceReferenceId String?
+  notes             String?
+
+  courseOffering    CourseOffering      @relation(fields: [courseOfferingId], references: [id], onDelete: Cascade)
+  teacher           Teacher             @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  sourceReference   SourceReference?    @relation(fields: [sourceReferenceId], references: [id], onDelete: SetNull)
+
+  @@index([courseOfferingId])
+  @@index([teacherId])
+}
+
+model Source {
+  id               String            @id @default(uuid())
+  groupId          String
+  type             SourceType
+  title            String
+  url              String?
+  documentMetadata Json              @default("{}")
+  teacherId        String?
+  classSessionId   String?
+  transcriptId     String?
+  createdAt        DateTime          @default(now())
+
+  group            StudyGroup        @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  teacher          Teacher?          @relation(fields: [teacherId], references: [id], onDelete: SetNull)
+  classSession     ClassSession?     @relation(fields: [classSessionId], references: [id], onDelete: SetNull)
+  transcript       Transcript?       @relation(fields: [transcriptId], references: [id], onDelete: SetNull)
+  references       SourceReference[]
+
+  @@index([groupId])
+}
+
+model SourceReference {
+  id          String          @id @default(uuid())
+  sourceId    String
+  entityType  String
+  entityId    String
+  quoteText   String?
+  confidence  ConfidenceLevel @default(CONFIRMED)
+  offsetStart Int?
+  offsetEnd   Int?
+  createdById String?
+  createdAt   DateTime        @default(now())
+
+  source      Source          @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  createdBy   User?           @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  tasks       Task[]
+  deadlines   Deadline[]
+  teachers    CourseTeacher[]
+  announcements Announcement[]
+
+  @@index([sourceId])
+  @@index([entityType, entityId])
+}
+
+model Task {
+  id                String           @id @default(uuid())
+  courseOfferingId  String
+  title             String
+  description       String?
+  type              TaskType
+  number            Int?
+  status            TaskStatus       @default(PUBLISHED)
+  sourceReferenceId String?
+  gradingMetadata   Json             @default("{}")
+  createdById       String
+  updatedById       String
+  publishedAt       DateTime         @default(now())
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  courseOffering    CourseOffering   @relation(fields: [courseOfferingId], references: [id], onDelete: Cascade)
+  createdBy         User             @relation("TaskCreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
+  updatedBy         User             @relation("TaskUpdatedBy", fields: [updatedById], references: [id], onDelete: Cascade)
+  sourceReference   SourceReference? @relation(fields: [sourceReferenceId], references: [id], onDelete: SetNull)
+  
+  audiences         TaskAudience[]
+  variants          TaskVariant[]
+  deadlines         Deadline[]
+  progress          StudentTaskProgress[]
+  materials         TaskMaterial[]
+  dependencies      TaskDependency[] @relation("TaskRequires")
+  dependentOn       TaskDependency[] @relation("TaskIsRequiredBy")
+
+  @@index([courseOfferingId])
+  @@index([status])
+}
+
+model TaskAudience {
+  id             String           @id @default(uuid())
+  taskId         String
+  targetType     TaskAudienceType @default(GROUP)
+  groupId        String?
+  subgroupNumber Int?
+  enrollmentId   String?
+
+  task           Task             @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  group          StudyGroup?      @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  enrollment     Enrollment?      @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+}
+
+model TaskVariant {
+  id            String              @id @default(uuid())
+  taskId        String
+  variantNumber String
+  title         String?
+  spec          Json                @default("{}")
+  sourceUrl     String?
+
+  task          Task                @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  assignments   VariantAssignment[]
+  progress      StudentTaskProgress[]
+
+  @@unique([taskId, variantNumber])
+  @@index([taskId])
+}
+
+model VariantAssignment {
+  id            String      @id @default(uuid())
+  taskVariantId String
+  enrollmentId  String
+  assignedBy    String      @default("HEADMAN")
+  assignedAt    DateTime    @default(now())
+
+  taskVariant   TaskVariant @relation(fields: [taskVariantId], references: [id], onDelete: Cascade)
+  enrollment    Enrollment  @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+
+  @@unique([taskVariantId, enrollmentId])
+  @@index([taskVariantId])
+  @@index([enrollmentId])
+}
+
+model Deadline {
+  id                 String                 @id @default(uuid())
+  taskId             String
+  courseOfferingId   String
+  title              String?
+  type               DeadlineType           @default(HARD)
+  date               DateTime
+  isTimeStrict       Boolean                @default(false)
+  status             DeadlineStatus         @default(ACTIVE)
+  originalDeadlineId String?
+  sourceReferenceId  String?
+  createdById        String
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+
+  task               Task                   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  courseOffering     CourseOffering         @relation(fields: [courseOfferingId], references: [id], onDelete: Cascade)
+  createdBy          User                   @relation("DeadlineCreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
+  sourceReference    SourceReference?       @relation(fields: [sourceReferenceId], references: [id], onDelete: SetNull)
+  originalDeadline   Deadline?              @relation("DeadlineHistory", fields: [originalDeadlineId], references: [id], onDelete: SetNull)
+  rescheduledDeadlines Deadline[]           @relation("DeadlineHistory")
+  calendarEvents     ExternalCalendarEvent[]
+
+  @@index([taskId])
+  @@index([courseOfferingId])
+  @@index([date])
+}
+
+model ExternalCalendarEvent {
+  id              String             @id @default(uuid())
+  deadlineId      String
+  integrationType String             @default("GOOGLE_CALENDAR")
+  calendarId      String
+  externalEventId String
+  syncStatus      CalendarSyncStatus @default(SYNCED)
+  lastSyncedAt    DateTime           @default(now())
+  lastError       String?
+
+  deadline        Deadline           @relation(fields: [deadlineId], references: [id], onDelete: Cascade)
+
+  @@unique([calendarId, externalEventId])
+  @@index([deadlineId])
+}
+
+model StudentTaskProgress {
+  id                 String                    @id @default(uuid())
+  taskId             String
+  userId             String
+  taskVariantId      String?
+  status             StudentTaskProgressStatus @default(NOT_STARTED)
+  isVerified         Boolean                   @default(false)
+  verifiedById       String?
+  verifiedAt         DateTime?
+  verificationSource String?
+  studentNotes       String?
+  submittedAt        DateTime?
+  acceptedAt         DateTime?
+  updatedAt          DateTime                  @updatedAt
+
+  task               Task                      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user               User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  taskVariant        TaskVariant?              @relation(fields: [taskVariantId], references: [id], onDelete: SetNull)
+  verifiedBy         User?                     @relation("ProgressVerifiedBy", fields: [verifiedById], references: [id], onDelete: SetNull)
+
+  @@unique([taskId, userId])
+  @@index([taskId])
+  @@index([userId])
+}
+
+model TaskDependency {
+  id              String @id @default(uuid())
+  taskId          String
+  dependsOnTaskId String
+
+  task            Task   @relation("TaskRequires", fields: [taskId], references: [id], onDelete: Cascade)
+  dependsOn       Task   @relation("TaskIsRequiredBy", fields: [dependsOnTaskId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, dependsOnTaskId])
+}
+
+model CourseMaterial {
+  id               String         @id @default(uuid())
+  courseOfferingId String
+  title            String
+  type             MaterialType
+  url              String
+  description      String?
+  fileSize         BigInt?
+  createdAt        DateTime       @default(now())
+
+  courseOffering   CourseOffering @relation(fields: [courseOfferingId], references: [id], onDelete: Cascade)
+  tasks            TaskMaterial[]
+
+  @@index([courseOfferingId])
+}
+
+model TaskMaterial {
+  id         String         @id @default(uuid())
+  taskId     String
+  materialId String
+
+  task       Task           @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  material   CourseMaterial @relation(fields: [materialId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, materialId])
+}
+
+model ClassSession {
+  id               String         @id @default(uuid())
+  courseOfferingId String
+  sessionDate      DateTime
+  type             SessionType
+  topic            String?
+  room             String?
+  notes            String?
+  teacherId        String?
+
+  courseOffering   CourseOffering @relation(fields: [courseOfferingId], references: [id], onDelete: Cascade)
+  teacher          Teacher?       @relation(fields: [teacherId], references: [id], onDelete: SetNull)
+  transcripts      Transcript[]
+  sources          Source[]
+
+  @@index([courseOfferingId])
+}
+
+model Transcript {
+  id             String       @id @default(uuid())
+  sessionId      String
+  rawText        String
+  audioSourceUrl String?
+  recordingPart  Int          @default(1)
+  createdAt      DateTime     @default(now())
+
+  session        ClassSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  sources        Source[]
+
+  @@index([sessionId])
+}
+
+model Announcement {
+  id                String           @id @default(uuid())
+  groupId           String
+  courseOfferingId  String?
+  title             String
+  content           String
+  isPinned          Boolean          @default(false)
+  priority          String           @default("NORMAL")
+  sourceReferenceId String?
+  authorId          String
+  publishedAt       DateTime         @default(now())
+
+  group             StudyGroup       @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  courseOffering    CourseOffering?  @relation(fields: [courseOfferingId], references: [id], onDelete: SetNull)
+  author            User             @relation("AnnouncementAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  sourceReference   SourceReference? @relation(fields: [sourceReferenceId], references: [id], onDelete: SetNull)
+
+  @@index([groupId])
+  @@index([courseOfferingId])
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String?
+  action     String
+  entityType String
+  entityId   String
+  details    Json     @default("{}")
+  createdAt  DateTime @default(now())
+
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([entityType, entityId])
+}
+
+model SecurityAccessLog {
+  id        String   @id @default(uuid())
+  userId    String?
+  event     String
+  path      String
+  method    String
+  ipAddress String?
+  userAgent String?
+  details   Json     @default("{}")
+  createdAt DateTime @default(now())
+
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([event])
+}

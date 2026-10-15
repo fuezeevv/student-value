@@ -10,7 +10,7 @@ erDiagram
     User ||--o{ AuthIdentity : "способы входа"
     User ||--o{ Session : "активные сессии"
     User ||--o{ GroupMember : "членство в группе"
-    User ||--o| Enrollment : "привязанная запись ведомости"
+    User ||--o{ Enrollment : "записи в ведомостях групп"
     User ||--o{ StudentTaskProgress : "личный прогресс"
     User ||--o{ AuditLog : "автор изменений"
 
