@@ -3,36 +3,50 @@
 
 ---
 
-## 1. Диаграмма сущностей и связей (ER Diagram)
+## 1. Обновленная диаграмма сущностей и связей (ER Diagram)
 
 ```mermaid
 erDiagram
-    User ||--o{ AuthIdentity : "имеет способы входа"
-    User ||--o{ GroupMember : "состоит в группе"
-    User ||--o{ Enrollment : "привязан к списку"
+    User ||--o{ AuthIdentity : "способы входа"
+    User ||--o{ Session : "активные сессии"
+    User ||--o{ GroupMember : "членство в группе"
+    User ||--o| Enrollment : "привязанная запись ведомости"
     User ||--o{ StudentTaskProgress : "личный прогресс"
-    User ||--o{ XpEvent : "история XP"
-    User ||--o| UserGamificationProfile : "геймификация"
-    User ||--o{ AuditLog : "действие"
+    User ||--o{ AuditLog : "автор изменений"
 
     StudyGroup ||--o{ GroupMember : "участники"
     StudyGroup ||--o{ Enrollment : "список группы"
     StudyGroup ||--o{ CourseOfferingGroup : "потоки курсов"
     StudyGroup ||--o{ Announcement : "объявления"
+    StudyGroup ||--o{ Source : "источники данных"
 
     Semester ||--o{ CourseOffering : "курсы семестра"
     CourseDefinition ||--o{ CourseOffering : "реализации курса"
     CourseOffering ||--o{ CourseOfferingGroup : "группы курса"
-    CourseOffering ||--o{ CourseTeacher : "преподаватели"
+    CourseOffering ||--o{ CourseTeacher : "преподаватели курса"
     CourseOffering ||--o{ Task : "задания"
+    CourseOffering ||--o{ Deadline : "дедлайны"
     CourseOffering ||--o{ CourseMaterial : "материалы"
     CourseOffering ||--o{ ClassSession : "занятия"
 
-    Teacher ||--o{ CourseTeacher : "ведет курс"
+    Teacher ||--o{ CourseTeacher : "преподает"
     
+    Task ||--o{ TaskAudience : "целевая аудитория"
+    Task ||--o{ TaskVariant : "варианты задания"
+    Task ||--o{ Deadline : "сроки сдачи"
     Task ||--o{ StudentTaskProgress : "прогресс студентов"
     Task ||--o{ TaskMaterial : "материалы задачи"
     Task ||--o{ TaskDependency : "зависимости"
+
+    TaskVariant ||--o{ VariantAssignment : "назначения студентам"
+    Enrollment ||--o{ VariantAssignment : "вариант студента"
+
+    Deadline ||--o{ ExternalCalendarEvent : "календарные события"
+
+    Source ||--o{ SourceReference : "фрагменты / цитаты"
+    SourceReference ||--o{ Task : "подтверждение задачи"
+    SourceReference ||--o{ Deadline : "подтверждение срока"
+    SourceReference ||--o{ CourseTeacher : "подтверждение роли"
 
     Role ||--o{ RolePermission : "состав прав"
     GroupMember ||--o{ UserGroupRole : "назначенные роли"
@@ -51,67 +65,80 @@ enum AuthProvider {
 }
 
 enum EnrollmentStatus {
-  PENDING_CLAIM    // В списке группы, но пользователь еще не зарегистрировался
-  ACTIVE           // Активный подтвержденный студент группы
+  PENDING_CLAIM    // Запись в ведомости группы, аккаунт еще не привязан
+  CLAIMED          // Привязан студентом, ожидает проверки старостой
+  VERIFIED         // Официально подтвержденное соответствие студента
   ARCHIVED         // Отчислен / переведен
 }
 
-enum ProvenanceSource {
-  OFFICIAL           // Официальный университетский документ / методичка
-  TEACHER            // Слова или сообщение преподавателя
-  HEADMAN_CONFIRMED  // Подтверждено старостой
-  INFERRED           // Выведено системой эвристически
-  PERSONAL           // Личная заметка студента
+enum SourceType {
+  OFFICIAL_DOCUMENT   // Приказ, методическое пособие, учебный план, ведомость
+  TEACHER_STATEMENT   // Сообщение, письмо, слова преподавателя на занятии
+  HEADMAN_RECORD      // Запись и фиксация старостой
+  CLASS_SESSION       // Протокол учебного занятия
+  TRANSCRIPT_SEGMENT  // Фрагмент аудиозаписи / транскрипта
+  STUDENT_PERSONAL    // Персональная рабочая заметка студента
+}
+
+enum ConfidenceLevel {
+  CONFIRMED           // Достоверно подтвержденный факт
+  INFERRED            // Выведено эвристически / системой
+  DISPUTED            // Спорный / конфликтующий факт
+}
+
+enum TeacherCourseStatus {
+  CONFIRMED           // Подтвержденный преподаватель курса
+  CANDIDATE_UNVERIFIED// Кандидат (требует уточнения)
+  DISPUTED            // Конфликт данных (например, СОВД: Семенов vs Кадргулов)
 }
 
 enum TaskType {
-  LABORATORY         // Лабораторная работа
-  HOMEWORK           // Домашнее задание
-  EXERCISE           // Упражнение на паре
-  CALCULATION_WORK   // Расчетная работа (РР / РГР)
-  PRACTICAL          // Практическое задание
-  COURSEWORK         // Курсовая работа / проект
-  TEST               // Контрольная работа / тест
-  EXAM_PREPARATION   // Подготовка к зачету/экзамену
-  CREATIVE_WORK      // Творческое задание
-  OPTIONAL           // Факультативное задание
-  OTHER              // Прочее
+  LABORATORY          // Лабораторная работа
+  HOMEWORK            // Домашнее задание
+  EXERCISE            // Упражнение на паре
+  CALCULATION_WORK    // Расчетная работа (РР / РГР)
+  PRACTICAL           // Практическое задание
+  COURSEWORK          // Курсовая работа / проект
+  TEST                // Контрольная работа / тест
+  EXAM_PREPARATION    // Подготовка к зачету/экзамену
+  CREATIVE_WORK       // Творческое задание
+  OPTIONAL            // Факультативное задание
+  OTHER               // Прочее
 }
 
 enum TaskStatus {
-  DRAFT              // Черновик (виден только администраторам)
-  PUBLISHED          // Опубликовано (доступно студентам)
-  ARCHIVED           // Архивировано
+  DRAFT               // Черновик (виден только администраторам)
+  PUBLISHED           // Опубликовано (доступно студентам)
+  ARCHIVED            // Архивировано
+  CANCELLED           // Отменено преподавателем
 }
 
-enum ProgressStatus {
-  NOT_STARTED        // Не начато
-  IN_PROGRESS        // В процессе выполнения
-  READY              // Сделано, готово к сдаче/демонстрации
-  SUBMITTED          // Сдано / отправлен отчет
-  ACCEPTED           // Защищено / принято преподавателем
-  NEEDS_FIX          // Требуются правки/доработка
+enum TaskAudienceType {
+  ALL_COURSE          // Все студенты курса
+  GROUP               // Конкретная учебная группа (например, только 40102)
+  SUBGROUP            // Конкретная подгруппа (подгруппа 1 или 2)
+  INDIVIDUAL          // Индивидуальные студенты
 }
 
-enum MaterialType {
-  FILE               // Локальный/загруженный файл
-  EXTERNAL_LINK      // Внешняя ссылка (Google Drive, сайт)
-  METHODOLOGY        // Методические указания
-  TEXTBOOK           // Учебник / пособие
-  PRESENTATION       // Презентация / слайды
-  ASSIGNMENT_SPEC    // Условие задания
-  TRANSCRIPT         // Транскрипт аудиозаписи
-  RECORDING_LINK     // Ссылка на аудио/видео
-  SOURCE_CODE        // Исходный код / репозиторий
-  OTHER              // Прочее
+enum DeadlineType {
+  HARD                // Жесткий дедлайн (после него прием закрыт/штраф)
+  SOFT                // Рекомендуемый / ориентировочный срок
 }
 
-enum SessionType {
-  LECTURE            // Лекция
-  PRACTICE           // Практика
-  LAB                // Лабораторное занятие
-  ORGANIZATIONAL     // Организационное собрание
-  OTHER              // Прочее
+enum DeadlineStatus {
+  ACTIVE              // Действующий срок
+  POSTPONED           // Перенесен преподавателем
+  SUPERSEDED          // Заменен новым дедлайном
+  CANCELLED           // Срок отменен
+}
+
+enum StudentTaskProgressStatus {
+  NOT_STARTED         // Не начато
+  IN_PROGRESS         // В работе
+  READY               // Готово к сдаче/демонстрации
+  SUBMITTED           // Сдано / отчет отправлен (Self-Reported)
+  ACCEPTED            // Принято / защищено (Verified)
+  NEEDS_FIX           // Возвращено на доработку
 }
 
 enum CalendarSyncStatus {
@@ -119,93 +146,103 @@ enum CalendarSyncStatus {
   SYNCED
   FAILED
 }
-
-enum AiSuggestionStatus {
-  PENDING            // Ожидает проверки старостой
-  APPROVED           // Одобрено (создано задание/дедлайн)
-  EDITED             // Отредактировано и принято
-  REJECTED           // Отклонено старостой
-}
 ```
 
 ---
 
-## 3. Таблицы аутентификации, пользователей и приватности
+## 3. Таблицы аутентификации, сессий и пользователей
 
-### 3.1. `User` (Основной профиль пользователя)
+### 3.1. `User` (Профиль пользователя приложения)
 | Поле | Тип | Ограничения | Описание |
 |---|---|---|---|
 | `id` | UUID | PK, default `gen_random_uuid()` | Уникальный ID пользователя |
-| `nickname` | String(50) | Unique, Not Null | Публичный никнейм в системе |
+| `nickname` | String(50) | Unique, Not Null | Публичный никнейм в приложении |
 | `avatarUrl` | String | Nullable | URL аватара |
-| `bio` | String(255) | Nullable | Краткое описание профиля |
+| `bio` | String(255) | Nullable | Статус / био |
 | `isSystemAdmin` | Boolean | Default `false` | Глобальный системный администратор |
-| `createdAt` | TimestampTZ | Default `now()` | Дата регистрации |
-| `updatedAt` | TimestampTZ | Auto update | Дата обновления профиля |
+| `createdAt` | TimestampTZ | Default `now()` | Дата создания |
+| `updatedAt` | TimestampTZ | Auto update | Дата обновления |
 
-### 3.2. `AuthIdentity` (Способы входа)
+### 3.2. `AuthIdentity` (Способы входа пользователя)
 | Поле | Тип | Ограничения | Описание |
 |---|---|---|---|
 | `id` | UUID | PK | Уникальный ID связи |
-| `userId` | UUID | FK $\to$ `User.id`, Cascade | Владелец учетной записи |
-| `provider` | `AuthProvider` | Not Null | Провайдер (`GOOGLE`, `TELEGRAM`, `LOCAL_DEV`) |
-| `providerUserId` | String | Not Null | ID пользователя во внешней системе |
-| `email` | String | Nullable | Приватный email (для Google) |
-| `metadata` | JSONB | Default `{}` | Данные токена / хэши / телефон |
+| `userId` | UUID | FK $\to$ `User.id`, Cascade | Пользователь |
+| `provider` | `AuthProvider` | Not Null | `GOOGLE`, `TELEGRAM`, `LOCAL_DEV` |
+| `providerUserId` | String | Not Null | Уникальный ID провайдера (Google sub, Telegram id) |
+| `email` | String | Nullable | Email (только от Google, приватный) |
+| `metadata` | JSONB | Default `{}` | Данные Telegram username, auth_date, хэш |
 | `createdAt` | TimestampTZ | Default `now()` | Дата привязки |
 *Индекс:* `UNIQUE(provider, providerUserId)`
 
-### 3.3. `StudyGroup` (Учебная группа)
+### 3.3. `Session` (Серверные сессии пользователей)
 | Поле | Тип | Ограничения | Описание |
 |---|---|---|---|
-| `id` | UUID | PK | Уникальный ID группы |
-| `code` | String(50) | Unique, Not Null | Номер группы (например, `5130901/40102`) |
-| `name` | String(100) | Not Null | Название группы |
-| `department` | String(100) | Nullable | Институт/кафедра (ИКНК) |
-| `program` | String(100) | Nullable | Направление (09.03.01 ИВТ) |
-| `calendarId` | String | Nullable | Google Calendar ID общей группы |
-| `createdAt` | TimestampTZ | Default `now()` | Дата создания |
+| `id` | UUID | PK | ID сессии |
+| `userId` | UUID | FK $\to$ `User.id`, Cascade | Пользователь сессии |
+| `tokenHash` | String | Unique, Not Null | SHA-256 хэш сессионного токена |
+| `expiresAt` | TimestampTZ | Not Null | Срок действия куки |
+| `ipAddress` | String | Nullable | IP клиента |
+| `userAgent` | String | Nullable | Браузер/устройство |
+| `createdAt` | TimestampTZ | Default `now()` | Дата входа |
 
-### 3.4. `Enrollment` (Студенческий список группы)
+---
+
+## 4. Разделение Enrollment и GroupMember (Приватность и ведомость)
+
+### 4.1. `StudyGroup` (Учебная группа)
+- `id` (UUID, PK)
+- `code` (String(50), Unique: e.g. `5130901/40102`)
+- `name` (String(100))
+- `department` (String(100), e.g. `ИКНК`)
+- `program` (String(100), e.g. `09.03.01 Информатика и вычислительная техника`)
+- `calendarId` (String, Nullable: Google Calendar ID группы)
+- `createdAt` (TimestampTZ, default `now()`)
+
+### 4.2. `Enrollment` (Академическая ведомость группы)
 | Поле | Тип | Ограничения | Описание |
 |---|---|---|---|
-| `id` | UUID | PK | Уникальный ID записи |
-| `groupId` | UUID | FK $\to$ `StudyGroup.id`, Cascade | Учебная группа |
-| `userId` | UUID | FK $\to$ `User.id`, Nullable | Связанный пользователь после регистрации |
+| `id` | UUID | PK | Уникальный ID записи ведомости |
+| `groupId` | UUID | FK $\to$ `StudyGroup.id`, Cascade | Группа |
+| `userId` | UUID | FK $\to$ `User.id`, Nullable | Привязанный профиль студента |
 | `fullName` | String(150) | Not Null | Реальное ФИО студента (защищенные ПДн) |
 | `subgroup` | Int | Nullable | Номер подгруппы (1 или 2) |
 | `studentIdNumber` | String(50) | Nullable | Номер студенческого билета / зачетки |
-| `status` | `EnrollmentStatus` | Default `PENDING_CLAIM` | Статус связывания |
-| `inviteToken` | String | Unique, Nullable | Токен одноразового безопасного клейма |
-*Индекс:* `UNIQUE(groupId, fullName)`
+| `status` | `EnrollmentStatus` | Default `PENDING_CLAIM` | Статус привязки |
+| `claimToken` | String | Unique, Nullable | Одноразовый инвайт-токен привязки |
+| `verifiedById` | UUID | FK $\to$ `User.id`, Nullable | Кто подтвердил соответствие (староста) |
+| `verifiedAt` | TimestampTZ | Nullable | Время подтверждения |
+| `createdAt` | TimestampTZ | Default `now()` | Дата создания |
+*Инвариант:* `UNIQUE(groupId, fullName)`  
+*Инвариант 1:1:* `UNIQUE(groupId, userId)` (для записей, где `userId IS NOT NULL`)
 
-### 3.5. `GroupMember` (Членство в группе)
+### 4.3. `GroupMember` (Участие User в пространстве приложения)
 | Поле | Тип | Ограничения | Описание |
 |---|---|---|---|
 | `id` | UUID | PK | Уникальный ID членства |
 | `groupId` | UUID | FK $\to$ `StudyGroup.id`, Cascade | Группа |
-| `userId` | UUID | FK $\to$ `User.id`, Cascade | Пользователь |
-| `isOwner` | Boolean | Default `false` | Владелец группы (Расул) |
+| `userId` | UUID | FK $\to$ `User.id`, Cascade | Пользователь приложения |
+| `isOwner` | Boolean | Default `false` | Статус владельца пространства (Расул) |
 | `joinedAt` | TimestampTZ | Default `now()` | Дата вступления |
 *Индекс:* `UNIQUE(groupId, userId)`
 
 ---
 
-## 4. Таблицы RBAC (Роли и динамические полномочия)
+## 5. Роли и динамические полномочия (RBAC)
 
-### 4.1. `Role`
+### 5.1. `Role`
 - `id` (UUID, PK)
-- `groupId` (UUID, FK $\to$ `StudyGroup.id`)
-- `name` (String, например: `Admin`, `CourseManager`, `Student`)
-- `isDefault` (Boolean) — выдается ли автоматически новым студентам
+- `groupId` (UUID, FK $\to$ `StudyGroup.id`, Cascade)
+- `name` (String: `Admin`, `CourseManager`, `Student`, `Guest`)
+- `isDefault` (Boolean, default `false`)
 
-### 4.2. `RolePermission`
+### 5.2. `RolePermission`
 - `id` (UUID, PK)
 - `roleId` (UUID, FK $\to$ `Role.id`, Cascade)
-- `permission` (String, Not Null) — строка права (`manage_tasks`, `manage_deadlines`, `manage_course:<courseOfferingId>`, etc.)
+- `permission` (String, Not Null) — e.g. `manage_tasks`, `manage_deadlines`, `manage_materials`, `manage_announcements`, `verify_progress`, `view_private_member_identity`, `manage_course:<offeringId>`
 *Индекс:* `UNIQUE(roleId, permission)`
 
-### 4.3. `UserGroupRole`
+### 5.3. `UserGroupRole`
 - `id` (UUID, PK)
 - `groupMemberId` (UUID, FK $\to$ `GroupMember.id`, Cascade)
 - `roleId` (UUID, FK $\to$ `Role.id`, Cascade)
@@ -213,198 +250,215 @@ enum AiSuggestionStatus {
 
 ---
 
-## 5. Учебный контур: семестры, курсы и преподаватели
+## 6. Двухуровневая модель источников (Source & SourceReference)
 
-### 5.1. `Semester`
+### 6.1. `Source` (Первоисточник)
+| Поле | Тип | Ограничения | Описание |
+|---|---|---|---|
+| `id` | UUID | PK | Уникальный ID источника |
+| `groupId` | UUID | FK $\to$ `StudyGroup.id`, Cascade | Учебная группа |
+| `type` | `SourceType` | Not Null | Тип источника |
+| `title` | String(255) | Not Null | Название (e.g. «Методические указания ОТУ 2026») |
+| `url` | String | Nullable | Ссылка на документ/запись/диск |
+| `documentMetadata` | JSONB | Default `{}` | Страницы, издательство, реквизиты |
+| `teacherId` | UUID | FK $\to$ `Teacher.id`, Nullable | Преподаватель (если источник устный) |
+| `classSessionId` | UUID | FK $\to$ `ClassSession.id`, Nullable | Занятие (если сказано на паре) |
+| `transcriptId` | UUID | FK $\to$ `Transcript.id`, Nullable | Транскрипт аудиозаписи |
+| `createdAt` | TimestampTZ | Default `now()` | Дата фиксации |
+
+### 6.2. `SourceReference` (Цитата / ссылка на факт)
+| Поле | Тип | Ограничения | Описание |
+|---|---|---|---|
+| `id` | UUID | PK | Уникальный ID ссылки |
+| `sourceId` | UUID | FK $\to$ `Source.id`, Cascade | Первоисточник |
+| `entityType` | String(50) | Not Null | `TASK`, `DEADLINE`, `ANNOUNCEMENT`, `COURSE_TEACHER` |
+| `entityId` | UUID | Not Null | ID подтверждаемой сущности |
+| `quoteText` | Text | Nullable | Точная цитата / фрагмент текста |
+| `confidence` | `ConfidenceLevel`| Default `CONFIRMED` | Уровень достоверности |
+| `offsetStart` | Int | Nullable | Смещение символов / миллисекунд аудио |
+| `offsetEnd` | Int | Nullable | Конец смещения |
+| `createdById` | UUID | FK $\to$ `User.id` | Кто зафиксировал цитату |
+| `createdAt` | TimestampTZ | Default `now()` | Дата создания |
+
+---
+
+## 7. Дисциплины, преподаватели и занятия
+
+### 7.1. `Semester`
 - `id` (UUID, PK)
 - `name` (String, e.g. `Осенний семестр 2026`)
 - `number` (Int, e.g. `5`)
-- `startDate` (Date, e.g. `2026-09-01`)
-- `endDate` (Date, e.g. `2027-01-31`)
-- `isCurrent` (Boolean, default `true`)
+- `startDate` (Date), `endDate` (Date), `isCurrent` (Boolean)
 
-### 5.2. `CourseDefinition` (Дисциплина в принципе)
+### 7.2. `CourseDefinition` (Дисциплина в принципе)
 - `id` (UUID, PK)
-- `code` (String, e.g. `OTU`, `COMPILERS`, `FPGA`)
-- `title` (String, e.g. `Основы теории управления`)
-- `shortTitle` (String, e.g. `ОТУ`)
+- `code` (String, Unique: e.g. `OTU`, `COMPILERS`, `FPGA`, `SOVD`, `FORESIGHT`, `SYS_ANALYSIS`)
+- `title` (String, e.g. `Основы теории управления`, `Образовательный форсайт`)
+- `shortTitle` (String, e.g. `ОТУ`, `Форсайт`, `Системный анализ`)
 - `description` (Text, Nullable)
 
-### 5.3. `Teacher` (Преподаватель)
+### 7.3. `Teacher` (Персона преподавателя)
 - `id` (UUID, PK)
-- `fullName` (String, e.g. `Нестеров С.А.`, `Цыган Владимир Николаевич`)
+- `fullName` (String, e.g. `Нестеров С.А.`, `Цыган Владимир Николаевич`, `Семенов Константин Константинович`)
 - `email` (String, Nullable)
 - `telegram` (String, Nullable)
 - `notes` (Text, Nullable)
 
-### 5.4. `CourseOffering` (Проведение курса в семестре)
+### 7.4. `CourseOffering` (Проведение курса в семестре)
 - `id` (UUID, PK)
 - `courseDefinitionId` (UUID, FK $\to$ `CourseDefinition.id`)
 - `semesterId` (UUID, FK $\to$ `Semester.id`)
-- `format` (String, Nullable: `Очный`, `Дистанционный`, `Смешанный`)
-- `creditCondition` (Text, Nullable: условия зачета/экзамена)
-- `softwareRequired` (Text, Nullable: например `MATLAB/Simulink`, `Flex/Bison`, `Quartus Prime 18.1`)
+- `format` (String, Nullable: `Очный`, `Дистанционный`)
+- `creditCondition` (Text, Nullable)
+- `softwareRequired` (Text, Nullable)
 - `status` (String, default `ACTIVE`)
 
-### 5.5. `CourseOfferingGroup` (Связь проведения курса с группами)
+### 7.5. `CourseOfferingGroup`
 - `id` (UUID, PK)
 - `courseOfferingId` (UUID, FK $\to$ `CourseOffering.id`, Cascade)
 - `groupId` (UUID, FK $\to$ `StudyGroup.id`, Cascade)
 *Индекс:* `UNIQUE(courseOfferingId, groupId)`
 
-### 5.6. `CourseTeacher` (Связь курса и преподавателей)
-- `id` (UUID, PK)
-- `courseOfferingId` (UUID, FK $\to$ `CourseOffering.id`, Cascade)
-- `teacherId` (UUID, FK $\to$ `Teacher.id`, Cascade)
-- `role` (String, Nullable: `Лектор`, `Практик`, `Лабораторные работы`)
-- `isConflictCandidate` (Boolean, default `false`) — для ситуаций конфликта данных, например СОВД (Семенов vs Кадргулов)
+### 7.6. `CourseTeacher` (Преподавание курса с моделированием неопределенности)
+| Поле | Тип | Ограничения | Описание |
+|---|---|---|---|
+| `id` | UUID | PK | Уникальный ID связи |
+| `courseOfferingId` | UUID | FK $\to$ `CourseOffering.id`, Cascade | Курс |
+| `teacherId` | UUID | FK $\to$ `Teacher.id`, Cascade | Преподаватель |
+| `role` | String | Nullable | `Лектор`, `Лабораторные работы`, `Практик` |
+| `status` | `TeacherCourseStatus`| Default `CONFIRMED` | `CONFIRMED`, `CANDIDATE_UNVERIFIED`, `DISPUTED` |
+| `sourceReferenceId` | UUID | FK $\to$ `SourceReference.id`, Nullable | Ссылка на источник утверждения |
+| `notes` | Text | Nullable | Примечание о неопределенности (e.g. СОВД) |
 
 ---
 
-## 6. Задания, персональный прогресс и дедлайны
+## 8. Задания, аудитория, варианты и дедлайны
 
-### 6.1. `Task` (Общее задание)
+### 8.1. `Task` (Общее учебное задание)
 | Поле | Тип | Ограничения | Описание |
 |---|---|---|---|
 | `id` | UUID | PK | Уникальный ID задания |
-| `courseOfferingId` | UUID | FK $\to$ `CourseOffering.id` | Курс, к которому относится задача |
-| `title` | String(200) | Not Null | Название (например, `ЛР1: Ознакомительная работа по Lex`) |
-| `description` | Text | Nullable | Подробное описание и требования |
-| `type` | `TaskType` | Not Null | Тип задания (`LABORATORY`, `HOMEWORK`, etc.) |
-| `number` | Int | Nullable | Порядковый номер работы (1, 2, ...) |
-| `publishedAt` | TimestampTZ | Default `now()` | Дата и время публикации |
-| `dueAt` | TimestampTZ | Nullable | Дедлайн сдачи (`null` = срок не указан) |
-| `isTimeStrict` | Boolean | Default `false` | Учитывать ли точное время (true) или дату целиком (false) |
-| `isHardDeadline` | Boolean | Default `false` | Жесткий срок (true) или рекомендуемый (false) |
-| `status` | `TaskStatus` | Default `PUBLISHED` | Статус публикации |
-| `provenance` | `ProvenanceSource` | Default `HEADMAN_CONFIRMED` | Источник информации |
-| `externalCalendarEventId`| String | Nullable | ID события в Google Calendar |
-| `gradingMetadata` | JSONB | Default `{}` | Максимальный балл, вес в итоговой оценке |
-| `createdById` | UUID | FK $\to$ `User.id` | Кто создал задание в системе |
-| `updatedById` | UUID | FK $\to$ `User.id` | Кто внес последние изменения |
+| `courseOfferingId` | UUID | FK $\to$ `CourseOffering.id`, Cascade | Курс |
+| `title` | String(200) | Not Null | Название задания |
+| `description` | Text | Nullable | Подробное описание и требования к отчету |
+| `type` | `TaskType` | Not Null | `LABORATORY`, `HOMEWORK`, `CALCULATION_WORK`, etc. |
+| `number` | Int | Nullable | Порядковый номер (1, 2, ...) |
+| `status` | `TaskStatus` | Default `PUBLISHED` | `DRAFT`, `PUBLISHED`, `ARCHIVED`, `CANCELLED` |
+| `sourceReferenceId` | UUID | FK $\to$ `SourceReference.id`, Nullable | Источник происхождения задания |
+| `gradingMetadata` | JSONB | Default `{}` | Максимальный балл, вес |
+| `createdById` | UUID | FK $\to$ `User.id` | Кто создал задачу |
+| `updatedById` | UUID | FK $\to$ `User.id` | Кто изменил задачу |
+| `publishedAt` | TimestampTZ | Default `now()` | Время публикации |
 | `createdAt` | TimestampTZ | Default `now()` | Дата создания |
 | `updatedAt` | TimestampTZ | Auto update | Дата изменения |
 
-### 6.2. `StudentTaskProgress` (Личное состояние выполнения)
+### 8.2. `TaskAudience` (Целевая аудитория задания)
 | Поле | Тип | Ограничения | Описание |
 |---|---|---|---|
-| `id` | UUID | PK | Уникальный ID записи прогресса |
+| `id` | UUID | PK | ID адресации |
+| `taskId` | UUID | FK $\to$ `Task.id`, Cascade | Задание |
+| `targetType` | `TaskAudienceType` | Default `GROUP` | `ALL_COURSE`, `GROUP`, `SUBGROUP`, `INDIVIDUAL` |
+| `groupId` | UUID | FK $\to$ `StudyGroup.id`, Nullable | Целевая группа (для `GROUP`) |
+| `subgroupNumber` | Int | Nullable | Номер подгруппы (для `SUBGROUP`) |
+| `enrollmentId` | UUID | FK $\to$ `Enrollment.id`, Nullable | Студент (для `INDIVIDUAL`) |
+
+### 8.3. `TaskVariant` (Индивидуальные варианты задания)
+| Поле | Тип | Ограничения | Описание |
+|---|---|---|---|
+| `id` | UUID | PK | ID варианта |
+| `taskId` | UUID | FK $\to$ `Task.id`, Cascade | Задание |
+| `variantNumber` | String(50) | Not Null | Номер («1», «17», «Вариант А») |
+| `title` | String(150) | Nullable | Название варианта |
+| `spec` | JSONB | Default `{}` | Параметры ОУ, язык, схема, параметры задачи |
+| `sourceUrl` | String | Nullable | Ссылка на персональный файл варианта |
+*Индекс:* `UNIQUE(taskId, variantNumber)`
+
+### 8.4. `VariantAssignment` (Назначение варианта студенту)
+| Поле | Тип | Ограничения | Описание |
+|---|---|---|---|
+| `id` | UUID | PK | ID назначения |
+| `taskVariantId` | UUID | FK $\to$ `TaskVariant.id`, Cascade | Вариант |
+| `enrollmentId` | UUID | FK $\to$ `Enrollment.id`, Cascade | Студент из списка группы |
+| `assignedBy` | String | Default `HEADMAN` | `TEACHER_ROSTER`, `HEADMAN`, `SELF_PICK` |
+| `assignedAt` | TimestampTZ | Default `now()` | Дата назначения |
+*Индекс:* `UNIQUE(taskVariantId, enrollmentId)`
+
+### 8.5. `Deadline` (Отдельная сущность дедлайна)
+| Поле | Тип | Ограничения | Описание |
+|---|---|---|---|
+| `id` | UUID | PK | Уникальный ID дедлайна |
+| `taskId` | UUID | FK $\to$ `Task.id`, Cascade | Задание |
+| `courseOfferingId` | UUID | FK $\to$ `CourseOffering.id` | Курс (для быстрой выборки по курсу) |
+| `title` | String(100) | Nullable | Название срока («Мягкий срок», «Жесткий дедлайн») |
+| `type` | `DeadlineType` | Default `HARD` | `HARD` (жесткий) или `SOFT` (рекомендуемый) |
+| `date` | TimestampTZ | Not Null | Дата и время дедлайна |
+| `isTimeStrict` | Boolean | Default `false` | Учет времени (true) или даты (false, 23:59:59) |
+| `status` | `DeadlineStatus` | Default `ACTIVE` | `ACTIVE`, `POSTPONED`, `SUPERSEDED`, `CANCELLED` |
+| `originalDeadlineId`| UUID | FK $\to$ `Deadline.id`, Nullable | Предыдущий дедлайн при переносе срока |
+| `sourceReferenceId` | UUID | FK $\to$ `SourceReference.id`, Nullable | Источник информации о дедлайне |
+| `createdById` | UUID | FK $\to$ `User.id` | Кто назначил срок |
+| `createdAt` | TimestampTZ | Default `now()` | Дата создания |
+| `updatedAt` | TimestampTZ | Auto update | Дата изменения |
+
+### 8.6. `ExternalCalendarEvent` (Событие внешнего календаря)
+| Поле | Тип | Ограничения | Описание |
+|---|---|---|---|
+| `id` | UUID | PK | ID интеграции |
+| `deadlineId` | UUID | FK $\to$ `Deadline.id`, Cascade | Связанный дедлайн |
+| `integrationType` | String | Default `GOOGLE_CALENDAR` | Тип календаря |
+| `calendarId` | String | Not Null | Google Calendar ID |
+| `externalEventId` | String | Not Null | ID события в Google Calendar |
+| `syncStatus` | `CalendarSyncStatus` | Default `SYNCED` | Статус синхронизации |
+| `lastSyncedAt` | TimestampTZ | Default `now()` | Время последней синхронизации |
+| `lastError` | Text | Nullable | Текст последней ошибки API |
+*Индекс:* `UNIQUE(calendarId, externalEventId)`
+
+---
+
+## 9. Персональный прогресс студента (Trust Model)
+
+### `StudentTaskProgress`
+| Поле | Тип | Ограничения | Описание |
+|---|---|---|---|
+| `id` | UUID | PK | Уникальный ID прогресса |
 | `taskId` | UUID | FK $\to$ `Task.id`, Cascade | Задание |
 | `userId` | UUID | FK $\to$ `User.id`, Cascade | Студент |
-| `status` | `ProgressStatus` | Default `NOT_STARTED` | Текущий личный статус |
-| `isConfirmed` | Boolean | Default `false` | Подтвержден ли преподавателем (`ACCEPTED`) |
-| `studentNotes` | Text | Nullable | Личные приватные заметки студента |
+| `taskVariantId` | UUID | FK $\to$ `TaskVariant.id`, Nullable | Назначенный вариант студента |
+| `status` | `StudentTaskProgressStatus` | Default `NOT_STARTED` | Статус студента |
+| `isVerified` | Boolean | Default `false` | Верифицирована ли сдача преподавателем |
+| `verifiedById` | UUID | FK $\to$ `User.id`, Nullable | Кто подтвердил сдачу (староста / преподаватель) |
+| `verifiedAt` | TimestampTZ | Nullable | Время верификации |
+| `verificationSource`| String(255) | Nullable | Основание (e.g. «Показ на паре 26.09», «Ведомость») |
+| `studentNotes` | Text | Nullable | Приватные заметки студента (ссылка на GitHub, черновик) |
 | `submittedAt` | TimestampTZ | Nullable | Время сдачи отчета студентом |
-| `acceptedAt` | TimestampTZ | Nullable | Время фактического зачета работы преподавателем |
-| `updatedAt` | TimestampTZ | Auto update | Время последнего обновления статуса |
+| `acceptedAt` | TimestampTZ | Nullable | Время зачета преподавателем |
+| `updatedAt` | TimestampTZ | Auto update | Время изменения статуса |
 *Индекс:* `UNIQUE(taskId, userId)`
 
-### 6.3. `TaskDependency` (Зависимости между заданиями)
-- `id` (UUID, PK)
-- `taskId` (UUID, FK $\to$ `Task.id`, Cascade) — целевое задание
-- `dependsOnTaskId` (UUID, FK $\to$ `Task.id`, Cascade) — задание, которое нужно выполнить сначала
-
 ---
 
-## 7. Учебные материалы и занятия
+## 10. Аудит и логирование безопасности (Разделенные сущности)
 
-### 7.1. `CourseMaterial`
-- `id` (UUID, PK)
-- `courseOfferingId` (UUID, FK $\to$ `CourseOffering.id`, Cascade)
-- `title` (String, Not Null)
-- `type` (`MaterialType`, Not Null)
-- `url` (String, Not Null) — ссылка на файл / диск / репозиторий
-- `description` (Text, Nullable)
-- `fileSize` (BigInt, Nullable)
-- `provenance` (`ProvenanceSource`, default `TEACHER`)
-- `createdAt` (TimestampTZ, default `now()`)
+### 10.1. `AuditLog` (Доменный аудит значимых изменений данных)
+| Поле | Тип | Ограничения | Описание |
+|---|---|---|---|
+| `id` | UUID | PK | ID записи аудита |
+| `userId` | UUID | FK $\to$ `User.id`, Nullable | Кто совершил изменение |
+| `action` | String(100) | Not Null | `CREATE_TASK`, `UPDATE_DEADLINE`, `GRANT_ROLE`, `VERIFY_PROGRESS`, `CLAIM_ENROLLMENT` |
+| `entityType` | String(50) | Not Null | `TASK`, `DEADLINE`, `ROLE`, `ENROLLMENT` |
+| `entityId` | UUID | Not Null | ID целевой сущности |
+| `details` | JSONB | Default `{}` | Diff изменений (до/после) |
+| `createdAt` | TimestampTZ | Default `now()` | Время операции |
 
-### 7.2. `TaskMaterial` (Материалы конкретного задания)
-- `id` (UUID, PK)
-- `taskId` (UUID, FK $\to$ `Task.id`, Cascade)
-- `materialId` (UUID, FK $\to$ `CourseMaterial.id`, Cascade)
-*Индекс:* `UNIQUE(taskId, materialId)`
-
-### 7.3. `ClassSession` (Учебное занятие)
-- `id` (UUID, PK)
-- `courseOfferingId` (UUID, FK $\to$ `CourseOffering.id`, Cascade)
-- `sessionDate` (Date, Not Null)
-- `type` (`SessionType`, Not Null)
-- `topic` (String, Nullable)
-- `room` (String, Nullable)
-- `notes` (Text, Nullable)
-- `teacherId` (UUID, FK $\to$ `Teacher.id`, Nullable)
-
-### 7.4. `Transcript` (Транскрипт занятия для будущего AI)
-- `id` (UUID, PK)
-- `sessionId` (UUID, FK $\to$ `ClassSession.id`, Cascade)
-- `rawText` (Text, Not Null)
-- `audioSourceUrl` (String, Nullable)
-- `recordingPart` (Int, default `1`)
-- `confidenceScore` (Float, Nullable)
-- `createdAt` (TimestampTZ, default `now()`)
-
----
-
-## 8. Оперативные объявления (Announcements)
-
-### `Announcement`
-- `id` (UUID, PK)
-- `groupId` (UUID, FK $\to$ `StudyGroup.id`, Cascade)
-- `courseOfferingId` (UUID, FK $\to$ `CourseOffering.id`, Nullable)
-- `title` (String(200), Not Null)
-- `content` (Text, Not Null)
-- `isPinned` (Boolean, default `false`)
-- `priority` (String, default `NORMAL`: `LOW`, `NORMAL`, `URGENT`)
-- `provenance` (`ProvenanceSource`, default `HEADMAN_CONFIRMED`)
-- `authorId` (UUID, FK $\to$ `User.id`)
-- `publishedAt` (TimestampTZ, default `now()`)
-
----
-
-## 9. Геймификация и очки опыта (Idempotent XP)
-
-### 9.1. `XpRule` (Настройки начисления очков)
-- `id` (UUID, PK)
-- `actionCode` (String, Unique, Not Null) — e.g. `TASK_ACCEPTED_LAB`, `TASK_ACCEPTED_HW`, `SUBMITTED_EARLY`
-- `xpAmount` (Int, Not Null) — количество XP
-- `description` (String, Not Null)
-
-### 9.2. `XpEvent` (Идемпотентный журнал начисления)
-- `id` (UUID, PK)
-- `userId` (UUID, FK $\to$ `User.id`, Cascade)
-- `taskId` (UUID, FK $\to$ `Task.id`, Nullable)
-- `ruleCode` (String, Not Null)
-- `xpAwarded` (Int, Not Null)
-- `createdAt` (TimestampTZ, default `now()`)
-*Индекс уникальности:* `UNIQUE(userId, taskId, ruleCode)` (гарантия защиты от фарминга)
-
-### 9.3. `UserGamificationProfile`
-- `userId` (UUID, PK, FK $\to$ `User.id`, Cascade)
-- `totalXp` (Int, default `0`)
-- `currentLevel` (Int, default `1`)
-- `optInLeaderboard` (Boolean, default `false`) — явное согласие на участие в рейтинге
-- `updatedAt` (TimestampTZ, auto update)
-
----
-
-## 10. Очередь интеграций и аудит (Integrations & Audit)
-
-### 10.1. `CalendarSyncQueue` (Outbox паттерн)
-- `id` (UUID, PK)
-- `taskId` (UUID, FK $\to$ `Task.id`, Cascade)
-- `action` (String: `CREATE`, `UPDATE`, `DELETE`)
-- `status` (`CalendarSyncStatus`, default `PENDING`)
-- `attempts` (Int, default `0`)
-- `lastError` (Text, Nullable)
-- `scheduledFor` (TimestampTZ, default `now()`)
-
-### 10.2. `AuditLog`
-- `id` (UUID, PK)
-- `userId` (UUID, FK $\to$ `User.id`, Nullable)
-- `action` (String, Not Null) — e.g. `CREATE_TASK`, `UPDATE_DEADLINE`, `GRANT_PERMISSION`
-- `entityType` (String, Not Null)
-- `entityId` (String, Not Null)
-- `details` (JSONB, Default `{}`)
-- `ipAddress` (String, Nullable)
-- `createdAt` (TimestampTZ, default `now()`)
+### 10.2. `SecurityAccessLog` (Системный журнал безопасности)
+| Поле | Тип | Ограничения | Описание |
+|---|---|---|---|
+| `id` | UUID | PK | ID события безопасности |
+| `userId` | UUID | FK $\to$ `User.id`, Nullable | Пользователь (если аутентифицирован) |
+| `event` | String(50) | Not Null | `403_FORBIDDEN`, `401_UNAUTHORIZED`, `RATE_LIMIT_EXCEEDED`, `INVALID_AUTH_HASH` |
+| `path` | String(255) | Not Null | URL / Server Action маршрут |
+| `method` | String(10) | Not Null | `GET`, `POST`, `ACTION` |
+| `ipAddress` | String(50) | Nullable | IP клиента |
+| `userAgent` | String(255) | Nullable | Браузер |
+| `details` | JSONB | Default `{}` | Дополнительные технические детали ошибки |
+| `createdAt` | TimestampTZ | Default `now()` | Время инцидента |
