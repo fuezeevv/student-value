@@ -113,7 +113,9 @@ export function AdminClient({ data }: { data: AdminData }) {
   const [annTitle, setAnnTitle] = useState("");
   const [annContent, setAnnContent] = useState("");
   const [annPinned, setAnnPinned] = useState(false);
-  const [annPriority, setAnnPriority] = useState<"NORMAL" | "HIGH" | "URGENT">("NORMAL");
+  const [annPriority, setAnnPriority] = useState<"NORMAL" | "HIGH" | "URGENT">(
+    "NORMAL",
+  );
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
 
   // Link Enrollment State
@@ -121,18 +123,24 @@ export function AdminClient({ data }: { data: AdminData }) {
   const [selectedUserId, setSelectedUserId] = useState("");
 
   // Deadline Editing State
-  const [editingDeadlineId, setEditingDeadlineId] = useState<string | null>(null);
+  const [editingDeadlineId, setEditingDeadlineId] = useState<string | null>(
+    null,
+  );
   const [editDateValue, setEditDateValue] = useState("");
+  const [deadlineSourceNote, setDeadlineSourceNote] = useState("");
+  const [actionError, setActionError] = useState<string | null>(null);
   const [editTypeValue, setEditTypeValue] = useState<"HARD" | "SOFT">("HARD");
 
   const handleReview = (
     suggestionId: string,
     status: "APPROVED" | "REJECTED",
-    notes: string
+    notes: string,
   ) => {
     startTransition(async () => {
       await reviewSuggestionAction(suggestionId, status, notes);
-      setActionSuccess(`Предложение переведено в статус: ${status === "APPROVED" ? "Одобрено" : "Отклонено"}`);
+      setActionSuccess(
+        `Предложение переведено в статус: ${status === "APPROVED" ? "Одобрено" : "Отклонено"}`,
+      );
     });
   };
 
@@ -164,8 +172,14 @@ export function AdminClient({ data }: { data: AdminData }) {
 
   const handleStartEditDeadline = (dl: AdminData["deadlines"][0]) => {
     setEditingDeadlineId(dl.id);
+    setDeadlineSourceNote("");
     const dateObj = new Date(dl.date);
-    const isoString = dateObj.toISOString().split("T")[0];
+    const isoString = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Europe/Moscow",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(dateObj);
     setEditDateValue(isoString);
     setEditTypeValue(dl.type === "HARD" ? "HARD" : "SOFT");
   };
@@ -173,14 +187,31 @@ export function AdminClient({ data }: { data: AdminData }) {
   const handleSaveDeadline = (deadlineId: string) => {
     if (!editDateValue) return;
     startTransition(async () => {
-      await updateDeadlineAction(deadlineId, editDateValue, editTypeValue);
-      setActionSuccess("Срок сдачи успешно изменен!");
-      setEditingDeadlineId(null);
+      try {
+        setActionError(null);
+        await updateDeadlineAction(
+          deadlineId,
+          editDateValue,
+          editTypeValue,
+          deadlineSourceNote,
+        );
+        setActionSuccess("Срок сдачи успешно изменен!");
+        setEditingDeadlineId(null);
+      } catch (error) {
+        setActionError(
+          error instanceof Error ? error.message : "Не удалось изменить срок",
+        );
+      }
     });
   };
 
   return (
     <div className="space-y-6">
+      {actionError && (
+        <p role="alert" className="text-red-400 text-sm">
+          {actionError}
+        </p>
+      )}
       {actionSuccess && (
         <div className="p-3.5 rounded-xl border border-emerald-500/30 bg-emerald-950/30 text-xs text-emerald-300 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -285,7 +316,7 @@ export function AdminClient({ data }: { data: AdminData }) {
               </Badge>
             </div>
             <span className="text-xs text-slate-400">
-              * Ни одно предложение не публикуется автоматически без одобрения старосты
+              * Это очередь ручного ревью; одобрение не публикует изменения
             </span>
           </div>
 
@@ -298,10 +329,15 @@ export function AdminClient({ data }: { data: AdminData }) {
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
-                      <Badge variant="secondary" className="font-mono text-[10px]">
+                      <Badge
+                        variant="secondary"
+                        className="font-mono text-[10px]"
+                      >
                         {sug.entityType}
                       </Badge>
-                      <span className="font-bold text-sm text-white">{sug.title}</span>
+                      <span className="font-bold text-sm text-white">
+                        {sug.title}
+                      </span>
                     </div>
 
                     <div className="flex items-center gap-2">
@@ -313,15 +349,15 @@ export function AdminClient({ data }: { data: AdminData }) {
                           sug.status === "APPROVED"
                             ? "success"
                             : sug.status === "REJECTED"
-                            ? "destructive"
-                            : "warning"
+                              ? "destructive"
+                              : "warning"
                         }
                       >
                         {sug.status === "APPROVED"
                           ? "Одобрено"
                           : sug.status === "REJECTED"
-                          ? "Отклонено"
-                          : "Ожидает ревью"}
+                            ? "Отклонено"
+                            : "Ожидает ревью"}
                       </Badge>
                     </div>
                   </div>
@@ -333,15 +369,21 @@ export function AdminClient({ data }: { data: AdminData }) {
                     </div>
                     {sug.suggestedData?.title && (
                       <div>
-                        <span className="text-slate-500">Задание / сущность:</span>{" "}
-                        <strong className="text-slate-200">{sug.suggestedData.title}</strong>
+                        <span className="text-slate-500">
+                          Задание / сущность:
+                        </span>{" "}
+                        <strong className="text-slate-200">
+                          {sug.suggestedData.title}
+                        </strong>
                       </div>
                     )}
                     {sug.suggestedData?.deadline && (
                       <div>
                         <span className="text-slate-500">Срок сдачи:</span>{" "}
                         <span className="text-cyan-300 font-mono">
-                          {new Date(sug.suggestedData.deadline).toLocaleDateString("ru-RU")}
+                          {new Date(
+                            sug.suggestedData.deadline,
+                          ).toLocaleDateString("ru-RU")}
                         </span>
                       </div>
                     )}
@@ -364,7 +406,8 @@ export function AdminClient({ data }: { data: AdminData }) {
 
                   {sug.reviewNotes && (
                     <div className="text-xs text-slate-400">
-                      Заметка ревьюера: <span className="text-slate-200">{sug.reviewNotes}</span>
+                      Заметка ревьюера:{" "}
+                      <span className="text-slate-200">{sug.reviewNotes}</span>
                     </div>
                   )}
 
@@ -373,18 +416,26 @@ export function AdminClient({ data }: { data: AdminData }) {
                       <Button
                         size="sm"
                         variant="primary"
-                        onClick={() => handleReview(sug.id, "APPROVED", "Одобрено старостой")}
+                        onClick={() =>
+                          handleReview(sug.id, "APPROVED", "Одобрено старостой")
+                        }
                         disabled={isPending}
                         className="text-xs gap-1"
                       >
                         <CheckCircle2 className="w-3.5 h-3.5" />
-                        <span>Одобрить и применить</span>
+                        <span>Отметить одобренным</span>
                       </Button>
 
                       <Button
                         size="sm"
                         variant="destructive"
-                        onClick={() => handleReview(sug.id, "REJECTED", "Отклонено старостой")}
+                        onClick={() =>
+                          handleReview(
+                            sug.id,
+                            "REJECTED",
+                            "Отклонено старостой",
+                          )
+                        }
                         disabled={isPending}
                         className="text-xs gap-1"
                       >
@@ -413,7 +464,8 @@ export function AdminClient({ data }: { data: AdminData }) {
               Управление контрольными сроками группы
             </h2>
             <span className="text-xs text-slate-400">
-              Любое изменение срока сразу отображается у студентов и попадает в аудит-лог
+              Любое изменение срока сразу отображается у студентов и попадает в
+              аудит-лог
             </span>
           </div>
 
@@ -425,11 +477,15 @@ export function AdminClient({ data }: { data: AdminData }) {
               return (
                 <div
                   key={dl.id}
+                  data-deadline-id={dl.id}
                   className="p-4 rounded-xl border border-slate-800 bg-slate-900/60 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs"
                 >
                   <div className="space-y-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <Badge variant="secondary" className="font-mono text-[10px]">
+                      <Badge
+                        variant="secondary"
+                        className="font-mono text-[10px]"
+                      >
                         {dl.courseShortTitle}
                       </Badge>
                       <span className="font-bold text-sm text-white truncate">
@@ -444,6 +500,7 @@ export function AdminClient({ data }: { data: AdminData }) {
                         Текущий срок:{" "}
                         <strong className="text-slate-200">
                           {new Date(dl.date).toLocaleDateString("ru-RU", {
+                            timeZone: "Europe/Moscow",
                             day: "numeric",
                             month: "long",
                             year: "numeric",
@@ -451,7 +508,11 @@ export function AdminClient({ data }: { data: AdminData }) {
                         </strong>
                       </span>
                       <span>·</span>
-                      <span className={dl.type === "HARD" ? "text-rose-400" : "text-blue-400"}>
+                      <span
+                        className={
+                          dl.type === "HARD" ? "text-rose-400" : "text-blue-400"
+                        }
+                      >
                         {formatDeadlineType(dl.type)}
                       </span>
                     </div>
@@ -461,14 +522,26 @@ export function AdminClient({ data }: { data: AdminData }) {
                     {isEditing ? (
                       <div className="flex items-center gap-2 flex-wrap">
                         <input
+                          aria-label="Основание изменения срока"
+                          placeholder="Источник и причина переноса"
+                          value={deadlineSourceNote}
+                          onChange={(e) =>
+                            setDeadlineSourceNote(e.target.value)
+                          }
+                          className="bg-slate-800 text-xs p-2 rounded"
+                        />
+                        <input
                           type="date"
+                          aria-label="Новая дата срока"
                           value={editDateValue}
                           onChange={(e) => setEditDateValue(e.target.value)}
                           className="px-2 py-1 rounded bg-slate-950 border border-slate-700 text-xs text-white"
                         />
                         <select
                           value={editTypeValue}
-                          onChange={(e: any) => setEditTypeValue(e.target.value)}
+                          onChange={(e: any) =>
+                            setEditTypeValue(e.target.value)
+                          }
                           className="px-2 py-1 rounded bg-slate-950 border border-slate-700 text-xs text-white"
                         >
                           <option value="HARD">Жесткий</option>
@@ -603,15 +676,19 @@ export function AdminClient({ data }: { data: AdminData }) {
                 className="p-4 rounded-xl border border-slate-800 bg-slate-900/60 space-y-1.5"
               >
                 <div className="flex items-center justify-between">
-                  <span className="font-semibold text-sm text-white">{ann.title}</span>
+                  <span className="font-semibold text-sm text-white">
+                    {ann.title}
+                  </span>
                   <div className="flex items-center gap-2">
-                    {ann.isPinned && <Badge variant="warning">Закреплено</Badge>}
+                    {ann.isPinned && (
+                      <Badge variant="warning">Закреплено</Badge>
+                    )}
                     <Badge variant="secondary">
                       {ann.priority === "URGENT"
                         ? "Срочно"
                         : ann.priority === "HIGH"
-                        ? "Высокий"
-                        : "Обычный"}
+                          ? "Высокий"
+                          : "Обычный"}
                     </Badge>
                   </div>
                 </div>
@@ -635,13 +712,18 @@ export function AdminClient({ data }: { data: AdminData }) {
 
           <div className="space-y-3">
             {data.courses.map((course) => (
-              <Card key={course.id} className="glass-panel border-slate-800 p-4 space-y-2">
+              <Card
+                key={course.id}
+                className="glass-panel border-slate-800 p-4 space-y-2"
+              >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Badge variant="secondary" className="font-mono text-xs">
                       {course.code}
                     </Badge>
-                    <span className="font-semibold text-sm text-white">{course.title}</span>
+                    <span className="font-semibold text-sm text-white">
+                      {course.title}
+                    </span>
                   </div>
                   <Link
                     href={`/courses/${course.id}`}
@@ -652,7 +734,8 @@ export function AdminClient({ data }: { data: AdminData }) {
                 </div>
 
                 <div className="text-xs text-slate-400">
-                  Формат: {course.format || "Очный"} · ПО: {course.softwareRequired || "Не указано"}
+                  Формат: {course.format || "Очный"} · ПО:{" "}
+                  {course.softwareRequired || "Не указано"}
                 </div>
 
                 <div className="pt-2 border-t border-slate-800/80 space-y-1">
@@ -665,14 +748,22 @@ export function AdminClient({ data }: { data: AdminData }) {
                       className="flex items-center justify-between text-xs py-1 px-2 rounded bg-slate-950/60"
                     >
                       <div className="flex items-center gap-2">
-                        <span className="font-medium text-slate-200">{t.fullName}</span>
-                        {t.role && <span className="text-slate-400">({t.role})</span>}
+                        <span className="font-medium text-slate-200">
+                          {t.fullName}
+                        </span>
+                        {t.role && (
+                          <span className="text-slate-400">({t.role})</span>
+                        )}
                       </div>
                       <Badge
-                        variant={t.status === "DISPUTED" ? "destructive" : "success"}
+                        variant={
+                          t.status === "DISPUTED" ? "destructive" : "success"
+                        }
                         className="text-[10px]"
                       >
-                        {t.status === "DISPUTED" ? "Конфликт источников" : "Подтвержден"}
+                        {t.status === "DISPUTED"
+                          ? "Конфликт источников"
+                          : "Подтвержден"}
                       </Badge>
                     </div>
                   ))}
@@ -710,7 +801,11 @@ export function AdminClient({ data }: { data: AdminData }) {
                   <option value="">Выберите студента...</option>
                   {data.enrollments.map((enr) => (
                     <option key={enr.id} value={enr.id}>
-                      {enr.fullName} ({enr.status === "VERIFIED" ? "Подтвержден" : "Не привязан"})
+                      {enr.fullName} (
+                      {enr.status === "VERIFIED"
+                        ? "Подтвержден"
+                        : "Не привязан"}
+                      )
                     </option>
                   ))}
                 </select>
@@ -762,14 +857,22 @@ export function AdminClient({ data }: { data: AdminData }) {
               <tbody className="divide-y divide-slate-800/60">
                 {data.enrollments.map((enr) => (
                   <tr key={enr.id}>
-                    <td className="py-2.5 px-4 font-medium text-white">{enr.fullName}</td>
+                    <td className="py-2.5 px-4 font-medium text-white">
+                      {enr.fullName}
+                    </td>
                     <td className="py-2.5 px-4">{enr.subgroup ?? "—"}</td>
                     <td className="py-2.5 px-4 font-mono text-slate-400">
                       {enr.studentIdNumber || "—"}
                     </td>
                     <td className="py-2.5 px-4">
-                      <Badge variant={enr.status === "VERIFIED" ? "success" : "muted"}>
-                        {enr.status === "VERIFIED" ? "Подтвержден" : "Не привязан"}
+                      <Badge
+                        variant={
+                          enr.status === "VERIFIED" ? "success" : "muted"
+                        }
+                      >
+                        {enr.status === "VERIFIED"
+                          ? "Подтвержден"
+                          : "Не привязан"}
                       </Badge>
                     </td>
                     <td className="py-2.5 px-4 font-mono text-cyan-400">
@@ -797,16 +900,16 @@ export function AdminClient({ data }: { data: AdminData }) {
                 log.action === "UPDATE_DEADLINE"
                   ? "Перенос дедлайна"
                   : log.action === "CREATE_TASK"
-                  ? "Создание задания"
-                  : log.action === "CREATE_ANNOUNCEMENT"
-                  ? "Публикация объявления"
-                  : log.action === "VERIFY_PROGRESS"
-                  ? "Верификация сдачи"
-                  : log.action === "LINK_ENROLLMENT_USER"
-                  ? "Привязка студента к аккаунту"
-                  : log.action === "REVIEW_AI_SUGGESTION"
-                  ? "Ревью AI предложения"
-                  : log.action;
+                    ? "Создание задания"
+                    : log.action === "CREATE_ANNOUNCEMENT"
+                      ? "Публикация объявления"
+                      : log.action === "VERIFY_PROGRESS"
+                        ? "Верификация сдачи"
+                        : log.action === "LINK_ENROLLMENT_USER"
+                          ? "Привязка студента к аккаунту"
+                          : log.action === "REVIEW_AI_SUGGESTION"
+                            ? "Ревью AI предложения"
+                            : log.action;
 
               return (
                 <div
@@ -815,13 +918,16 @@ export function AdminClient({ data }: { data: AdminData }) {
                 >
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
-                      <span className="font-bold text-white font-mono">{actionLabel}</span>
+                      <span className="font-bold text-white font-mono">
+                        {actionLabel}
+                      </span>
                       <Badge variant="secondary" className="text-[10px]">
                         {log.entityType}
                       </Badge>
                     </div>
                     <div className="text-slate-400 font-mono text-[11px]">
-                      Автор: {log.userNickname ? `@${log.userNickname}` : "Система"}
+                      Автор:{" "}
+                      {log.userNickname ? `@${log.userNickname}` : "Система"}
                     </div>
                   </div>
 

@@ -1,18 +1,21 @@
+import { taskVisibilityWhere } from "@/server/domain/access";
+import { isTrustedAccepted, progressEvidenceInclude } from "@/server/domain/trust";
 import React from "react";
 import Link from "next/link";
 import { prisma } from "@/lib/db/prisma";
-import { getCurrentUser } from "@/lib/auth/session";
+import { requireCurrentUser } from "@/lib/auth/session";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { BookOpen, User, Cpu, ArrowRight } from "lucide-react";
 
 export default async function CoursesIndexPage() {
-  const user = await getCurrentUser();
+  const user = await requireCurrentUser();
+  const visibleTasks = await taskVisibilityWhere(user);
 
   const offerings = await prisma.courseOffering.findMany({
     where: {
       semester: { isCurrent: true },
-      groups: { some: { group: { code: "5130901/40102" } } },
+      groups: { some: { groupId: user.groupId } },
     },
     include: {
       courseDefinition: true,
@@ -20,8 +23,9 @@ export default async function CoursesIndexPage() {
         include: { teacher: true },
       },
       tasks: {
+        where: visibleTasks,
         include: {
-          progress: user ? { where: { userId: user.id } } : false,
+          progress: { where: { userId: user.id }, include: progressEvidenceInclude },
         },
       },
     },
@@ -36,7 +40,7 @@ export default async function CoursesIndexPage() {
           Дисциплины 5-го семестра
         </h1>
         <p className="text-sm text-slate-400 mt-1">
-          Все активные курсы группы 5130901/40102, получаемые динамически из базы данных.
+          Дисциплины вашей группы и опубликованные задания.
         </p>
       </div>
 
@@ -44,7 +48,7 @@ export default async function CoursesIndexPage() {
         {offerings.map((offering) => {
           const totalTasks = offering.tasks.length;
           const acceptedTasks = offering.tasks.filter(
-            (t) => t.progress?.[0]?.status === "ACCEPTED"
+            (t) => isTrustedAccepted(t.progress?.[0])
           ).length;
 
           return (
@@ -78,9 +82,9 @@ export default async function CoursesIndexPage() {
                             {ct.teacher.fullName}
                             {ct.role ? ` (${ct.role})` : ""}
                           </span>
-                          {ct.status === "DISPUTED" && (
+                          {ct.status !== "CONFIRMED" && (
                             <Badge variant="warning" className="text-[9px] px-1 py-0">
-                              Конфликт источников
+                              Требует уточнения
                             </Badge>
                           )}
                         </div>

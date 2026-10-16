@@ -1,3 +1,6 @@
+import { confirmedDeadlineWhere } from "@/server/domain/deadline-visibility";
+import { requireCurrentUser } from "@/lib/auth/session";
+import { taskVisibilityWhere } from "@/server/domain/access";
 import React from "react";
 import Link from "next/link";
 import { prisma } from "@/lib/db/prisma";
@@ -13,6 +16,8 @@ interface SearchPageProps {
 }
 
 export default async function SearchPage({ searchParams }: SearchPageProps) {
+  const user = await requireCurrentUser();
+  const visibleTasks = await taskVisibilityWhere(user);
   const params = await searchParams;
   const q = params.q?.trim() || "";
   const cat = params.cat || "ALL";
@@ -26,6 +31,8 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
     if (cat === "ALL" || cat === "COURSES") {
       courseResults = await prisma.courseOffering.findMany({
         where: {
+          groups: { some: { groupId: user.groupId } },
+          status: "ACTIVE", semester: { isCurrent: true },
           OR: [
             { courseDefinition: { title: { contains: q, mode: "insensitive" } } },
             { courseDefinition: { shortTitle: { contains: q, mode: "insensitive" } } },
@@ -42,6 +49,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
     if (cat === "ALL" || cat === "TASKS") {
       taskResults = await prisma.task.findMany({
         where: {
+          AND: [visibleTasks],
           OR: [
             { title: { contains: q, mode: "insensitive" } },
             { description: { contains: q, mode: "insensitive" } },
@@ -49,7 +57,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
         },
         include: {
           courseOffering: { include: { courseDefinition: true } },
-          deadlines: { where: { status: "ACTIVE" } },
+          deadlines: { where: confirmedDeadlineWhere },
         },
         take: 15,
       });
@@ -58,6 +66,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
     if (cat === "ALL" || cat === "ANNOUNCEMENTS") {
       announcementResults = await prisma.announcement.findMany({
         where: {
+          groupId: user.groupId, status: "PUBLISHED",
           OR: [
             { title: { contains: q, mode: "insensitive" } },
             { content: { contains: q, mode: "insensitive" } },
@@ -68,8 +77,9 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
     }
 
     if (cat === "ALL" || cat === "MATERIALS") {
-      sourceResults = await prisma.source.findMany({
+      sourceResults = await prisma.courseMaterial.findMany({
         where: {
+          courseOffering: { groups: { some: { groupId: user.groupId } } },
           title: { contains: q, mode: "insensitive" },
         },
         take: 10,

@@ -60,3 +60,25 @@ describe("Deadline Service (Europe/Moscow)", () => {
     expect(result.badgeVariant).toBe("info");
   });
 });
+
+describe("Moscow boundaries independent of host timezone",()=>{
+ it("recognizes tomorrow across Moscow midnight while UTC day is unchanged",()=>{
+  expect(calculateDeadlineStatus("2026-10-17T00:30:00+03:00",new Date("2026-10-16T23:00:00+03:00")).urgency).toBe("DUE_TOMORROW");
+ });
+ it("recognizes the first millisecond of overdue",()=>{
+  expect(calculateDeadlineStatus("2026-10-16T12:00:00+03:00",new Date("2026-10-16T12:00:00.001+03:00")).urgency).toBe("OVERDUE");
+ });
+ it("recognizes a deadline overdue by 30 minutes",()=>{
+  expect(calculateDeadlineStatus("2026-10-16T12:00:00+03:00",new Date("2026-10-16T12:30:00+03:00")).urgency).toBe("OVERDUE");
+ });
+ it("keeps a date-only deadline active until end of the Moscow day",()=>{
+  const date="2026-10-16T00:00:00+03:00";
+  const result=calculateDeadlineStatus(date,new Date("2026-10-16T23:59:59+03:00"),false,false);
+  expect(result.urgency).toBe("DUE_TODAY");expect(result.formattedDate).toBe("16.10.2026");
+  expect(calculateDeadlineStatus(date,new Date("2026-10-17T00:00:00+03:00"),false,false).urgency).toBe("OVERDUE");
+ });
+});
+
+it("treats a date-only input string as a Moscow calendar date",()=>{
+ const result=calculateDeadlineStatus("2026-10-16",new Date("2026-10-16T23:59:59+03:00"));expect(result.urgency).toBe("DUE_TODAY");expect(result.formattedDate).toBe("16.10.2026");
+});

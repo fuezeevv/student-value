@@ -1,5 +1,6 @@
 "use client";
 
+import { HighlightedText } from "@/components/text/HighlightedText";
 import React, { useState } from "react";
 import { Search, FileText, Clock, ExternalLink, BookOpen, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
@@ -134,18 +135,7 @@ export function TranscriptViewer({ transcripts }: { transcripts: TranscriptItem[
               {filteredLines && filteredLines.length > 0 ? (
                 filteredLines.map((line, idx) => (
                   <p key={idx} className="hover:bg-cyan-500/5 px-1 py-0.5 rounded">
-                    {searchQuery ? (
-                      <span
-                        dangerouslySetInnerHTML={{
-                          __html: line.replace(
-                            new RegExp(`(${searchQuery})`, "gi"),
-                            `<mark class="bg-cyan-500/30 text-cyan-200 px-1 rounded">$1</mark>`
-                          ),
-                        }}
-                      />
-                    ) : (
-                      line
-                    )}
+                    <HighlightedText text={line} query={searchQuery} />
                   </p>
                 ))
               ) : (

@@ -6,13 +6,20 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
-    "test": "vitest run",
-    "test:watch": "vitest",
+    "lint": "eslint src tests prisma scripts",
+    "test": "node scripts/run-tests.mjs",
+    "test:watch": "node scripts/run-tests.mjs --watch",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "prisma:push": "prisma db push",
-    "prisma:seed": "tsx prisma/seed.ts"
+    "prisma:seed": "tsx prisma/seed.ts",
+    "typecheck": "tsc --noEmit --incremental false",
+    "test:integration": "node scripts/run-tests.mjs tests/core.integration.test.ts",
+    "test:e2e": "node scripts/verify-ui-e2e.mjs",
+    "test:prepare": "node scripts/prepare-test-db.mjs",
+    "db:repair-academic": "tsx scripts/repair-academic-data.ts",
+    "test:migrations": "node scripts/check-migrations.mjs",
+    "test:production-auth": "node scripts/check-production-auth.mjs",
+    "format:check": "prettier --check src/server/domain src/components/task/TaskVerificationForm.tsx src/components/text tests/core.integration.test.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -30,16 +37,20 @@
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@eslint/eslintrc": "^3.3.7",
     "@types/node": "^22.10.7",
     "@types/react": "^19.0.7",
     "@types/react-dom": "^19.0.3",
     "autoprefixer": "^10.4.20",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^15.5.28",
     "postcss": "^8.5.1",
+    "prettier": "^3.9.10",
     "prisma": "^6.2.1",
     "puppeteer": "^25.14.0",
     "tailwindcss": "^3.4.17",
     "tsx": "^4.19.2",
     "typescript": "^5.7.3",
-    "vitest": "^3.0.2"
+    "vitest": "^5.0.5"
   }
 }

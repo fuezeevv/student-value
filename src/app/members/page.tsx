@@ -1,18 +1,18 @@
 import React from "react";
 import { prisma } from "@/lib/db/prisma";
-import { getCurrentUser } from "@/lib/auth/session";
+import { requireCurrentUser } from "@/lib/auth/session";
 import { hasPermission } from "@/lib/permissions/checker";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Users, Shield, User, CheckCircle2, Clock, Lock } from "lucide-react";
 
 export default async function MembersPage() {
-  const user = await getCurrentUser();
+  const user = await requireCurrentUser();
   const canViewPrivateIdentity = user ? hasPermission(user, "view_private_member_identity") : false;
 
   // Group 5130901/40102
   const group = await prisma.studyGroup.findFirst({
-    where: { code: "5130901/40102" },
+    where: { id: user.groupId },
     include: {
       members: {
         include: {
@@ -24,12 +24,11 @@ export default async function MembersPage() {
           userRoles: { include: { role: true } },
         },
       },
-      enrollments: {
-        orderBy: { fullName: "asc" },
-        include: { user: true },
-      },
+      _count: { select: { enrollments: true } },
     },
   });
+
+  const enrollments = canViewPrivateIdentity ? await prisma.enrollment.findMany({where:{groupId:user.groupId},orderBy:{fullName:"asc"},include:{user:{select:{nickname:true}}}}) : [];
 
   if (!group) {
     return <div className="p-6 text-center text-slate-400">Группа не найдена.</div>;
@@ -52,7 +51,7 @@ export default async function MembersPage() {
 
           <div className="flex items-center gap-2">
             <Badge variant="secondary" className="font-mono text-xs">
-              Всего по списку: {group.enrollments.length} студентов
+              Всего по списку: {group._count.enrollments} студентов
             </Badge>
             <Badge variant="default" className="text-xs">
               Зарегистрировано: {group.members.length} польз.
@@ -87,7 +86,7 @@ export default async function MembersPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60">
-                {group.enrollments.map((enr, idx) => (
+                {enrollments.map((enr, idx) => (
                   <tr key={enr.id} className="hover:bg-slate-800/30 transition-colors">
                     <td className="py-3 px-4 font-mono text-slate-500">{idx + 1}</td>
                     <td className="py-3 px-4 font-medium text-white">{enr.fullName}</td>

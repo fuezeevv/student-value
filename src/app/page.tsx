@@ -1,7 +1,14 @@
+import { hasPermission } from "@/lib/permissions/checker";
+import { confirmedDeadlineWhere } from "@/server/domain/deadline-visibility";
+import { taskVisibilityWhere } from "@/server/domain/access";
+import {
+  isTrustedAccepted,
+  progressEvidenceInclude,
+} from "@/server/domain/trust";
 import React from "react";
 import Link from "next/link";
 import { prisma } from "@/lib/db/prisma";
-import { getCurrentUser } from "@/lib/auth/session";
+import { requireCurrentUser } from "@/lib/auth/session";
 import { calculateDeadlineStatus } from "@/server/services/deadline-service";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
@@ -25,23 +32,28 @@ import {
 } from "lucide-react";
 
 export default async function DashboardPage() {
-  const user = await getCurrentUser();
+  const user = await requireCurrentUser();
+  const visibleTasks = await taskVisibilityWhere(user);
 
   // Load group courses
   const offerings = await prisma.courseOffering.findMany({
     where: {
       semester: { isCurrent: true },
-      groups: { some: { group: { code: "5130901/40102" } } },
+      groups: { some: { groupId: user.groupId } },
     },
     include: {
       courseDefinition: true,
       tasks: {
+        where: visibleTasks,
         include: {
           deadlines: {
-            where: { status: "ACTIVE" },
+            where: confirmedDeadlineWhere,
             orderBy: { date: "asc" },
           },
-          progress: user ? { where: { userId: user.id } } : false,
+          progress: {
+            where: { userId: user.id },
+            include: progressEvidenceInclude,
+          },
           variants: true,
         },
       },
@@ -56,12 +68,13 @@ export default async function DashboardPage() {
   const allTasks = offerings.flatMap((o) =>
     o.tasks.map((t) => {
       const userProgress = t.progress?.[0];
-      const isAccepted = userProgress?.status === "ACCEPTED";
+      const isAccepted = isTrustedAccepted(userProgress);
       const primaryDeadline = t.deadlines[0];
       const deadlineCalc = calculateDeadlineStatus(
         primaryDeadline ? primaryDeadline.date : null,
         new Date(),
-        isAccepted
+        isAccepted,
+        primaryDeadline?.isTimeStrict ?? true,
       );
 
       return {
@@ -74,7 +87,7 @@ export default async function DashboardPage() {
         deadlineCalc,
         isAccepted,
       };
-    })
+    }),
   );
 
   // Focus tasks: Overdue first, then DUE_TODAY, DUE_TOMORROW, DUE_URGENT
@@ -90,7 +103,11 @@ export default async function DashboardPage() {
         ACCEPTED: 5,
         NO_DEADLINE: 6,
       };
-      return order[a.deadlineCalc.urgency] - order[b.deadlineCalc.urgency];
+      return (
+        order[a.deadlineCalc.urgency] - order[b.deadlineCalc.urgency] ||
+        (a.primaryDeadline?.date.getTime() ?? Infinity) -
+          (b.primaryDeadline?.date.getTime() ?? Infinity)
+      );
     });
 
   const focusTask = urgentTasks[0] || allTasks.find((t) => !t.isAccepted);
@@ -101,18 +118,21 @@ export default async function DashboardPage() {
       t.userProgress?.status === "IN_PROGRESS" ||
       t.userProgress?.status === "READY" ||
       t.userProgress?.status === "SUBMITTED" ||
-      t.userProgress?.status === "NEEDS_FIX"
+      t.userProgress?.status === "NEEDS_FIX",
   );
 
   // Progress metrics
   const totalTasks = allTasks.length;
   const completedTasks = allTasks.filter((t) => t.isAccepted).length;
-  const submittedTasks = allTasks.filter((t) => t.userProgress?.status === "SUBMITTED").length;
-  const progressPercent = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+  const submittedTasks = allTasks.filter(
+    (t) => t.userProgress?.status === "SUBMITTED",
+  ).length;
+  const progressPercent =
+    totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
   // Group announcements
   const announcements = await prisma.announcement.findMany({
-    where: { group: { code: "5130901/40102" } },
+    where: { groupId: user.groupId, status: "PUBLISHED" },
     include: { author: true },
     orderBy: { publishedAt: "desc" },
     take: 4,
@@ -128,10 +148,12 @@ export default async function DashboardPage() {
   // Pending AI suggestions for admins
   const pendingSuggestionsCount =
     user?.isOwner || user?.permissions.includes("manage_tasks")
-      ? await prisma.aiSuggestion.count({ where: { status: "PENDING" } })
+      ? await prisma.aiSuggestion.count({
+          where: { status: "PENDING", source: { groupId: user.groupId } },
+        })
       : 0;
 
-  const canManageTasks = user?.permissions.includes("manage_tasks") ?? false;
+  const canManageTasks = hasPermission(user, "manage_tasks");
 
   const coursesListForModal = offerings.map((o) => ({
     id: o.id,
@@ -146,7 +168,8 @@ export default async function DashboardPage() {
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight text-white flex items-center gap-2">
-              Student Value <span className="text-cyan-400 font-mono">1.984</span>
+              Student Value{" "}
+              <span className="text-cyan-400 font-mono">1.984</span>
             </h1>
             <Badge variant="default" className="text-[10px] font-mono">
               BETA 5130901/40102
@@ -174,7 +197,9 @@ export default async function DashboardPage() {
             <Bot className="w-4 h-4 text-cyan-400 shrink-0" />
             <span className="text-slate-200">
               В очереди AI Ingestion есть{" "}
-              <strong className="text-cyan-300 font-semibold">{pendingSuggestionsCount}</strong>{" "}
+              <strong className="text-cyan-300 font-semibold">
+                {pendingSuggestionsCount}
+              </strong>{" "}
               извлеченных предложений из транскрипций на ревью.
             </span>
           </div>
@@ -221,7 +246,9 @@ export default async function DashboardPage() {
                   <div className="flex items-center gap-4 text-xs text-slate-400">
                     <div className="flex items-center gap-1.5">
                       <Calendar className="w-3.5 h-3.5 text-cyan-400" />
-                      <span>Дедлайн: {focusTask.deadlineCalc.formattedDate}</span>
+                      <span>
+                        Дедлайн: {focusTask.deadlineCalc.formattedDate}
+                      </span>
                     </div>
                     <div className="flex items-center gap-1.5">
                       <Clock className="w-3.5 h-3.5 text-slate-400" />
@@ -235,7 +262,11 @@ export default async function DashboardPage() {
                   </div>
 
                   <Link href={`/tasks/${focusTask.id}`}>
-                    <Button size="sm" variant="primary" className="gap-1.5 font-semibold">
+                    <Button
+                      size="sm"
+                      variant="primary"
+                      className="gap-1.5 font-semibold"
+                    >
                       <span>Перейти к сдаче</span>
                       <ArrowRight className="w-3.5 h-3.5" />
                     </Button>
@@ -291,7 +322,10 @@ export default async function DashboardPage() {
                   </div>
                   <div className="text-xs text-slate-400 flex items-center gap-1.5">
                     <Flame className="w-3.5 h-3.5 text-rose-500 animate-pulse" />
-                    <span>Ударный режим: {gamificationProfile?.currentStreak ?? 0} дн.</span>
+                    <span>
+                      Ударный режим: {gamificationProfile?.currentStreak ?? 0}{" "}
+                      дн.
+                    </span>
                   </div>
                 </div>
               </div>
@@ -299,7 +333,9 @@ export default async function DashboardPage() {
 
             <div className="pt-4 border-t border-slate-800/80 mt-4">
               <div className="flex items-center justify-between text-xs text-slate-400 mb-1.5">
-                <span>Прогресс до уровня {(gamificationProfile?.level ?? 1) + 1}</span>
+                <span>
+                  Прогресс до уровня {(gamificationProfile?.level ?? 1) + 1}
+                </span>
                 <span className="text-slate-300 font-mono">
                   {(gamificationProfile?.totalXp ?? 0) % 100} / 100 XP
                 </span>
@@ -307,7 +343,9 @@ export default async function DashboardPage() {
               <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
                 <div
                   className="bg-cyan-400 h-1.5 rounded-full transition-all duration-500"
-                  style={{ width: `${(gamificationProfile?.totalXp ?? 0) % 100}%` }}
+                  style={{
+                    width: `${(gamificationProfile?.totalXp ?? 0) % 100}%`,
+                  }}
                 />
               </div>
             </div>
@@ -322,10 +360,11 @@ export default async function DashboardPage() {
             <div className="flex items-center gap-2">
               <Layers className="w-4 h-4 text-cyan-400" />
               <span className="font-semibold text-sm text-slate-200">
-                Семестровый прогресс группы
+                Ваш прогресс по опубликованным заданиям
               </span>
               <span className="text-xs text-slate-400">
-                · Зачтено: {completedTasks} · Сдано на проверку: {submittedTasks} · Всего: {totalTasks}
+                · Зачтено: {completedTasks} · Сдано на проверку:{" "}
+                {submittedTasks} · Всего: {totalTasks}
               </span>
             </div>
             <div className="text-sm font-bold text-cyan-400 font-mono">
@@ -353,7 +392,10 @@ export default async function DashboardPage() {
                 <AlertTriangle className="w-4 h-4 text-cyan-400" />
                 Контрольные сроки ({urgentTasks.length})
               </h2>
-              <Link href="/deadlines" className="text-xs text-cyan-400 hover:text-cyan-300">
+              <Link
+                href="/deadlines"
+                className="text-xs text-cyan-400 hover:text-cyan-300"
+              >
                 Все дедлайны →
               </Link>
             </div>
@@ -361,11 +403,18 @@ export default async function DashboardPage() {
             {urgentTasks.length > 0 ? (
               <div className="space-y-2">
                 {urgentTasks.map((task) => (
-                  <Link key={task.id} href={`/tasks/${task.id}`} className="block group">
+                  <Link
+                    key={task.id}
+                    href={`/tasks/${task.id}`}
+                    className="block group"
+                  >
                     <div className="p-3.5 rounded-xl border border-slate-800/80 bg-slate-900/50 hover:bg-slate-900 hover:border-cyan-500/40 transition-all flex items-center justify-between gap-3">
                       <div className="space-y-1 min-w-0">
                         <div className="flex items-center gap-2">
-                          <Badge variant="secondary" className="text-[10px] px-1.5 py-0 font-mono">
+                          <Badge
+                            variant="secondary"
+                            className="text-[10px] px-1.5 py-0 font-mono"
+                          >
                             {task.courseShortTitle}
                           </Badge>
                           <span className="font-medium text-sm text-slate-200 group-hover:text-cyan-300 transition-colors truncate">
@@ -376,7 +425,9 @@ export default async function DashboardPage() {
                           <span>Срок: {task.deadlineCalc.formattedDate}</span>
                           <span>·</span>
                           <span>
-                            {task.primaryDeadline?.type === "HARD" ? "Жесткий" : "Рекомендуемый"}
+                            {task.primaryDeadline?.type === "HARD"
+                              ? "Жесткий"
+                              : "Рекомендуемый"}
                           </span>
                         </div>
                       </div>
@@ -408,11 +459,18 @@ export default async function DashboardPage() {
             {activeTasks.length > 0 ? (
               <div className="space-y-2">
                 {activeTasks.map((task) => (
-                  <Link key={task.id} href={`/tasks/${task.id}`} className="block group">
+                  <Link
+                    key={task.id}
+                    href={`/tasks/${task.id}`}
+                    className="block group"
+                  >
                     <div className="p-3.5 rounded-xl border border-slate-800/80 bg-slate-900/50 hover:bg-slate-900 hover:border-cyan-500/40 transition-all flex items-center justify-between gap-3">
                       <div className="space-y-1 min-w-0">
                         <div className="flex items-center gap-2">
-                          <Badge variant="secondary" className="text-[10px] px-1.5 py-0 font-mono">
+                          <Badge
+                            variant="secondary"
+                            className="text-[10px] px-1.5 py-0 font-mono"
+                          >
                             {task.courseShortTitle}
                           </Badge>
                           <span className="font-medium text-sm text-slate-200 group-hover:text-cyan-300 transition-colors truncate">
@@ -423,14 +481,18 @@ export default async function DashboardPage() {
                           {task.userProgress?.status === "SUBMITTED"
                             ? "Сдано на проверку"
                             : task.userProgress?.status === "READY"
-                            ? "Сделано, готово к сдаче"
-                            : "В процессе выполнения"}
+                              ? "Сделано, готово к сдаче"
+                              : "В процессе выполнения"}
                         </div>
                       </div>
 
                       <div className="shrink-0">
                         <Badge
-                          variant={task.userProgress?.status === "SUBMITTED" ? "info" : "default"}
+                          variant={
+                            task.userProgress?.status === "SUBMITTED"
+                              ? "info"
+                              : "default"
+                          }
                         >
                           {formatTaskStatus(task.userProgress?.status)}
                         </Badge>
@@ -441,7 +503,8 @@ export default async function DashboardPage() {
               </div>
             ) : (
               <div className="p-4 rounded-xl border border-slate-800/80 bg-slate-900/40 text-center text-xs text-slate-400">
-                Нет задач со статусом «В работе». Перейдите в дисциплины для выбора задания.
+                Нет задач со статусом «В работе». Перейдите в дисциплины для
+                выбора задания.
               </div>
             )}
           </div>
@@ -459,19 +522,28 @@ export default async function DashboardPage() {
             {announcements.length > 0 ? (
               <div className="space-y-2.5">
                 {announcements.map((ann) => (
-                  <Card key={ann.id} className="glass-panel border-slate-800 p-4 space-y-2">
+                  <Card
+                    key={ann.id}
+                    className="glass-panel border-slate-800 p-4 space-y-2"
+                  >
                     <div className="flex items-center justify-between gap-2">
-                      <span className="font-semibold text-sm text-slate-200">{ann.title}</span>
+                      <span className="font-semibold text-sm text-slate-200">
+                        {ann.title}
+                      </span>
                       {ann.isPinned && (
                         <Badge variant="warning" className="text-[10px]">
                           Закреплено
                         </Badge>
                       )}
                     </div>
-                    <p className="text-xs text-slate-300 leading-relaxed">{ann.content}</p>
+                    <p className="text-xs text-slate-300 leading-relaxed">
+                      {ann.content}
+                    </p>
                     <div className="text-[11px] text-slate-500 pt-1.5 border-t border-slate-800/60 flex items-center justify-between">
                       <span>Автор: {ann.author.nickname}</span>
-                      <span>{new Date(ann.publishedAt).toLocaleDateString("ru-RU")}</span>
+                      <span>
+                        {new Date(ann.publishedAt).toLocaleDateString("ru-RU")}
+                      </span>
                     </div>
                   </Card>
                 ))}

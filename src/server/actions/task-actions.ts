@@ -1,74 +1,40 @@
 "use server";
-
 import { revalidatePath } from "next/cache";
-import { z } from "zod";
 import { prisma } from "@/lib/db/prisma";
-import { getCurrentUser, setDevUserCookie } from "@/lib/auth/session";
-import { requirePermission, hasPermission, ForbiddenError } from "@/lib/permissions/checker";
-import {
-  StudentTaskProgressStatus,
-  TaskType,
-  DeadlineType,
-  TaskAudienceType,
-  VerificationSource,
-  DeadlineProvenance,
-} from "@prisma/client";
-import { awardXp, checkAndUnlockAchievement } from "@/server/services/gamification-service";
-import {
-  createNotification,
-  broadcastGroupNotification,
-} from "@/server/services/notification-service";
+import { requireCurrentUser, setDevUserCookie } from "@/lib/auth/session";
+import { StudentTaskProgressStatus, VerificationSource } from "@prisma/client";
 import { CreateTaskSchema, CreateTaskInput } from "@/lib/validations/schemas";
+import { requireCoursePermission } from "@/server/domain/access";
+import {
+  updateOwnProgress,
+  saveOwnNotes,
+  verifyProgress,
+} from "@/server/domain/progress";
+import { parseDateOnly } from "@/server/domain/deadline-date";
+import {
+  awardXp,
+  checkAndUnlockAchievement,
+} from "@/server/services/gamification-service";
+import { redirect } from "next/navigation";
 
-// --- Actions ---
-
+function refreshTask(taskId: string) {
+  for (const path of [
+    "/",
+    "/deadlines",
+    "/analytics",
+    `/tasks/${taskId}`,
+    "/courses",
+  ])
+    revalidatePath(path, "layout");
+}
 export async function updateStudentProgressAction(
   taskId: string,
   newStatus: StudentTaskProgressStatus,
-  studentNotes?: string
+  studentNotes?: string,
 ) {
-  const user = await getCurrentUser();
-  if (!user) {
-    throw new Error("Необходимо войти в систему");
-  }
-
-  // TRUST MODEL ENFORCEMENT (ADR-015):
-  // A student CANNOT self-report verified ACCEPTED unless they have verify_progress permission!
-  if (newStatus === StudentTaskProgressStatus.ACCEPTED && !hasPermission(user, "verify_progress")) {
-    throw new ForbiddenError(
-      "Студент не может самостоятельно подтвердить зачет работы преподавателем. Для отметки о сдаче отчета используйте статус 'Сдано (SUBMITTED)'."
-    );
-  }
-
-  const existing = await prisma.studentTaskProgress.findUnique({
-    where: { taskId_userId: { taskId, userId: user.id } },
-  });
-
-  const isNowSubmitted = newStatus === StudentTaskProgressStatus.SUBMITTED;
-  const isNowAccepted = newStatus === StudentTaskProgressStatus.ACCEPTED;
-
-  await prisma.studentTaskProgress.upsert({
-    where: { taskId_userId: { taskId, userId: user.id } },
-    update: {
-      status: newStatus,
-      studentNotes: studentNotes !== undefined ? studentNotes : existing?.studentNotes,
-      submittedAt: isNowSubmitted ? new Date() : existing?.submittedAt,
-      acceptedAt: isNowAccepted ? (existing?.acceptedAt ?? new Date()) : null,
-      isVerified: isNowAccepted ? (existing?.isVerified ?? false) : false,
-    },
-    create: {
-      taskId,
-      userId: user.id,
-      status: newStatus,
-      studentNotes: studentNotes ?? null,
-      submittedAt: isNowSubmitted ? new Date() : null,
-      acceptedAt: isNowAccepted ? new Date() : null,
-      isVerified: false,
-    },
-  });
-
-  // Server-side idempotent XP Ledger reward for submission
-  if (isNowSubmitted) {
+  const user = await requireCurrentUser();
+  await updateOwnProgress(user, taskId, newStatus, studentNotes);
+  if (newStatus === "SUBMITTED") {
     await awardXp({
       userId: user.id,
       taskId,
@@ -77,202 +43,183 @@ export async function updateStudentProgressAction(
     });
     await checkAndUnlockAchievement(user.id, "FIRST_STEP");
   }
-
-  revalidatePath("/");
-  revalidatePath(`/tasks/${taskId}`);
-  revalidatePath("/deadlines");
-  revalidatePath("/analytics");
+  refreshTask(taskId);
   return { success: true };
 }
-
+export async function saveStudentNotesAction(taskId: string, notes: string) {
+  const user = await requireCurrentUser();
+  await saveOwnNotes(user, taskId, notes);
+  refreshTask(taskId);
+  return { success: true };
+}
 export async function verifyTaskProgressAction(
   taskId: string,
   targetUserId: string,
   isAccepted: boolean,
-  verificationSource: VerificationSource = VerificationSource.HEADMAN_CONFIRMED
+  verificationSource: VerificationSource = VerificationSource.HEADMAN_CONFIRMED,
+  sourceReferenceId?: string,
 ) {
-  const user = await getCurrentUser();
-  await requirePermission(user, "verify_progress", "verifyTaskProgressAction");
-
-  const newStatus = isAccepted
-    ? StudentTaskProgressStatus.ACCEPTED
-    : StudentTaskProgressStatus.NEEDS_FIX;
-
-  const updated = await prisma.studentTaskProgress.upsert({
-    where: { taskId_userId: { taskId, userId: targetUserId } },
-    update: {
-      status: newStatus,
-      isVerified: isAccepted,
-      verifiedById: isAccepted ? user!.id : null,
-      verifiedAt: isAccepted ? new Date() : null,
-      verificationSource: isAccepted ? verificationSource : null,
-      acceptedAt: isAccepted ? new Date() : null,
-    },
-    create: {
-      taskId,
-      userId: targetUserId,
-      status: newStatus,
-      isVerified: isAccepted,
-      verifiedById: isAccepted ? user!.id : null,
-      verifiedAt: isAccepted ? new Date() : null,
-      verificationSource: isAccepted ? verificationSource : null,
-      acceptedAt: isAccepted ? new Date() : null,
-    },
-  });
-
-  // If verified ACCEPTED: award XP
+  const user = await requireCurrentUser();
+  await verifyProgress(
+    user,
+    taskId,
+    targetUserId,
+    isAccepted,
+    verificationSource,
+    sourceReferenceId,
+  );
   if (isAccepted) {
-    const isTeacher = verificationSource === VerificationSource.TEACHER_CONFIRMED;
     await awardXp({
       userId: targetUserId,
       taskId,
       ruleCode: "TASK_ACCEPTED",
-      reason: isTeacher
-        ? "Работа зачтена преподавателем"
-        : "Выполнение работы подтверждено старостой",
+      reason: "Результат подтверждён с источником",
     });
-
-    // Only award ACCEPTED_MASTER achievement if officially confirmed by teacher
-    if (isTeacher) {
+    if (verificationSource === "TEACHER_CONFIRMED")
       await checkAndUnlockAchievement(targetUserId, "ACCEPTED_MASTER");
-    }
-
-    const task = await prisma.task.findUnique({
-      where: { id: taskId },
-      select: { title: true },
-    });
-
-    await createNotification({
-      userId: targetUserId,
-      title: isTeacher ? "Зачет преподавателем подтвержден!" : "Статус подтвержден старостой",
-      message: `Работа «${task?.title ?? "Задание"}» отмечена как принятая.`,
-      type: "PROGRESS_VERIFIED",
-      link: `/tasks/${taskId}`,
-    });
   }
-
-  // Record into domain AuditLog
-  await prisma.auditLog.create({
-    data: {
-      userId: user!.id,
-      action: "VERIFY_PROGRESS",
-      entityType: "TASK_PROGRESS",
-      entityId: `${taskId}:${targetUserId}`,
-      details: {
-        isAccepted,
-        newStatus,
-        verificationSource,
-      },
-    },
-  });
-
-  revalidatePath("/");
-  revalidatePath(`/tasks/${taskId}`);
-  revalidatePath("/deadlines");
-  revalidatePath("/analytics");
+  refreshTask(taskId);
   return { success: true };
 }
-
 export async function createTaskAction(rawInput: CreateTaskInput) {
-  const user = await getCurrentUser();
-  await requirePermission(user, "manage_tasks", "createTaskAction");
-
-  const validated = CreateTaskSchema.parse(rawInput);
-
-  const courseOffering = await prisma.courseOffering.findUnique({
-    where: { id: validated.courseOfferingId },
-    include: { groups: true },
-  });
-
-  if (!courseOffering) {
-    throw new Error("Указанный курс не найден");
-  }
-
-  const primaryGroup = courseOffering.groups[0];
-
-  // Create Task
-  const task = await prisma.task.create({
-    data: {
-      courseOfferingId: validated.courseOfferingId,
-      title: validated.title,
-      description: validated.description ?? null,
-      type: validated.type,
-      number: validated.number ?? null,
-      createdById: user!.id,
-      updatedById: user!.id,
-      audiences: {
-        create: {
-          targetType: TaskAudienceType.GROUP,
-          groupId: primaryGroup?.groupId ?? null,
-        },
-      },
-      ...(validated.variantNumber
-        ? {
-            variants: {
-              create: {
-                variantNumber: validated.variantNumber,
-                title: validated.variantTitle ?? null,
-              },
-            },
-          }
-        : {}),
-    },
-  });
-
-  // Create Deadline if date is given
-  if (validated.deadlineDate) {
-    await prisma.deadline.create({
+  const user = await requireCurrentUser();
+  const input = CreateTaskSchema.parse(rawInput);
+  await requireCoursePermission(user, input.courseOfferingId, "manage_tasks");
+  if (input.deadlineDate)
+    await requireCoursePermission(
+      user,
+      input.courseOfferingId,
+      "manage_deadlines",
+    );
+  const task = await prisma.$transaction(async (tx) => {
+    const source = await tx.source.create({
       data: {
-        taskId: task.id,
-        courseOfferingId: validated.courseOfferingId,
-        title: "Срок сдачи",
-        type: validated.deadlineType,
-        date: new Date(validated.deadlineDate),
-        isTimeStrict: validated.isTimeStrict,
-        provenance: DeadlineProvenance.HEADMAN_CONFIRMED,
-        createdById: user!.id,
+        groupId: user.groupId,
+        type: "HEADMAN_RECORD",
+        title: "Задание, зафиксированное старостой",
       },
     });
-  }
-
-  // Broadcast in-app notification if group exists
-  if (primaryGroup?.groupId) {
-    await broadcastGroupNotification(primaryGroup.groupId, {
-      title: "Новое задание добавлено",
-      message: `Курс: ${validated.title}`,
-      type: "TASK_NEW",
-      link: `/tasks/${task.id}`,
-    });
-  }
-
-  // Record in domain AuditLog
-  await prisma.auditLog.create({
-    data: {
-      userId: user!.id,
-      action: "CREATE_TASK",
-      entityType: "TASK",
-      entityId: task.id,
-      details: {
-        title: task.title,
-        type: task.type,
-        courseOfferingId: task.courseOfferingId,
-        hasDeadline: Boolean(validated.deadlineDate),
+    const task = await tx.task.create({
+      data: {
+        courseOfferingId: input.courseOfferingId,
+        title: input.title,
+        description: input.description,
+        type: input.type,
+        number: input.number,
+        createdById: user.id,
+        updatedById: user.id,
+        audiences: { create: { targetType: "GROUP", groupId: user.groupId } },
+        ...(input.variantNumber
+          ? {
+              variants: {
+                create: {
+                  variantNumber: input.variantNumber,
+                  title: input.variantTitle,
+                },
+              },
+            }
+          : {}),
       },
-    },
+    });
+    const ref = await tx.sourceReference.create({
+      data: {
+        sourceId: source.id,
+        entityType: "TASK",
+        entityId: task.id,
+        quoteText: input.sourceNote,
+        confidence: "CONFIRMED",
+        createdById: user.id,
+      },
+    });
+    await tx.task.update({
+      where: { id: task.id },
+      data: { sourceReferenceId: ref.id },
+    });
+    if (input.deadlineDate) {
+      const dl = await tx.deadline.create({
+        data: {
+          taskId: task.id,
+          courseOfferingId: task.courseOfferingId,
+          date: parseDateOnly(input.deadlineDate),
+          type: input.deadlineType,
+          isTimeStrict: false,
+          provenance: "HEADMAN_CONFIRMED",
+          createdById: user.id,
+        },
+      });
+      const dr = await tx.sourceReference.create({
+        data: {
+          sourceId: source.id,
+          entityType: "DEADLINE",
+          entityId: dl.id,
+          quoteText: input.sourceNote,
+          confidence: "CONFIRMED",
+          createdById: user.id,
+        },
+      });
+      await tx.deadline.update({
+        where: { id: dl.id },
+        data: { sourceReferenceId: dr.id },
+      });
+    }
+    const members = await tx.groupMember.findMany({
+      where: { groupId: user.groupId },
+      select: { userId: true },
+    });
+    await tx.notification.createMany({
+      data: members.map((m) => ({
+        userId: m.userId,
+        type: "TASK_NEW",
+        title: "Новое задание",
+        message: task.title,
+        link: `/tasks/${task.id}`,
+      })),
+    });
+    await tx.auditLog.create({
+      data: {
+        userId: user.id,
+        action: "CREATE_TASK",
+        entityType: "TASK",
+        entityId: task.id,
+        details: { groupId: user.groupId, sourceReferenceId: ref.id },
+      },
+    });
+    return task;
   });
-
-  revalidatePath("/");
-  revalidatePath("/deadlines");
-  revalidatePath(`/courses/${validated.courseOfferingId}`);
+  refreshTask(task.id);
   return { success: true, taskId: task.id };
 }
-
 export async function switchDevUserAction(userId: string) {
-  const isDevAuth =
-    process.env.NODE_ENV === "development" || process.env.ALLOW_DEV_AUTH === "true";
-  if (!isDevAuth) {
-    throw new Error("Смена тестового пользователя доступна только в режиме разработки.");
-  }
   await setDevUserCookie(userId);
-  revalidatePath("/");
+  revalidatePath("/", "layout");
+  redirect("/");
+}
+
+export async function recordTaskVerificationAction(
+  taskId: string,
+  targetUserId: string,
+  source: {
+    title: string;
+    quoteText: string;
+    type: "TEACHER_STATEMENT" | "OFFICIAL_DOCUMENT";
+  },
+) {
+  const user = await requireCurrentUser();
+  await verifyProgress(
+    user,
+    taskId,
+    targetUserId,
+    true,
+    VerificationSource.HEADMAN_CONFIRMED,
+    undefined,
+    source,
+  );
+  await awardXp({
+    userId: targetUserId,
+    taskId,
+    ruleCode: "TASK_ACCEPTED",
+    reason: "Староста зафиксировал подтверждение преподавателя с источником",
+  });
+  refreshTask(taskId);
+  return { success: true };
 }

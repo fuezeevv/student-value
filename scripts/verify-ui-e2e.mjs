@@ -1,681 +1,465 @@
 import puppeteer from "puppeteer";
-
-const BASE_URL = "http://localhost:3000";
-const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-// Helper: Safely update React controlled inputs
-async function setReactInputValue(page, selectorOrElement, value) {
-  let element = typeof selectorOrElement === "string" ? await page.$(selectorOrElement) : selectorOrElement;
-  if (!element) throw new Error(`Element not found for value setter: ${selectorOrElement}`);
-  await page.evaluate((el, val) => {
-    const proto = el instanceof HTMLTextAreaElement ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype;
-    const setter = Object.getOwnPropertyDescriptor(proto, "value").set;
-    setter.call(el, val);
-    el.dispatchEvent(new Event("input", { bubbles: true }));
-    el.dispatchEvent(new Event("change", { bubbles: true }));
-  }, element, value);
+import fs from "node:fs";
+import { spawn } from "node:child_process";
+import { createHash, randomUUID } from "node:crypto";
+import { PrismaClient } from "@prisma/client";
+import { prepareTestDatabase, run, loadEnv } from "./test-db.mjs";
+import assert from "node:assert/strict";
+loadEnv();
+const workingUrl = process.env.DATABASE_URL;
+const isolatedUrl = new URL(workingUrl);
+isolatedUrl.pathname = "/studentvalue_test_e2e";
+process.env.TEST_DATABASE_URL = isolatedUrl.href;
+const env = prepareTestDatabase();
+run("node", ["node_modules/tsx/dist/cli.mjs", "prisma/test-fixtures.ts"], env);
+const test = new PrismaClient({ datasourceUrl: env.DATABASE_URL });
+const working = new PrismaClient({ datasourceUrl: workingUrl });
+async function fingerprint() {
+  const rows = await Promise.all(
+    [
+      "task",
+      "deadline",
+      "announcement",
+      "studentTaskProgress",
+      "xpEvent",
+      "userAchievement",
+      "user",
+      "enrollment",
+    ].map((name) => working[name].findMany({ orderBy: { id: "asc" } })),
+  );
+  return createHash("sha256").update(JSON.stringify(rows)).digest("hex");
 }
-
-async function runE2E() {
-  console.log("================================================================================");
-  console.log("🚀 STARTING STUDENT VALUE 1.984 UNCOMPROMISING UI E2E VERIFICATION SUITE");
-  console.log("================================================================================\n");
-
-  const results = [];
-
-  const browser = await puppeteer.launch({
-    headless: true,
-    args: ["--no-sandbox", "--disable-setuid-sandbox"],
+const before = await fingerprint();
+const privateNote = `[TEST] Мой черновик ${randomUUID()}`;
+fs.mkdirSync(".test-work", { recursive: true });
+const log = fs.openSync(".test-work/e2e-server.log", "w");
+const port = 3301;
+const base = `http://127.0.0.1:${port}`;
+const server = spawn(
+  process.execPath,
+  [
+    "node_modules/next/dist/bin/next",
+    "dev",
+    "--hostname",
+    "127.0.0.1",
+    "--port",
+    String(port),
+  ],
+  {
+    env: {
+      ...env,
+      NODE_ENV: "development",
+      ALLOW_DEV_AUTH: "true",
+      NEXT_DIST_DIR: ".next-e2e",
+      NEXT_TELEMETRY_DISABLED: "1",
+    },
+    stdio: ["ignore", log, log],
+  },
+);
+let browser;
+const passed = [];
+async function scenario(name, fn) {
+  await fn();
+  passed.push(name);
+  console.log(`PASS ${name}`);
+}
+try {
+  const manager = await test.user.upsert({
+    where: { id: "test-manager" },
+    update: {},
+    create: { id: "test-manager", nickname: "test_manager" },
   });
-
+  await test.authIdentity.upsert({
+    where: {
+      provider_providerUserId: {
+        provider: "LOCAL_DEV",
+        providerUserId: manager.id,
+      },
+    },
+    update: {},
+    create: {
+      provider: "LOCAL_DEV",
+      providerUserId: manager.id,
+      userId: manager.id,
+    },
+  });
+  const member = await test.groupMember.upsert({
+    where: { groupId_userId: { groupId: "test-group", userId: manager.id } },
+    update: {},
+    create: { groupId: "test-group", userId: manager.id },
+  });
+  const role = await test.role.upsert({
+    where: { groupId_name: { groupId: "test-group", name: "Task Editor" } },
+    update: {},
+    create: { groupId: "test-group", name: "Task Editor" },
+  });
+  await test.rolePermission.upsert({
+    where: {
+      roleId_permission: { roleId: role.id, permission: "manage_tasks" },
+    },
+    update: {},
+    create: { roleId: role.id, permission: "manage_tasks" },
+  });
+  await test.userGroupRole.upsert({
+    where: {
+      groupMemberId_roleId: { groupMemberId: member.id, roleId: role.id },
+    },
+    update: {},
+    create: { groupMemberId: member.id, roleId: role.id },
+  });
+  await test.classSession.upsert({
+    where: { id: "test-session" },
+    update: {},
+    create: {
+      id: "test-session",
+      courseOfferingId: "test-course",
+      sessionDate: new Date("2026-10-16T10:00:00+03:00"),
+      type: "LECTURE",
+      topic: "[TEST] Безопасность транскрипции",
+    },
+  });
+  await test.transcript.upsert({
+    where: { id: "test-transcript" },
+    update: {},
+    create: {
+      id: "test-transcript",
+      sessionId: "test-session",
+      rawText:
+        '<img src=x onerror="window.__transcriptExecuted=true"> Текст [ и (.*) <script>window.__transcriptExecuted=true</script>',
+    },
+  });
+  // A dedicated published deadline, with an actual evidence reference.
+  const taskId = `e2e-${randomUUID()}`;
+  await test.task.create({
+    data: {
+      id: taskId,
+      courseOfferingId: "test-course",
+      title: "[TEST] Проверка переноса срока",
+      type: "HOMEWORK",
+      createdById: "user-dev-owner",
+      updatedById: "user-dev-owner",
+      audiences: { create: { targetType: "GROUP", groupId: "test-group" } },
+    },
+  });
+  const deadline = await test.deadline.create({
+    data: {
+      taskId,
+      courseOfferingId: "test-course",
+      date: new Date("2026-10-16T23:59:59.999+03:00"),
+      isTimeStrict: false,
+      createdById: "user-dev-owner",
+    },
+  });
+  const evidence = await test.sourceReference.create({
+    data: {
+      sourceId: "test-teacher-source",
+      entityType: "DEADLINE",
+      entityId: deadline.id,
+      quoteText: "[TEST] Дата изолированного сценария",
+      confidence: "CONFIRMED",
+    },
+  });
+  await test.deadline.update({
+    where: { id: deadline.id },
+    data: { provenance: "TEACHER", sourceReferenceId: evidence.id },
+  });
+  const start = Date.now();
+  while (true) {
+    try {
+      if (
+        !fs
+          .readFileSync(".test-work/e2e-server.log", "utf8")
+          .includes("Ready in")
+      )
+        throw new Error("Own test server is not ready");
+      const r = await fetch(`${base}/login`);
+      if (r.ok) break;
+    } catch {}
+    if (server.exitCode !== null)
+      throw new Error(
+        "Isolated Next server exited; see .test-work/e2e-server.log",
+      );
+    if (Date.now() - start > 60000)
+      throw new Error("Isolated Next server did not start");
+    await new Promise((r) => setTimeout(r, 300));
+  }
+  browser = await puppeteer.launch({ headless: true, args: ["--no-sandbox"] });
   const page = await browser.newPage();
-  await page.setViewport({ width: 1440, height: 900 });
-
-  // --------------------------------------------------------------------------------
-  // Helper: Switch active user cleanly by clearing existing cookies and setting new one
-  // --------------------------------------------------------------------------------
-  async function setUser(role) {
-    const cookies = await page.cookies();
-    if (cookies.length > 0) {
-      await page.deleteCookie(...cookies);
-    }
-
-    if (role === "guest") {
-      return;
-    }
-
-    const val = role === "owner" ? "user-dev-owner" : "user-dev-student";
-    await page.setCookie({
-      name: "study_dev_user_id",
-      value: val,
-      domain: "localhost",
-      path: "/",
-    });
-  }
-
-  // ================================================================================
-  // SCENARIO 1: Shift deadline in Admin Center UI -> check /deadlines as student ->
-  // reload page -> verify persistence -> revert via UI -> verify student sees reverted
-  // ================================================================================
-  console.log("▶ [SCENARIO 1] Headman shifts deadline in Admin UI -> Student verifies on /deadlines -> Reload -> Revert");
-  try {
-    // 1. Open Admin as Headman
-    await setUser("owner");
-    await page.goto(`${BASE_URL}/admin`, { waitUntil: "networkidle0" });
-
-    // 2. Click "Дедлайны и сроки" tab
-    const tabs = await page.$$("button");
-    let deadlinesTab = null;
-    for (const t of tabs) {
-      const text = await page.evaluate((el) => el.innerText, t);
-      if (text && text.includes("Дедлайны и сроки")) {
-        deadlinesTab = t;
-        break;
-      }
-    }
-    if (!deadlinesTab) throw new Error("Tab 'Дедлайны и сроки' not found in Admin Center");
-    await deadlinesTab.click();
-    await delay(600);
-
-    // 3. Find first deadline item & click "Перенести срок"
-    const editBtns = await page.$$("button");
-    let editBtn = null;
-    for (const b of editBtns) {
-      const text = await page.evaluate((el) => el.innerText, b);
-      if (text && text.includes("Перенести срок")) {
-        editBtn = b;
-        break;
-      }
-    }
-    if (!editBtn) throw new Error("No 'Перенести срок' button found in deadlines tab");
-    await editBtn.click();
-    await delay(400);
-
-    // 4. Set date input with test date: 2026-11-20
-    const dateInput = await page.$('input[type="date"]');
-    if (!dateInput) throw new Error("Date input not revealed upon clicking edit");
-    await setReactInputValue(page, dateInput, "2026-11-20");
-
-    // 5. Click "Сохранить"
-    const saveBtns = await page.$$("button");
-    let saveBtn = null;
-    for (const b of saveBtns) {
-      const text = await page.evaluate((el) => el.innerText, b);
-      if (text && text.includes("Сохранить")) {
-        saveBtn = b;
-        break;
-      }
-    }
-    if (!saveBtn) throw new Error("'Сохранить' button not found");
-    await saveBtn.click();
-    await delay(1800);
-
-    // 6. Assert success banner in Admin UI
-    const bannerText = await page.evaluate(() => document.body.innerText);
-    const hasSuccessBanner = bannerText.includes("Срок сдачи успешно изменен!");
-    if (!hasSuccessBanner) throw new Error("Success banner 'Срок сдачи успешно изменен!' not found in DOM");
-
-    // 7. Switch to Student & open /deadlines
-    await setUser("student");
-    await page.goto(`${BASE_URL}/deadlines`, { waitUntil: "networkidle0" });
-
-    // 8. Verify shifted date is visible to the student
-    const deadlinesContent = await page.evaluate(() => document.body.innerText);
-    const studentSeesNewDate = deadlinesContent.includes("20 ноября 2026") || deadlinesContent.includes("20.11.2026");
-    if (!studentSeesNewDate) throw new Error("Student does NOT see shifted deadline date '20 ноября 2026' on /deadlines");
-
-    // 9. Reload page and check persistence
-    await page.reload({ waitUntil: "networkidle0" });
-    const reloadedContent = await page.evaluate(() => document.body.innerText);
-    const persistedAfterReload = reloadedContent.includes("20 ноября 2026") || reloadedContent.includes("20.11.2026");
-    if (!persistedAfterReload) throw new Error("Shifted deadline did not persist after browser refresh");
-
-    // 10. Revert deadline back via Admin UI
-    await setUser("owner");
-    await page.goto(`${BASE_URL}/admin`, { waitUntil: "networkidle0" });
-    const tabsOwner = await page.$$("button");
-    for (const t of tabsOwner) {
-      const text = await page.evaluate((el) => el.innerText, t);
-      if (text && text.includes("Дедлайны и сроки")) {
-        await t.click();
-        break;
-      }
-    }
-    await delay(600);
-
-    const editBtnsRevert = await page.$$("button");
-    for (const b of editBtnsRevert) {
-      const text = await page.evaluate((el) => el.innerText, b);
-      if (text && text.includes("Перенести срок")) {
-        await b.click();
-        break;
-      }
-    }
-    await delay(400);
-
-    const dateInputRevert = await page.$('input[type="date"]');
-    await setReactInputValue(page, dateInputRevert, "2026-09-22"); // Original date for CAD Ex 1
-
-    const saveBtnsRevert = await page.$$("button");
-    for (const b of saveBtnsRevert) {
-      const text = await page.evaluate((el) => el.innerText, b);
-      if (text && text.includes("Сохранить")) {
-        await b.click();
-        break;
-      }
-    }
-    await delay(1800);
-
-    // 11. Verify student sees reverted date
-    await setUser("student");
-    await page.goto(`${BASE_URL}/deadlines`, { waitUntil: "networkidle0" });
-    const revertedContent = await page.evaluate(() => document.body.innerText);
-    const studentSeesReverted = revertedContent.includes("22 сентября 2026") || revertedContent.includes("22.09.2026");
-
-    results.push({
-      scenario: "1. Headman shifts deadline in Admin UI -> Student verifies on /deadlines -> Reload -> Revert",
-      actions: "Edited deadline date to 2026-11-20 in Admin, saved, verified banner, switched to student, opened /deadlines, reloaded, reverted date to 2026-09-22 in Admin, verified student view",
-      domVerified: "Success feedback 'Срок сдачи успешно изменен!', /deadlines renders '20 ноября 2026', survives reload, reverts to '22 сентября 2026'",
-      status: studentSeesReverted ? "PASS" : "FAIL",
-    });
-    console.log("   ✅ PASS: Deadline shifted, verified by student, persisted after refresh, and reverted cleanly.\n");
-  } catch (err) {
-    results.push({
-      scenario: "1. Headman shifts deadline in Admin UI -> Student verifies on /deadlines -> Reload -> Revert",
-      actions: "Attempted deadline modification via Admin UI",
-      domVerified: `Error encountered: ${err.message}`,
-      status: "FAIL",
-    });
-    console.error("   ❌ FAIL:", err.message, "\n");
-  }
-
-  // ================================================================================
-  // SCENARIO 2: Create task via UI (`CreateTaskModal`)
-  // ================================================================================
-  console.log("▶ [SCENARIO 2] Create task via UI CreateTaskModal -> check Course & Deadlines pages");
-  try {
-    await setUser("owner");
-    await page.goto(`${BASE_URL}/`, { waitUntil: "networkidle0" });
-
-    // 1. Click "Новое задание" button
+  await page.setViewport({ width: 1280, height: 900 });
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  const setUser = async (id) => {
+    await page.setCookie({ name: "study_dev_user_id", value: id, url: base });
+  };
+  const go = async (route) =>
+    page.goto(base + route, { waitUntil: "networkidle2", timeout: 30000 });
+  const body = () => page.evaluate(() => document.body.innerText);
+  const clickText = async (text) => {
     const buttons = await page.$$("button");
-    let newBtn = null;
     for (const b of buttons) {
-      const text = await page.evaluate((el) => el.innerText, b);
-      if (text && text.includes("Новое задание")) {
-        newBtn = b;
-        break;
-      }
-    }
-    if (!newBtn) throw new Error("Button 'Новое задание' not found on dashboard");
-    await newBtn.click();
-    await delay(500);
-
-    // 2. Check modal opened
-    const modalHeading = await page.$eval("h3", (el) => el.innerText);
-    if (!modalHeading.includes("Добавить учебное задание")) {
-      throw new Error("CreateTaskModal did not open");
-    }
-
-    // 3. Fill form
-    const uniqueTitle = `E2E Тестовая лабораторная: Моделирование ${Date.now().toString().slice(-4)}`;
-    const titleInput = await page.$('input[placeholder*="Ознакомительная работа"]');
-    if (!titleInput) throw new Error("Title input not found in modal");
-    await setReactInputValue(page, titleInput, uniqueTitle);
-
-    const descTextarea = await page.$('textarea[placeholder*="Что нужно сделать"]');
-    if (descTextarea) {
-      await setReactInputValue(page, descTextarea, "Автоматизированный E2E тест создания учебного задания через реальную форму UI.");
-    }
-
-    const modalDate = await page.$('input[type="date"]');
-    if (modalDate) {
-      await setReactInputValue(page, modalDate, "2026-12-18");
-    }
-
-    // 4. Click Submit inside modal
-    const submitBtn = await page.$('form button[type="submit"]');
-    if (!submitBtn) throw new Error("Submit button 'form button[type=\"submit\"]' not found");
-    await submitBtn.click();
-    await delay(1800);
-
-    // 5. Verify task appears on /deadlines
-    await page.goto(`${BASE_URL}/deadlines`, { waitUntil: "networkidle0" });
-    const deadlinesText = await page.evaluate(() => document.body.innerText);
-    const foundOnDeadlines = deadlinesText.includes(uniqueTitle);
-    if (!foundOnDeadlines) throw new Error(`Newly created task '${uniqueTitle}' not found on /deadlines`);
-
-    results.push({
-      scenario: "2. Create task via UI (CreateTaskModal)",
-      actions: `Opened CreateTaskModal on dashboard, selected course, filled title '${uniqueTitle}', set deadline 2026-12-18, submitted form`,
-      domVerified: `Modal DOM opened, form submitted without errors, task appeared on /deadlines with date and title`,
-      status: "PASS",
-    });
-    console.log("   ✅ PASS: Task created via UI modal and verified on /deadlines.\n");
-  } catch (err) {
-    results.push({
-      scenario: "2. Create task via UI (CreateTaskModal)",
-      actions: "Attempted task creation via UI modal",
-      domVerified: `Error encountered: ${err.message}`,
-      status: "FAIL",
-    });
-    console.error("   ❌ FAIL:", err.message, "\n");
-  }
-
-  // ================================================================================
-  // SCENARIO 3: Change personal task status as student via UI
-  // ================================================================================
-  console.log("▶ [SCENARIO 3] Change personal task status as student via UI (StatusSelect) -> Reload");
-  try {
-    await setUser("student");
-    await page.goto(`${BASE_URL}/tasks/task-otu-lab1`, { waitUntil: "networkidle0" });
-
-    // 1. Locate Status select
-    const statusSelect = await page.$("select.cursor-pointer");
-    if (!statusSelect) throw new Error("Status select element not found on task page");
-
-    // 2. Select IN_PROGRESS ("В работе")
-    await statusSelect.select("IN_PROGRESS");
-    await delay(1000);
-
-    // 3. Assert badge changed to "В работе"
-    let pageText = await page.evaluate(() => document.body.innerText);
-    if (!pageText.includes("В работе")) throw new Error("Badge did not update to 'В работе'");
-
-    // 4. Select SUBMITTED ("Сдано (отчет отправлен)")
-    await statusSelect.select("SUBMITTED");
-    await delay(1000);
-
-    // 5. Assert badge changed to "Сдано (Ожидает зачета)"
-    pageText = await page.evaluate(() => document.body.innerText);
-    if (!pageText.includes("Сдано (Ожидает зачета)")) throw new Error("Badge did not update to 'Сдано (Ожидает зачета)'");
-
-    // 6. Reload page to verify database persistence
-    await page.reload({ waitUntil: "networkidle0" });
-    const reloadedText = await page.evaluate(() => document.body.innerText);
-    const persisted = reloadedText.includes("Сдано (Ожидает зачета)");
-    if (!persisted) throw new Error("Student task status did not persist after page refresh");
-
-    // 7. Reset back to NOT_STARTED
-    const resetSelect = await page.$("select.cursor-pointer");
-    await resetSelect.select("NOT_STARTED");
-    await delay(1000);
-
-    results.push({
-      scenario: "3. Change personal task status as student via UI",
-      actions: "Student navigated to /tasks/task-otu-lab1, changed select to IN_PROGRESS, then SUBMITTED, verified badge, reloaded page to verify persistence, reverted to NOT_STARTED",
-      domVerified: "Badge dynamically transitioned to 'В работе' then 'Сдано (Ожидает зачета)', persisted across hard refresh",
-      status: "PASS",
-    });
-    console.log("   ✅ PASS: Student progress updated via UI, verified in DOM, and persisted after refresh.\n");
-  } catch (err) {
-    results.push({
-      scenario: "3. Change personal task status as student via UI",
-      actions: "Attempted student progress update via UI select",
-      domVerified: `Error encountered: ${err.message}`,
-      status: "FAIL",
-    });
-    console.error("   ❌ FAIL:", err.message, "\n");
-  }
-
-  // ================================================================================
-  // SCENARIO 4: Impossibility for student to self-report `ACCEPTED`
-  // ================================================================================
-  console.log("▶ [SCENARIO 4] Verification of trust model: student cannot self-report ACCEPTED");
-  try {
-    await setUser("student");
-    await page.goto(`${BASE_URL}/tasks/task-otu-lab1`, { waitUntil: "networkidle0" });
-
-    // 1. Inspect the option[value="ACCEPTED"] in DOM
-    const isAcceptedDisabled = await page.evaluate(() => {
-      const opt = document.querySelector('option[value="ACCEPTED"]');
-      return opt ? opt.disabled : null;
-    });
-
-    if (isAcceptedDisabled !== true) {
-      throw new Error(`option[value="ACCEPTED"] is not disabled for student! Found disabled=${isAcceptedDisabled}`);
-    }
-
-    const optionText = await page.evaluate(() => {
-      const opt = document.querySelector('option[value="ACCEPTED"]');
-      return opt ? opt.textContent : "";
-    });
-
-    if (!optionText.includes("требуется проверка преподавателем")) {
-      throw new Error(`Option label does not indicate requirement of teacher verification: '${optionText}'`);
-    }
-
-    // 2. Verify dev-owner CAN verify/accept
-    await setUser("owner");
-    await page.goto(`${BASE_URL}/tasks/task-otu-lab1`, { waitUntil: "networkidle0" });
-
-    const isOwnerAcceptedDisabled = await page.evaluate(() => {
-      const opt = document.querySelector('option[value="ACCEPTED"]');
-      return opt ? opt.disabled : null;
-    });
-
-    if (isOwnerAcceptedDisabled === true) {
-      throw new Error("option[value='ACCEPTED'] is unexpectedly disabled for owner/moderator");
-    }
-
-    results.push({
-      scenario: "4. Impossibility for student to self-report ACCEPTED",
-      actions: "Inspected option[value='ACCEPTED'] as student; checked disabled attribute and label; compared with owner session",
-      domVerified: "DOM option[value='ACCEPTED'] has attribute disabled=true with label 'Принято (требуется проверка преподавателем)' for student; enabled for owner",
-      status: "PASS",
-    });
-    console.log("   ✅ PASS: Trust model enforced in UI - student cannot select ACCEPTED.\n");
-  } catch (err) {
-    results.push({
-      scenario: "4. Impossibility for student to self-report ACCEPTED",
-      actions: "Inspected option[value='ACCEPTED'] attribute",
-      domVerified: `Error encountered: ${err.message}`,
-      status: "FAIL",
-    });
-    console.error("   ❌ FAIL:", err.message, "\n");
-  }
-
-  // ================================================================================
-  // SCENARIO 5: Publish announcement via Admin Center UI -> check dashboard & persistence
-  // ================================================================================
-  console.log("▶ [SCENARIO 5] Publish announcement via Admin UI -> Verify on Dashboard -> Reload");
-  try {
-    await setUser("owner");
-    await page.goto(`${BASE_URL}/admin`, { waitUntil: "networkidle0" });
-
-    // 1. Click "Объявления" tab
-    const tabs = await page.$$("button");
-    let annTab = null;
-    for (const t of tabs) {
-      const text = await page.evaluate((el) => el.innerText, t);
-      if (text && text.includes("Объявления")) {
-        annTab = t;
-        break;
-      }
-    }
-    if (!annTab) throw new Error("Tab 'Объявления' not found in Admin Center");
-    await annTab.click();
-    await delay(400);
-
-    // 2. Fill announcement form
-    const annTitle = `E2E Важное объявление ${Date.now().toString().slice(-4)}`;
-    const annContent = "Контрольное объявление, созданное через форму старосты в браузере. Проверка доставки студентам.";
-
-    const titleInput = await page.$('input[placeholder*="Перенос контрольной недели"]');
-    if (!titleInput) throw new Error("Announcement title input not found");
-    await setReactInputValue(page, titleInput, annTitle);
-
-    const contentInput = await page.$('textarea[placeholder*="Подробный текст"]');
-    if (!contentInput) throw new Error("Announcement content textarea not found");
-    await setReactInputValue(page, contentInput, annContent);
-
-    // Check "Закрепить сверху"
-    const pinCheckbox = await page.$('input[type="checkbox"]');
-    if (pinCheckbox) await pinCheckbox.click();
-
-    // 3. Click "Опубликовать"
-    const pubButtons = await page.$$("button");
-    let pubBtn = null;
-    for (const b of pubButtons) {
-      const text = await page.evaluate((el) => el.innerText, b);
-      if (text && text.trim() === "Опубликовать") {
-        pubBtn = b;
-        break;
-      }
-    }
-    if (!pubBtn) throw new Error("Button 'Опубликовать' not found");
-    await pubBtn.click();
-    await delay(1400);
-
-    // 4. Check success feedback
-    const adminText = await page.evaluate(() => document.body.innerText);
-    if (!adminText.includes("Объявление успешно опубликовано для всей группы!")) {
-      throw new Error("Success notification for announcement publication not found");
-    }
-
-    // 5. Switch to student and visit dashboard
-    await setUser("student");
-    await page.goto(`${BASE_URL}/`, { waitUntil: "networkidle0" });
-
-    const dashboardText = await page.evaluate(() => document.body.innerText);
-    const studentSeesAnnouncement = dashboardText.includes(annTitle) && dashboardText.includes(annContent);
-    if (!studentSeesAnnouncement) throw new Error(`Announcement '${annTitle}' not visible to student on dashboard`);
-
-    // 6. Reload page and assert persistence
-    await page.reload({ waitUntil: "networkidle0" });
-    const reloadedDashboard = await page.evaluate(() => document.body.innerText);
-    const persisted = reloadedDashboard.includes(annTitle);
-    if (!persisted) throw new Error("Announcement disappeared after page reload");
-
-    results.push({
-      scenario: "5. Publish announcement via Admin UI -> Verify on Dashboard -> Reload",
-      actions: `Headman filled form with title '${annTitle}', pinned it, published it, checked success banner; student visited dashboard, reloaded page`,
-      domVerified: `Admin banner 'Объявление успешно опубликовано', dashboard renders announcement card with badge 'Закреплено', persists across reload`,
-      status: "PASS",
-    });
-    console.log("   ✅ PASS: Announcement published via Admin UI, delivered to student dashboard, and persisted.\n");
-  } catch (err) {
-    results.push({
-      scenario: "5. Publish announcement via Admin UI -> Verify on Dashboard -> Reload",
-      actions: "Attempted announcement publication via Admin UI",
-      domVerified: `Error encountered: ${err.message}`,
-      status: "FAIL",
-    });
-    console.error("   ❌ FAIL:", err.message, "\n");
-  }
-
-  // ================================================================================
-  // SCENARIO 6: Change nickname / privacy settings via Settings UI -> Reload
-  // ================================================================================
-  console.log("▶ [SCENARIO 6] Change nickname / privacy settings via Settings UI -> Reload");
-  try {
-    await setUser("student");
-    await page.goto(`${BASE_URL}/settings`, { waitUntil: "networkidle0" });
-
-    // 1. Locate nickname input
-    const nickInput = await page.$('input[value*="ivan"]');
-    if (!nickInput) throw new Error("Nickname input not found in settings");
-
-    // 2. Change nickname safely with React setter
-    const updatedNick = "ivan_e2e_verified";
-    await setReactInputValue(page, nickInput, updatedNick);
-
-    // 3. Click "Сохранить изменения"
-    const settingsBtns = await page.$$("button");
-    let saveProfileBtn = null;
-    for (const b of settingsBtns) {
-      const text = await page.evaluate((el) => el.innerText, b);
-      if (text && text.includes("Сохранить изменения")) {
-        saveProfileBtn = b;
-        break;
-      }
-    }
-    if (!saveProfileBtn) throw new Error("Button 'Сохранить изменения' not found");
-    await saveProfileBtn.click();
-    await delay(1200);
-
-    // 4. Assert success feedback
-    const feedbackText = await page.evaluate(() => document.body.innerText);
-    if (!feedbackText.includes("Настройки профиля успешно сохранены!")) {
-      throw new Error("Success message 'Настройки профиля успешно сохранены!' not found");
-    }
-
-    // 5. Reload page to verify persistence
-    await page.reload({ waitUntil: "networkidle0" });
-    const currentVal = await page.$eval('input[type="text"]', (el) => el.value);
-    if (currentVal !== updatedNick) {
-      throw new Error(`Updated nickname did not persist after reload. Found: '${currentVal}'`);
-    }
-
-    // 6. Revert nickname back to ivan_student
-    const revertInput = await page.$('input[type="text"]');
-    await setReactInputValue(page, revertInput, "ivan_student");
-
-    const revertBtns = await page.$$("button");
-    for (const b of revertBtns) {
-      const text = await page.evaluate((el) => el.innerText, b);
-      if (text && text.includes("Сохранить изменения")) {
+      if ((await b.evaluate((el) => el.textContent)).includes(text)) {
         await b.click();
-        break;
+        return;
       }
     }
-    await delay(1200);
-
-    results.push({
-      scenario: "6. Change nickname / privacy settings via Settings UI -> Reload",
-      actions: "Navigated to /settings as student, changed nickname to 'ivan_e2e_verified', submitted form, verified success alert, reloaded page, verified input value, reverted to 'ivan_student'",
-      domVerified: "Alert 'Настройки профиля успешно сохранены!', input value matches changed value across hard refresh",
-      status: "PASS",
-    });
-    console.log("   ✅ PASS: Nickname changed in Settings, saved, verified in DOM, and reverted.\n");
-  } catch (err) {
-    results.push({
-      scenario: "6. Change nickname / privacy settings via Settings UI -> Reload",
-      actions: "Attempted profile update via Settings UI",
-      domVerified: `Error encountered: ${err.message}`,
-      status: "FAIL",
-    });
-    console.error("   ❌ FAIL:", err.message, "\n");
-  }
-
-  // ================================================================================
-  // SCENARIO 7: Permissions on Admin Center (/admin forbidden for dev-student, accessible for dev-owner)
-  // ================================================================================
-  console.log("▶ [SCENARIO 7] Authorization check: /admin forbidden for student, accessible for owner");
-  try {
-    // 1. Access /admin as student
-    await setUser("student");
-    await page.goto(`${BASE_URL}/admin`, { waitUntil: "networkidle0" });
-
-    const studentAdminText = await page.evaluate(() => document.body.innerText);
-    const hasForbidden403 = studentAdminText.includes("403 Доступ ограничен") || studentAdminText.includes("Панель управления доступна только старосте");
-    if (!hasForbidden403) {
-      throw new Error("Student was not blocked from /admin (expected 403 Доступ ограничен)");
-    }
-
-    const hasAdminTabsForStudent = studentAdminText.includes("AI Ingestion") || studentAdminText.includes("Очередь предложений");
-    if (hasAdminTabsForStudent) {
-      throw new Error("Admin tabs were improperly rendered for student in restricted view!");
-    }
-
-    // 2. Access /admin as owner
-    await setUser("owner");
-    await page.goto(`${BASE_URL}/admin`, { waitUntil: "networkidle0" });
-
-    const ownerAdminText = await page.evaluate(() => document.body.innerText);
-    const hasOwnerAccess = ownerAdminText.includes("Панель управления старосты") && ownerAdminText.includes("AI Ingestion");
-    if (!hasOwnerAccess) {
-      throw new Error(`Owner was unable to access /admin features. Text found: ${ownerAdminText.slice(0, 300)}`);
-    }
-
-    results.push({
-      scenario: "7. Permissions on Admin Center (/admin)",
-      actions: "Navigated to /admin as dev-student; checked DOM for 403 screen and absence of controls; switched to dev-owner and navigated to /admin",
-      domVerified: "Student DOM renders '403 Доступ ограничен' without administrative tabs; Owner DOM renders full 'Панель управления старосты' with 6 tabs",
-      status: "PASS",
-    });
-    console.log("   ✅ PASS: Role-based authorization enforced on /admin.\n");
-  } catch (err) {
-    results.push({
-      scenario: "7. Permissions on Admin Center (/admin)",
-      actions: "Checked access to /admin for student and owner",
-      domVerified: `Error encountered: ${err.message}`,
-      status: "FAIL",
-    });
-    console.error("   ❌ FAIL:", err.message, "\n");
-  }
-
-  // ================================================================================
-  // SCENARIO 8: Session persistence / login / logout
-  // ================================================================================
-  console.log("▶ [SCENARIO 8] Session persistence, Logout, and Login Switcher");
-  try {
-    // 1. Start as student and visit /settings
-    await setUser("student");
-    await page.goto(`${BASE_URL}/settings`, { waitUntil: "networkidle0" });
-
-    // 2. Click "Выйти из аккаунта" button
-    const logoutBtns = await page.$$("button");
-    let logoutBtn = null;
-    for (const b of logoutBtns) {
-      const text = await page.evaluate((el) => el.innerText, b);
-      if (text && text.includes("Выйти из аккаунта")) {
-        logoutBtn = b;
-        break;
+    throw new Error(`Button missing: ${text}`);
+  };
+  const setInput = async (selector, value) => {
+    await page.$eval(
+      selector,
+      (el, val) => {
+        const proto =
+          el.tagName === "TEXTAREA"
+            ? HTMLTextAreaElement.prototype
+            : HTMLInputElement.prototype;
+        Object.getOwnPropertyDescriptor(proto, "value").set.call(el, val);
+        el.dispatchEvent(new Event("input", { bubbles: true }));
+        el.dispatchEvent(new Event("change", { bubbles: true }));
+      },
+      value,
+    );
+  };
+  await scenario("guest cannot use a fallback owner", async () => {
+    await go("/");
+    assert(page.url().endsWith("/login"));
+  });
+  await setUser("user-dev-student");
+  await scenario("student cannot access admin or private roster", async () => {
+    await go("/admin");
+    assert((await body()).includes("403 Доступ ограничен"));
+    await go("/members");
+    assert(!(await body()).includes("PRIVATE user-dev-owner"));
+  });
+  await scenario(
+    "server hides foreign, subgroup, individual and draft tasks",
+    async () => {
+      for (const id of [
+        "test-foreign-task",
+        "test-subgroup-task",
+        "test-individual-task",
+        "test-draft-task",
+        "test-no-audience",
+      ]) {
+        const r = await go(`/tasks/${id}`);
+        assert.equal(r.status(), 404, id);
+      }
+    },
+  );
+  await scenario(
+    "variant is not guessed and self acceptance is unavailable",
+    async () => {
+      await go("/tasks/task-otu-lab1");
+      assert((await body()).includes("Вариант не назначен"));
+      assert(!(await body()).includes("Ваш индивидуальный вариант: 99"));
+      assert(await page.$eval('option[value="ACCEPTED"]', (el) => el.disabled));
+    },
+  );
+  await scenario(
+    "student progress and private notes persist through reload",
+    async () => {
+      await page.select("select", "IN_PROGRESS");
+      await page.waitForFunction(() =>
+        document.body.innerText.includes("В работе"),
+      );
+      await setInput("textarea", privateNote);
+      await clickText("Сохранить");
+      await page.waitForFunction(() =>
+        document.body.innerText.includes("Сохранено"),
+      );
+      await page.reload({ waitUntil: "networkidle2" });
+      assert.equal(await page.$eval("textarea", (el) => el.value), privateNote);
+      assert.equal(await page.$eval("select", (el) => el.value), "IN_PROGRESS");
+    },
+  );
+  await scenario(
+    "transcript HTML and regex characters are rendered as text",
+    async () => {
+      await go("/transcripts");
+      await page.type("input", "img");
+      assert.equal(
+        await page.evaluate(() => window.__transcriptExecuted),
+        undefined,
+      );
+      assert.equal((await page.$$eval("mark", (els) => els.length)) > 0, true);
+      assert.equal(await page.$$eval("img[onerror]", (els) => els.length), 0);
+      assert((await body()).includes("<img"));
+      await setInput("input", "[");
+      await page.waitForFunction(() =>
+        Array.from(document.querySelectorAll("mark")).some(
+          (el) => el.textContent === "[",
+        ),
+      );
+    },
+  );
+  await setUser("test-manager");
+  await scenario(
+    "task editor receives no private enrollment payload",
+    async () => {
+      await go("/admin");
+      const html = await page.content();
+      assert(!html.includes("PRIVATE user-dev-student"));
+      assert(!html.includes("PRIVATE user-dev-owner"));
+    },
+  );
+  await setUser("user-dev-owner");
+  await scenario(
+    "headman records another student result with an explicit source",
+    async () => {
+      await go("/tasks/task-otu-lab1");
+      await page.select(
+        'select[aria-label="Студент для подтверждения"]',
+        "test-peer",
+      );
+      await setInput(
+        'input[aria-label="Источник подтверждения"]',
+        "[TEST] Преподаватель на защите 16.10.2026",
+      );
+      await setInput(
+        'textarea[aria-label="Основание подтверждения"]',
+        "[TEST] Преподаватель сообщил: работа студента test_peer принята.",
+      );
+      await clickText("Записать результат с источником");
+      await page.waitForFunction(() =>
+        document.body.innerText.includes(
+          "Подтверждение преподавателя записано старостой",
+        ),
+      );
+      const row = await test.studentTaskProgress.findUniqueOrThrow({
+        where: {
+          taskId_userId: { taskId: "task-otu-lab1", userId: "test-peer" },
+        },
+        include: { verificationEvidence: true },
+      });
+      assert.equal(row.status, "ACCEPTED");
+      assert.equal(row.verificationSource, "HEADMAN_CONFIRMED");
+      assert.equal(row.verifiedById, "user-dev-owner");
+      assert(row.verificationEvidence.quoteText.includes("test_peer"));
+      await setUser("test-peer");
+      await go("/tasks/task-otu-lab1");
+      assert(
+        (await body()).includes("Результат преподавателя записан старостой"),
+      );
+      await setUser("user-dev-owner");
+    },
+  );
+  await scenario(
+    "deadline UI stores history, date-only time, source and notification",
+    async () => {
+      await go("/admin");
+      await clickText("Дедлайны и сроки");
+      await page.waitForSelector(`[data-deadline-id="${deadline.id}"] button`);
+      await page.click(`[data-deadline-id="${deadline.id}"] button`);
+      await setInput('input[aria-label="Новая дата срока"]', "2026-11-20");
+      await setInput(
+        'input[aria-label="Основание изменения срока"]',
+        "[TEST] Преподаватель перенёс срок; изолированный E2E",
+      );
+      await clickText("Сохранить");
+      await page.waitForFunction(() =>
+        document.body.innerText.includes("Срок сдачи успешно изменен!"),
+      );
+      const old = await test.deadline.findUniqueOrThrow({
+        where: { id: deadline.id },
+      });
+      const next = await test.deadline.findFirstOrThrow({
+        where: { originalDeadlineId: deadline.id },
+      });
+      assert.equal(old.status, "SUPERSEDED");
+      assert.equal(next.date.toISOString(), "2026-11-20T20:59:59.999Z");
+      assert(next.sourceReferenceId);
+      await setUser("user-dev-student");
+      await go(`/tasks/${taskId}`);
+      assert((await body()).includes("20.11.2026"));
+      assert(!(await body()).includes("03:00"));
+      assert(
+        await test.notification.findFirst({
+          where: {
+            userId: "user-dev-student",
+            type: "DEADLINE_CHANGE",
+            link: `/tasks/${taskId}`,
+          },
+        }),
+      );
+      const response = await fetch(base + "/api/calendar/export", {
+        headers: { cookie: "study_dev_user_id=user-dev-student" },
+      });
+      assert.equal(response.status, 200);
+      const ics = await response.text();
+      assert(ics.includes("DTSTART:20261120T205959Z"));
+      assert(!ics.includes("test-foreign-task"));
+    },
+  );
+  if (process.env.SV_CAPTURE_SCREENSHOTS) {
+    const widths =
+      process.env.SV_CAPTURE_SCREENSHOTS === "matrix"
+        ? [390, 1280, 1440]
+        : [390, 1440];
+    for (const width of widths) {
+      await page.setViewport({ width, height: 900 });
+      for (const [name, route] of [
+        ["dashboard", "/"],
+        ["course", "/courses/test-course"],
+        ["task", "/tasks/task-otu-lab1"],
+        ["admin", "/admin"],
+        ["deadlines", "/deadlines"],
+      ]) {
+        await go(route);
+        fs.mkdirSync(`.test-work/screenshots/${width}`, { recursive: true });
+        await page.screenshot({
+          path: `.test-work/screenshots/${width}/${name}.png`,
+          fullPage: true,
+        });
       }
     }
-    if (!logoutBtn) throw new Error("Button 'Выйти из аккаунта' not found on /settings");
-    await logoutBtn.click();
-    await delay(1400);
-
-    // 3. Verify redirected to /login
-    const currentUrl = page.url();
-    if (!currentUrl.includes("/login")) {
-      throw new Error(`Expected redirect to /login after logout, got: ${currentUrl}`);
-    }
-
-    // 4. Attempt to access /admin as logged-out guest -> expect redirect to /login
-    await page.goto(`${BASE_URL}/admin`, { waitUntil: "networkidle0" });
-    if (!page.url().includes("/login")) {
-      throw new Error("Guest was not redirected to /login when attempting to access /admin");
-    }
-
-    // 5. On /login, click "Батукаев Расул (Староста / Owner)"
-    const loginButtons = await page.$$("button");
-    let ownerLoginBtn = null;
-    for (const b of loginButtons) {
-      const text = await page.evaluate((el) => el.innerText, b);
-      if (text && text.includes("Батукаев Расул")) {
-        ownerLoginBtn = b;
-        break;
-      }
-    }
-    if (!ownerLoginBtn) throw new Error("Quick login button for Rasul not found on /login");
-    await ownerLoginBtn.click();
-    await delay(1600);
-
-    // 6. Verify redirected to dashboard and authenticated as Rasul
-    const navText = await page.evaluate(() => document.querySelector("nav")?.innerText || "");
-    const isAuthenticatedAsOwner = navText.includes("Панель старосты") || navText.toLowerCase().includes("старост");
-    if (!isAuthenticatedAsOwner) {
-      throw new Error(`Navbar does not indicate owner session after login. Found: '${navText}'`);
-    }
-
-    results.push({
-      scenario: "8. Session persistence / login / logout",
-      actions: "Clicked 'Выйти из аккаунта' on /settings, confirmed redirect to /login, tried accessing /admin as guest (redirected), clicked quick login as Rasul, confirmed session in navbar",
-      domVerified: "URL transitions to /login upon logout; guest blocked with redirect; login button sets active session and renders Owner UI elements in nav",
-      status: "PASS",
-    });
-    console.log("   ✅ PASS: Full login/logout session lifecycle verified end-to-end.\n");
-  } catch (err) {
-    results.push({
-      scenario: "8. Session persistence / login / logout",
-      actions: "Tested logout on /settings and login on /login",
-      domVerified: `Error encountered: ${err.message}`,
-      status: "FAIL",
-    });
-    console.error("   ❌ FAIL:", err.message, "\n");
   }
-
-  await browser.close();
-
-  console.log("================================================================================");
-  console.log("📊 E2E BROWSER AUTOMATION RESULTS SUMMARY");
-  console.log("================================================================================");
-  console.table(results, ["scenario", "status", "domVerified"]);
-
-  const allPassed = results.every((r) => r.status === "PASS");
-  if (allPassed) {
-    console.log("\n🎉 ALL 8 E2E BROWSER TEST SCENARIOS PASSED WITH UNCOMPROMISING REAL DOM VERIFICATION!");
-    process.exit(0);
-  } else {
-    console.log("\n⚠️ SOME SCENARIOS FAILED. Check details above.");
-    process.exit(1);
-  }
+  await scenario(
+    "headman creates an evidenced task through the existing form",
+    async () => {
+      await setUser("user-dev-owner");
+      await go("/");
+      await clickText("Новое задание");
+      const title = `[TEST] Новая задача ${randomUUID()}`;
+      await setInput('input[aria-label="Название задания"]', title);
+      await setInput(
+        'textarea[aria-label="Источник задания и срока"]',
+        "[TEST] Преподаватель выдал задание и указал срок на занятии",
+      );
+      await setInput('input[type="date"]', "2026-12-01");
+      await clickText("Опубликовать задание");
+      await page.waitForFunction(
+        () => !document.querySelector('input[aria-label="Название задания"]'),
+      );
+      const task = await test.task.findFirstOrThrow({
+        where: { title },
+        include: { sourceReference: true, deadlines: true },
+      });
+      assert.equal(task.sourceReference.confidence, "CONFIRMED");
+      assert.equal(
+        task.deadlines[0].date.toISOString(),
+        "2026-12-01T20:59:59.999Z",
+      );
+      await setUser("user-dev-student");
+      await go(`/tasks/${task.id}`);
+      assert((await body()).includes(title));
+    },
+  );
+  assert.deepEqual(errors, []);
+  assert.equal(
+    await fingerprint(),
+    before,
+    "Working database changed during isolated E2E",
+  );
+  fs.writeFileSync(
+    ".test-work/e2e-results.json",
+    JSON.stringify({ passed, workingDatabaseUnchanged: true }, null, 2),
+  );
+  console.log(
+    `${passed.length} E2E scenarios passed; working database unchanged.`,
+  );
+} finally {
+  if (browser) await browser.close();
+  server.kill("SIGTERM");
+  await test.$disconnect();
+  await working.$disconnect();
+  fs.closeSync(log);
 }
-
-runE2E().catch((err) => {
-  console.error("Fatal E2E suite error:", err);
-  process.exit(1);
-});

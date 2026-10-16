@@ -3,6 +3,7 @@
 import React, { useState, useTransition } from "react";
 import { StudentTaskProgressStatus, VerificationSource } from "@prisma/client";
 import { updateStudentProgressAction, verifyTaskProgressAction } from "@/server/actions/task-actions";
+import { formatVerificationSource } from "@/lib/utils/formatters";
 import { Badge } from "@/components/ui/Badge";
 import { CheckCircle2, Clock, AlertCircle, FileCheck, ShieldCheck, Loader2 } from "lucide-react";
 
@@ -36,7 +37,7 @@ export function StatusSelect({
         return (
           <Badge variant="success" className="gap-1.5 font-semibold">
             <CheckCircle2 className="w-3.5 h-3.5" />
-            {verified ? "Принято (Верифицировано)" : "Принято (Self-Reported)"}
+            {verified ? "Результат подтверждён" : "Подтверждение требует проверки"}
           </Badge>
         );
       case "SUBMITTED":
@@ -125,7 +126,7 @@ export function StatusSelect({
         <div className="flex items-center gap-1.5 text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 px-2 py-1 rounded">
           <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
           <span>
-            {verificationSource || "Зачтено преподавателем"}
+            {formatVerificationSource(verificationSource)}
             {verifiedAt ? ` • ${new Date(verifiedAt).toLocaleDateString("ru-RU")}` : ""}
           </span>
         </div>
@@ -161,7 +162,7 @@ export function StatusSelect({
             disabled={isPending || (currentStatus === "ACCEPTED" && isVerified)}
             className="text-xs bg-emerald-600 hover:bg-emerald-500 text-white px-2 py-1 rounded font-medium disabled:opacity-40 cursor-pointer transition-colors"
           >
-            Зачесть (ACCEPTED)
+            Подтвердить результат
           </button>
           <button
             onClick={() => handleVerify(false)}

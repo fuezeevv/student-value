@@ -1,4 +1,5 @@
 import React from "react";
+import { isDevAuthEnabled } from "@/lib/auth/dev-policy";
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth/session";
 import { redirect } from "next/navigation";
@@ -11,7 +12,7 @@ import { switchDevUserAction } from "@/server/actions/task-actions";
 export default async function LoginPage() {
   const user = await getCurrentUser();
   const isDevAuth =
-    process.env.NODE_ENV === "development" || process.env.ALLOW_DEV_AUTH === "true";
+    isDevAuthEnabled();
 
   // If already logged in and not in dev/demo mode, redirect to dashboard
   if (user && !isDevAuth) {
@@ -64,7 +65,7 @@ export default async function LoginPage() {
           </Button>
 
           <p className="text-[11px] text-slate-500 text-center leading-relaxed">
-            Google OAuth ожидает регистрации Client ID. Для входа в Beta используйте быстрый вход ниже.
+            {isDevAuth ? "Google OAuth ещё не реализован. Ниже доступен тестовый вход для разработки." : "Вход пока недоступен: Google OAuth ещё не реализован."}
           </p>
         </div>
 

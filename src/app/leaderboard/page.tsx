@@ -1,7 +1,7 @@
 import React from "react";
 import Link from "next/link";
 import { prisma } from "@/lib/db/prisma";
-import { getCurrentUser } from "@/lib/auth/session";
+import { requireCurrentUser } from "@/lib/auth/session";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import {
@@ -17,10 +17,11 @@ import {
 } from "lucide-react";
 
 export default async function LeaderboardPage() {
-  const user = await getCurrentUser();
+  const user = await requireCurrentUser();
 
   // Load all gamification profiles sorted by totalXp descending
   const profiles = await prisma.userGamificationProfile.findMany({
+    where: { user: { memberships: { some: { groupId: user.groupId } } }, OR: [{ isLeaderboardOptIn: true }, { userId: user.id }] },
     orderBy: { totalXp: "desc" },
     include: {
       user: {
@@ -128,7 +129,7 @@ export default async function LeaderboardPage() {
           </div>
 
           <div className="space-y-2">
-            {profiles.map((profile, idx) => {
+            {profiles.filter(profile => profile.isLeaderboardOptIn).map((profile, idx) => {
               const isCurrentUser = user && profile.userId === user.id;
               const isOptedIn = profile.isLeaderboardOptIn;
               const displayName = isOptedIn

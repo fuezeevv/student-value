@@ -1,83 +1,107 @@
 import React from "react";
-import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
-import { getCurrentUser } from "@/lib/auth/session";
+import { requireCurrentUser } from "@/lib/auth/session";
 import { hasPermission } from "@/lib/permissions/checker";
 import { AdminClient, AdminData } from "./AdminClient";
 import { Shield } from "lucide-react";
 
 export default async function AdminPage() {
-  const user = await getCurrentUser();
-
-  // Server-side Authorization Check
-  if (!user) {
-    redirect("/login");
-  }
-
-  const isAdmin =
-    user.isOwner ||
-    user.isSystemAdmin ||
-    hasPermission(user, "manage_group") ||
-    hasPermission(user, "manage_tasks") ||
-    hasPermission(user, "manage_courses");
-
-  if (!isAdmin) {
+  const user = await requireCurrentUser();
+  const allowed = (permission: string) =>
+    hasPermission(user, permission, user.groupId);
+  if (
+    ![
+      "manage_group",
+      "manage_tasks",
+      "manage_courses",
+      "manage_deadlines",
+      "manage_members",
+      "manage_announcements",
+    ].some(allowed)
+  )
     return (
-      <div className="p-12 text-center space-y-3">
-        <h2 className="text-xl font-bold text-rose-400">403 Доступ ограничен</h2>
-        <p className="text-xs text-slate-400 max-w-md mx-auto">
-          Панель управления доступна только старосте группы и уполномоченным администраторам.
-        </p>
+      <div className="p-12 text-center">
+        <h2 className="text-xl text-rose-400">403 Доступ ограничен</h2>
+        <p>Панель доступна уполномоченным редакторам группы.</p>
       </div>
     );
-  }
-
-  // Load all admin data
-  const [suggestions, offerings, announcements, enrollments, auditLogs, users, deadlines] =
-    await Promise.all([
-      prisma.aiSuggestion.findMany({
-        orderBy: { createdAt: "desc" },
-        take: 30,
-      }),
-      prisma.courseOffering.findMany({
-        where: { semester: { isCurrent: true } },
-        include: {
-          courseDefinition: true,
-          teachers: { include: { teacher: true } },
-        },
-      }),
-      prisma.announcement.findMany({
-        orderBy: { publishedAt: "desc" },
-        take: 20,
-      }),
-      prisma.enrollment.findMany({
-        where: { group: { code: "5130901/40102" } },
-        orderBy: { fullName: "asc" },
-        include: { user: true },
-      }),
-      prisma.auditLog.findMany({
-        orderBy: { createdAt: "desc" },
-        include: { user: true },
-        take: 30,
-      }),
-      prisma.user.findMany({
-        select: { id: true, nickname: true },
-        orderBy: { nickname: "asc" },
-      }),
-      prisma.deadline.findMany({
-        where: { status: "ACTIVE" },
-        include: {
-          task: {
-            include: {
-              courseOffering: { include: { courseDefinition: true } },
+  const privateAccess = allowed("view_private_member_identity");
+  const [
+    suggestions,
+    offerings,
+    announcements,
+    enrollments,
+    auditLogs,
+    users,
+    deadlines,
+  ] = await Promise.all([
+    allowed("manage_tasks")
+      ? prisma.aiSuggestion.findMany({
+          where: { source: { groupId: user.groupId } },
+          orderBy: { createdAt: "desc" },
+          take: 30,
+        })
+      : [],
+    prisma.courseOffering.findMany({
+      where: {
+        groups: { some: { groupId: user.groupId } },
+        semester: { isCurrent: true },
+      },
+      include: {
+        courseDefinition: true,
+        teachers: { include: { teacher: true } },
+      },
+    }),
+    allowed("manage_announcements")
+      ? prisma.announcement.findMany({
+          where: { groupId: user.groupId, status: "PUBLISHED" },
+          orderBy: { publishedAt: "desc" },
+          take: 20,
+        })
+      : [],
+    privateAccess
+      ? prisma.enrollment.findMany({
+          where: { groupId: user.groupId },
+          orderBy: { fullName: "asc" },
+          include: { user: { select: { nickname: true } } },
+        })
+      : [],
+    allowed("manage_group") && privateAccess
+      ? prisma.auditLog.findMany({
+          where: { details: { path: ["groupId"], equals: user.groupId } },
+          include: { user: { select: { nickname: true } } },
+          orderBy: { createdAt: "desc" },
+          take: 30,
+        })
+      : [],
+    privateAccess && allowed("manage_members")
+      ? prisma.user.findMany({
+          where: { memberships: { some: { groupId: user.groupId } } },
+          select: { id: true, nickname: true },
+          orderBy: { nickname: "asc" },
+        })
+      : [],
+    allowed("manage_deadlines")
+      ? prisma.deadline.findMany({
+          where: {
+            status: "ACTIVE",
+            task: {
+              status: "PUBLISHED",
+              courseOffering: { groups: { some: { groupId: user.groupId } } },
             },
           },
-        },
-        orderBy: { date: "asc" },
-      }),
-    ]);
-
-  const adminData: AdminData = {
+          include: {
+            task: {
+              include: {
+                courseOffering: { include: { courseDefinition: true } },
+              },
+            },
+          },
+          orderBy: { date: "asc" },
+        })
+      : [],
+  ]);
+  const data: AdminData = {
     deadlines: deadlines.map((d) => ({
       id: d.id,
       taskId: d.taskId,
@@ -104,13 +128,13 @@ export default async function AdminPage() {
       shortTitle: o.courseDefinition.shortTitle,
       format: o.format,
       softwareRequired: o.softwareRequired,
-      teachers: o.teachers.map((ct) => ({
-        id: ct.id,
-        teacherId: ct.teacherId,
-        fullName: ct.teacher.fullName,
-        role: ct.role,
-        status: ct.status,
-        notes: ct.notes,
+      teachers: o.teachers.map((t) => ({
+        id: t.id,
+        teacherId: t.teacherId,
+        fullName: t.teacher.fullName,
+        role: t.role,
+        status: t.status,
+        notes: t.notes,
       })),
     })),
     announcements: announcements.map((a) => ({
@@ -128,7 +152,7 @@ export default async function AdminPage() {
       studentIdNumber: e.studentIdNumber,
       status: e.status,
       userId: e.userId,
-      userNickname: e.user?.nickname || null,
+      userNickname: e.user?.nickname ?? null,
     })),
     auditLogs: auditLogs.map((l) => ({
       id: l.id,
@@ -137,24 +161,19 @@ export default async function AdminPage() {
       entityId: l.entityId,
       details: l.details,
       createdAt: l.createdAt.toISOString(),
-      userNickname: l.user?.nickname || null,
+      userNickname: l.user?.nickname ?? null,
     })),
     users,
   };
-
   return (
     <div className="space-y-6">
       <div className="pb-3 border-b border-slate-800">
-        <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight text-white flex items-center gap-2">
+        <h1 className="text-2xl font-bold flex items-center gap-2">
           <Shield className="w-6 h-6 text-cyan-400" />
-          Панель управления старосты (Admin Center)
+          Панель старосты
         </h1>
-        <p className="text-xs sm:text-sm text-slate-400 mt-0.5">
-          Управление курсами, модерация предложений AI, объявления и администрирование группы 5130901/40102
-        </p>
       </div>
-
-      <AdminClient data={adminData} />
+      <AdminClient data={data} />
     </div>
   );
 }

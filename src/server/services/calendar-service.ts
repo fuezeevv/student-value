@@ -18,16 +18,17 @@ export async function getCalendarIntegrationStatus(
   });
 
   const totalSyncedEvents = await prisma.externalCalendarEvent.count({
-    where: { syncStatus: "SYNCED" },
+    where: { syncStatus: "SYNCED", deadline: { courseOffering: { groups: { some: { groupId } } } } },
   });
 
   const lastEvent = await prisma.externalCalendarEvent.findFirst({
+    where: { deadline: { courseOffering: { groups: { some: { groupId } } } } },
     orderBy: { lastSyncedAt: "desc" },
     select: { lastSyncedAt: true },
   });
 
   const syncErrorsCount = await prisma.externalCalendarEvent.count({
-    where: { syncStatus: "FAILED" },
+    where: { syncStatus: "FAILED", deadline: { courseOffering: { groups: { some: { groupId } } } } },
   });
 
   const missingCredentials: string[] = [];
@@ -36,7 +37,7 @@ export async function getCalendarIntegrationStatus(
   if (!process.env.GOOGLE_SERVICE_ACCOUNT_KEY) missingCredentials.push("GOOGLE_SERVICE_ACCOUNT_KEY (или OAuth Refresh Token)");
 
   return {
-    isConfigured: missingCredentials.length === 0,
+    isConfigured: false,
     groupCalendarId: group?.calendarId || null,
     lastSyncedAt: lastEvent?.lastSyncedAt || null,
     totalSyncedEvents,
@@ -53,55 +54,7 @@ export async function syncDeadlineToExternalCalendar(
   deadlineId: string,
   calendarId: string
 ) {
-  const deadline = await prisma.deadline.findUnique({
-    where: { id: deadlineId },
-    include: {
-      task: true,
-      courseOffering: { include: { courseDefinition: true } },
-    },
-  });
-
-  if (!deadline) {
-    throw new Error("Deadline not found");
-  }
-
-  // Check if credentials exist
-  if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
-    // Record as pending sync or note missing configuration
-    return {
-      success: false,
-      reason: "MISSING_GOOGLE_CREDENTIALS",
-      message: "Google API credentials are not yet configured in environment variables.",
-    };
-  }
-
-  // Idempotent upsert in database
-  const existing = await prisma.externalCalendarEvent.findFirst({
-    where: { deadlineId, calendarId },
-  });
-
-  if (existing) {
-    // In actual Google API call, we would do calendar.events.patch(...)
-    const updated = await prisma.externalCalendarEvent.update({
-      where: { id: existing.id },
-      data: {
-        syncStatus: "SYNCED",
-        lastSyncedAt: new Date(),
-        lastError: null,
-      },
-    });
-    return { success: true, event: updated, action: "UPDATED" };
-  } else {
-    // In actual Google API call, we would do calendar.events.insert(...)
-    const created = await prisma.externalCalendarEvent.create({
-      data: {
-        deadlineId,
-        calendarId,
-        externalEventId: `sv1984_event_${deadline.id.slice(0, 12)}`,
-        syncStatus: "SYNCED",
-        lastSyncedAt: new Date(),
-      },
-    });
-    return { success: true, event: created, action: "CREATED" };
-  }
+  // API transport and worker are not implemented. Never report a simulated sync.
+  void deadlineId; void calendarId;
+  return {success:false,reason:"NOT_IMPLEMENTED",message:"Прямая синхронизация Google Calendar пока не реализована. Доступен экспорт .ics."};
 }

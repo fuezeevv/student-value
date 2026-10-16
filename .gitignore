@@ -33,3 +33,7 @@ next-env.d.ts
 # prisma SQLite if used
 *.db
 *.db-journal
+
+# Isolated test builds and reports
+.next-*/
+.test-work/

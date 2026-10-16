@@ -462,3 +462,14 @@ enum CalendarSyncStatus {
 | `userAgent` | String(255) | Nullable | Браузер |
 | `details` | JSONB | Default `{}` | Дополнительные технические детали ошибки |
 | `createdAt` | TimestampTZ | Default `now()` | Время инцидента |
+
+## Уточнения реализованного ядра
+
+- ConfidenceLevel дополнен UNVERIFIED; SourceReference по умолчанию не подтверждён.
+- CourseTeacher по умолчанию CANDIDATE_UNVERIFIED, Deadline.provenance по умолчанию UNKNOWN.
+- StudentTaskProgress.verificationSourceReferenceId связывает подтверждение конкретного результата с SourceReference. CHECK accepted_requires_evidence проверяет обязательные поля; семантику источника проверяет сервер.
+- VariantAssignment содержит confidence и sourceReferenceId. При отсутствии единственного подтверждённого назначения персональный вариант не выводится.
+- Announcement.status отделяет опубликованные записи от архива.
+- ExternalCalendarEvent по умолчанию PENDING; API-синхронизация не реализована.
+
+Фактическое поведение и проверки описаны в [RELIABLE_CORE.md](RELIABLE_CORE.md).

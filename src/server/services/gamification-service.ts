@@ -37,7 +37,8 @@ export async function awardXp({
     const rule = await prisma.xpRule.findUnique({
       where: { code: ruleCode },
     });
-    points = rule?.points ?? 50;
+    if (!rule) return { awarded: false, reason: "Rule not configured" };
+    points = rule.points;
   }
 
   // 3. Create XP Event in transaction and update profile
@@ -65,7 +66,7 @@ export async function awardXp({
         level: 1,
         currentStreak: 1,
         longestStreak: 1,
-        isLeaderboardOptIn: true,
+        isLeaderboardOptIn: false,
         lastActivityDate: new Date(),
       },
     });

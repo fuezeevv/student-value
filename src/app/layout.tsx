@@ -1,3 +1,4 @@
+import { isDevAuthEnabled } from "@/lib/auth/dev-policy";
 import type { Metadata } from "next";
 import "./globals.css";
 import { getCurrentUser } from "@/lib/auth/session";
@@ -25,7 +26,7 @@ export default async function RootLayout({
   return (
     <html lang="ru" className="dark">
       <body className="bg-[#070a13] text-slate-100 min-h-screen flex flex-col antialiased selection:bg-cyan-500/30 selection:text-cyan-200">
-        <Navbar user={user} unreadCount={unreadCount} />
+        <Navbar user={user} unreadCount={unreadCount} devAuthEnabled={isDevAuthEnabled()} />
         <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10 relative z-10">
           {children}
         </main>

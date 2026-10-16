@@ -1,5 +1,5 @@
 import { formatInTimeZone } from "date-fns-tz";
-import { differenceInCalendarDays, differenceInHours } from "date-fns";
+import { effectiveDeadline, moscowDate } from "@/server/domain/deadline-date";
 
 export const MOSCOW_TZ = "Europe/Moscow";
 
@@ -24,7 +24,8 @@ export interface DeadlineCalculationResult {
 export function calculateDeadlineStatus(
   deadlineDate: Date | string | null,
   now: Date = new Date(),
-  isAccepted: boolean = false
+  isAccepted: boolean = false,
+  isTimeStrict: boolean = true
 ): DeadlineCalculationResult {
   if (isAccepted) {
     return {
@@ -50,12 +51,14 @@ export function calculateDeadlineStatus(
     };
   }
 
-  const targetDate = new Date(deadlineDate);
-  const diffDays = differenceInCalendarDays(targetDate, now);
-  const diffHours = differenceInHours(targetDate, now);
-  const formatted = formatInTimeZone(targetDate, MOSCOW_TZ, "dd.MM.yyyy, HH:mm");
+  const strict = isTimeStrict && !(typeof deadlineDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(deadlineDate));
+  const targetDate = effectiveDeadline(deadlineDate, strict);
+  const diffMs = targetDate.getTime() - now.getTime();
+  const diffDays = Math.round((Date.parse(moscowDate(targetDate)) - Date.parse(moscowDate(now))) / 86400000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const formatted = formatInTimeZone(targetDate, MOSCOW_TZ, strict ? "dd.MM.yyyy, HH:mm" : "dd.MM.yyyy");
 
-  if (diffHours < 0) {
+  if (diffMs < 0) {
     const overdueDays = Math.abs(diffDays);
     return {
       urgency: "OVERDUE",

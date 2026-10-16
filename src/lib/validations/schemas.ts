@@ -7,7 +7,16 @@ export const CreateTaskSchema = z.object({
   description: z.string().optional(),
   type: z.nativeEnum(TaskType),
   number: z.number().int().positive().optional().nullable(),
-  deadlineDate: z.string().optional().nullable(),
+  sourceNote: z
+    .string()
+    .trim()
+    .min(8, "Укажите источник задания и срока")
+    .max(4000),
+  deadlineDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Укажите календарную дату")
+    .optional()
+    .nullable(),
   deadlineType: z.nativeEnum(DeadlineType).default(DeadlineType.HARD),
   isTimeStrict: z.boolean().default(false),
   variantNumber: z.string().optional().nullable(),

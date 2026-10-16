@@ -1,7 +1,9 @@
+import { confirmedDeadlineWhere } from "@/server/domain/deadline-visibility";
+import { taskVisibilityWhere } from "@/server/domain/access";
 import React from "react";
 import Link from "next/link";
 import { prisma } from "@/lib/db/prisma";
-import { getCurrentUser } from "@/lib/auth/session";
+import { requireCurrentUser } from "@/lib/auth/session";
 import { getCalendarIntegrationStatus } from "@/server/services/calendar-service";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
@@ -20,14 +22,14 @@ import {
 } from "lucide-react";
 
 export default async function CalendarPage() {
-  const user = await getCurrentUser();
+  const user = await requireCurrentUser();
   const groupId = user?.groupId || "";
 
   const calendarStatus = await getCalendarIntegrationStatus(groupId);
 
   // Fetch active deadlines
   const deadlines = await prisma.deadline.findMany({
-    where: { status: "ACTIVE" },
+    where: { ...confirmedDeadlineWhere, task: await taskVisibilityWhere(user) },
     include: {
       task: {
         include: {
@@ -39,33 +41,8 @@ export default async function CalendarPage() {
     orderBy: { date: "asc" },
   });
 
-  // Verified class sessions
-  const knownSessions = [
-    {
-      course: "САПР, часть 1 (упражнения)",
-      day: "Каждый понедельник",
-      time: "12:00 – 14:00",
-      room: "ауд. 3-402",
-      source: "САПР_упр_5130901.40102_full.docx",
-      color: "border-cyan-500/30 bg-cyan-950/20 text-cyan-300",
-    },
-    {
-      course: "Основы теории управления (ОТУ)",
-      day: "Среда / По расписанию",
-      time: "Лекции и лабораторные",
-      room: "СПбПУ",
-      source: "Нестеров Сергей Александрович",
-      color: "border-blue-500/30 bg-blue-950/20 text-blue-300",
-    },
-    {
-      course: "Инженерная и компьютерная графика / VR",
-      day: "Воскресенье / СДО",
-      time: "Очная лаборатория / СДО курс",
-      room: "Лаборатория VR / Дистанционно",
-      source: "Болсуновская Марина Владимировна",
-      color: "border-emerald-500/30 bg-emerald-950/20 text-emerald-300",
-    },
-  ];
+  // Schedule facts appear only after they have a stored source; none are assumed.
+  const knownSessions: Array<{course:string;day:string;time:string;room:string;source:string;color:string}> = [];
 
   return (
     <div className="space-y-6">
@@ -74,10 +51,10 @@ export default async function CalendarPage() {
         <div>
           <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight text-white flex items-center gap-2">
             <CalendarIcon className="w-6 h-6 text-cyan-400" />
-            Календарь и Google Calendar
+            Календарь сроков
           </h1>
           <p className="text-xs sm:text-sm text-slate-400 mt-0.5">
-            Расписание занятий, контрольные сроки и синхронизация группы 5130901/40102
+            Контрольные сроки вашей группы; доступен экспорт файла .ics
           </p>
         </div>
 
@@ -169,7 +146,7 @@ export default async function CalendarPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-xs text-slate-300 leading-relaxed">
-              Прямая двусторонняя синхронизация с личным аккаунтом Google (автоматическое создание
+              Планируемая синхронизация с личным аккаунтом Google (автоматическое создание
               напоминаний о сдачах в вашей личной сетке календаря).
             </p>
 
@@ -206,6 +183,7 @@ export default async function CalendarPage() {
               const isSynced = dl.calendarEvents.some((e) => e.syncStatus === "SYNCED");
               const courseTitle = dl.task.courseOffering.courseDefinition.shortTitle;
               const dateStr = new Date(dl.date).toLocaleDateString("ru-RU", {
+                timeZone: "Europe/Moscow",
                 day: "numeric",
                 month: "long",
                 year: "numeric",
@@ -261,10 +239,11 @@ export default async function CalendarPage() {
         <div className="lg:col-span-5 space-y-4">
           <h2 className="text-sm font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">
             <Layers className="w-4 h-4 text-cyan-400" />
-            Подтвержденные аудитории и расписание
+            Подтверждённые занятия
           </h2>
 
           <div className="space-y-3">
+            {knownSessions.length === 0 && <p className="text-sm text-slate-400">Подтверждённые занятия ещё не добавлены.</p>}
             {knownSessions.map((session, idx) => (
               <div
                 key={idx}

@@ -45,7 +45,7 @@ export function formatDeadlineProvenance(
     case "HEADMAN_CONFIRMED":
       return { label: "Подтверждено старостой", variant: "info" };
     case "OFFICIAL":
-      return { label: "Расписание СПбПУ", variant: "info" };
+      return { label: "Официальный документ", variant: "info" };
     case "PERSONAL":
       return { label: "Личный дедлайн", variant: "muted" };
     case "UNKNOWN":
@@ -61,7 +61,7 @@ export function formatVerificationSource(
     case "TEACHER_CONFIRMED":
       return "Зачтено преподавателем";
     case "HEADMAN_CONFIRMED":
-      return "Подтверждено старостой";
+      return "Результат преподавателя записан старостой";
     case "SELF_REPORTED":
       return "Отмечено студентом";
     case "SYSTEM_VERIFIED":

@@ -55,7 +55,7 @@ export function SettingsClient({
   const [nickname, setNickname] = useState(user.nickname);
   const [bio, setBio] = useState(user.bio || "");
   const [isLeaderboardOptIn, setIsLeaderboardOptIn] = useState(
-    gamification?.isLeaderboardOptIn ?? true
+    gamification?.isLeaderboardOptIn ?? true,
   );
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -84,7 +84,7 @@ export function SettingsClient({
         setStatusMessage(
           checked
             ? "Вы включены в публичную таблицу лидеров"
-            : "Ваш профиль в рейтинге скрыт (приватный режим)"
+            : "Ваш профиль в рейтинге скрыт (приватный режим)",
         );
       } catch (err: any) {
         setErrorMessage(err.message);
@@ -118,7 +118,10 @@ export function SettingsClient({
         <form onSubmit={handleSaveProfile} className="space-y-4">
           <div className="flex items-center gap-4">
             <img
-              src={user.avatarUrl || "https://api.dicebear.com/7.x/bottts/svg?seed=user"}
+              src={
+                user.avatarUrl ||
+                "https://api.dicebear.com/7.x/bottts/svg?seed=user"
+              }
               alt={user.nickname}
               className="w-14 h-14 rounded-full bg-slate-800 border border-cyan-500/30"
             />
@@ -158,7 +161,13 @@ export function SettingsClient({
             </div>
           </div>
 
-          <Button type="submit" size="sm" variant="primary" disabled={isPending} className="text-xs">
+          <Button
+            type="submit"
+            size="sm"
+            variant="primary"
+            disabled={isPending}
+            className="text-xs"
+          >
             Сохранить изменения
           </Button>
         </form>
@@ -177,7 +186,8 @@ export function SettingsClient({
               Отображение в таблице лидеров (Leaderboard)
             </div>
             <div className="text-[11px] text-slate-400">
-              Если опция выключена, ваше имя и аватар заменяются на «Анонимный студент»
+              Если опция выключена, ваше имя и аватар заменяются на «Анонимный
+              студент»
             </div>
           </div>
 
@@ -198,7 +208,7 @@ export function SettingsClient({
       <Card className="glass-panel border-slate-800 p-5 space-y-4">
         <h2 className="text-sm font-bold uppercase tracking-wider text-slate-200 flex items-center gap-2">
           <Shield className="w-4 h-4 text-cyan-400" />
-          Привязанные идентификаторы (Multi-Identity Auth)
+          Способы входа
         </h2>
 
         <div className="space-y-2.5 text-xs">
@@ -208,8 +218,18 @@ export function SettingsClient({
               className="p-3 rounded-xl border border-slate-800 bg-slate-950/60 flex items-center justify-between"
             >
               <div className="space-y-0.5">
-                <span className="font-semibold text-white font-mono">{id.provider}</span>
-                <span className="text-slate-400 block">{id.email || id.providerUserId}</span>
+                <span className="font-semibold text-white font-mono">
+                  {(
+                    {
+                      LOCAL_DEV: "Тестовый вход",
+                      GOOGLE: "Google",
+                      TELEGRAM: "Telegram",
+                    } as Record<string, string>
+                  )[id.provider] ?? id.provider}
+                </span>
+                <span className="text-slate-400 block">
+                  {id.email || id.providerUserId}
+                </span>
               </div>
               <Badge variant="success" className="text-[10px]">
                 Подключен
@@ -219,8 +239,12 @@ export function SettingsClient({
 
           <div className="p-3 rounded-xl border border-slate-800/80 bg-slate-950/30 flex items-center justify-between text-slate-400">
             <div className="space-y-0.5">
-              <span className="font-semibold text-slate-300">Telegram Bot Notifications</span>
-              <span className="text-[11px] block">Оповещения в личные сообщения Telegram</span>
+              <span className="font-semibold text-slate-300">
+                Telegram Bot Notifications
+              </span>
+              <span className="text-[11px] block">
+                Оповещения в личные сообщения Telegram
+              </span>
             </div>
             <Badge variant="muted" className="text-[10px]">
               Скоро
@@ -238,12 +262,15 @@ export function SettingsClient({
 
         <div className="space-y-2 text-xs text-slate-300">
           <p>
-            Интеграция автоматически передает дедлайны группы в Google Calendar.
+            Прямая синхронизация Google Calendar пока не реализована. Доступен
+            экспорт .ics.
           </p>
           <div className="p-3 rounded-xl border border-slate-800 bg-slate-950/60 flex items-center justify-between">
             <span>Статус интеграции:</span>
-            <Badge variant={calendarStatus.isConfigured ? "success" : "warning"}>
-              {calendarStatus.isConfigured ? "Активно" : "Ожидает Google Client ID"}
+            <Badge
+              variant={calendarStatus.isConfigured ? "success" : "warning"}
+            >
+              {calendarStatus.isConfigured ? "Активно" : "Не реализована"}
             </Badge>
           </div>
         </div>

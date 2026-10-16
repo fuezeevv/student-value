@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useTransition } from "react";
-import { updateStudentProgressAction } from "@/server/actions/task-actions";
+import { saveStudentNotesAction } from "@/server/actions/task-actions";
 import { StudentTaskProgressStatus } from "@prisma/client";
 import { Button } from "@/components/ui/Button";
 import { Save, Loader2, Check } from "lucide-react";
@@ -19,7 +19,7 @@ export function StudentNotesEditor({ taskId, initialNotes, currentStatus }: Stud
 
   const handleSave = () => {
     startTransition(async () => {
-      await updateStudentProgressAction(taskId, currentStatus, notes);
+      await saveStudentNotesAction(taskId, notes);
       setIsSaved(true);
       setTimeout(() => setIsSaved(false), 2000);
     });

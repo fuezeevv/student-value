@@ -1,11 +1,15 @@
 "use server";
 
+import { createHash } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
 import { getCurrentUser } from "@/lib/auth/session";
-import { markNotificationRead, markAllNotificationsRead } from "@/server/services/notification-service";
+import {
+  markNotificationRead,
+  markAllNotificationsRead,
+} from "@/server/services/notification-service";
 
 export async function markNotificationReadAction(notificationId: string) {
   const user = await getCurrentUser();
@@ -45,7 +49,10 @@ export async function toggleLeaderboardOptInAction(optIn: boolean) {
   return { success: true };
 }
 
-export async function updateProfileSettingsAction(nickname: string, bio?: string) {
+export async function updateProfileSettingsAction(
+  nickname: string,
+  bio?: string,
+) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
 
@@ -80,9 +87,13 @@ export async function updateProfileSettingsAction(nickname: string, bio?: string
 
 export async function logoutUserAction() {
   const cookieStore = await cookies();
-  cookieStore.set("study_dev_user_id", "guest", { path: "/" });
+  const token = cookieStore.get("__Host-session")?.value;
+  if (token)
+    await prisma.session.deleteMany({
+      where: { tokenHash: createHash("sha256").update(token).digest("hex") },
+    });
+  cookieStore.delete("study_dev_user_id");
   cookieStore.delete("__Host-session");
   revalidatePath("/");
   redirect("/login");
 }
-

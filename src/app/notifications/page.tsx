@@ -1,11 +1,11 @@
 import React from "react";
 import { prisma } from "@/lib/db/prisma";
-import { getCurrentUser } from "@/lib/auth/session";
+import { requireCurrentUser } from "@/lib/auth/session";
 import { NotificationsClient, NotificationItem } from "./NotificationsClient";
 import { Bell } from "lucide-react";
 
 export default async function NotificationsPage() {
-  const user = await getCurrentUser();
+  const user = await requireCurrentUser();
 
   const dbNotifs = user
     ? await prisma.notification.findMany({

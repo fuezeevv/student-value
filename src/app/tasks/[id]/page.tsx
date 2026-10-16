@@ -1,8 +1,18 @@
+import { assignedVariants } from "@/server/domain/variants";
+import { confirmedDeadlineWhere } from "@/server/domain/deadline-visibility";
+import { TaskVerificationForm } from "@/components/task/TaskVerificationForm";
+import { hasPermission } from "@/lib/permissions/checker";
+import { audienceMemberIds } from "@/server/domain/access";
+import { taskVisibilityWhere } from "@/server/domain/access";
+import {
+  isTrustedAccepted,
+  progressEvidenceInclude,
+} from "@/server/domain/trust";
 import React from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
-import { getCurrentUser } from "@/lib/auth/session";
+import { requireCurrentUser } from "@/lib/auth/session";
 import { calculateDeadlineStatus } from "@/server/services/deadline-service";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
@@ -25,10 +35,10 @@ interface TaskPageProps {
 
 export default async function TaskDetailPage({ params }: TaskPageProps) {
   const { id } = await params;
-  const user = await getCurrentUser();
+  const user = await requireCurrentUser();
 
-  const task = await prisma.task.findUnique({
-    where: { id },
+  const task = await prisma.task.findFirst({
+    where: { AND: [await taskVisibilityWhere(user), { id }] },
     include: {
       courseOffering: {
         include: {
@@ -37,15 +47,10 @@ export default async function TaskDetailPage({ params }: TaskPageProps) {
         },
       },
       deadlines: {
+        where: confirmedDeadlineWhere,
         orderBy: { date: "asc" },
       },
-      variants: {
-        include: {
-          assignments: {
-            include: { enrollment: true },
-          },
-        },
-      },
+
       audiences: true,
       sourceReference: {
         include: {
@@ -53,7 +58,10 @@ export default async function TaskDetailPage({ params }: TaskPageProps) {
           createdBy: true,
         },
       },
-      progress: user ? { where: { userId: user.id } } : false,
+      progress: {
+        where: { userId: user.id },
+        include: progressEvidenceInclude,
+      },
       materials: {
         include: { material: true },
       },
@@ -64,40 +72,50 @@ export default async function TaskDetailPage({ params }: TaskPageProps) {
     notFound();
   }
 
-  // Find user's enrollment
-  const userEnrollment = user
-    ? await prisma.enrollment.findFirst({
-        where: { userId: user.id, group: { code: "5130901/40102" } },
-      })
-    : null;
-
+  const personalVariants = await assignedVariants(user, [task.id]);
   const userProgress = task.progress?.[0];
-  const isAccepted = userProgress?.status === "ACCEPTED";
+  const isAccepted = isTrustedAccepted(userProgress);
   const primaryDeadline = task.deadlines[0];
   const deadlineCalc = calculateDeadlineStatus(
     primaryDeadline ? primaryDeadline.date : null,
     new Date(),
-    isAccepted
+    isAccepted,
+    primaryDeadline?.isTimeStrict ?? true,
   );
 
   // User's assigned variant
-  const assignedVariant = task.variants.find((v) =>
-    v.assignments.some((a) => a.enrollmentId === userEnrollment?.id)
-  ) || task.variants[0];
+  const assignedVariant = personalVariants.get(task.id);
 
-  const canVerifyProgress = user?.permissions.includes("verify_progress") ?? false;
+  const canVerifyProgress = false; // Own results require an independent verifier.
+  const canRecordResult =
+    hasPermission(user, "verify_progress") ||
+    user.permissions.includes(`verify_progress:${task.courseOfferingId}`);
+  const recipients = canRecordResult ? await audienceMemberIds(task.id) : [];
+  const verificationTargets = recipients.length
+    ? await prisma.user.findMany({
+        where: { id: { in: recipients.filter((id) => id !== user.id) } },
+        select: { id: true, nickname: true },
+      })
+    : [];
 
   return (
     <div className="space-y-6">
       {/* Breadcrumbs */}
       <div className="flex items-center gap-2 text-xs text-slate-400">
-        <Link href="/" className="hover:text-slate-200">Главная</Link>
+        <Link href="/" className="hover:text-slate-200">
+          Главная
+        </Link>
         <span>/</span>
-        <Link href={`/courses/${task.courseOfferingId}`} className="hover:text-slate-200">
+        <Link
+          href={`/courses/${task.courseOfferingId}`}
+          className="hover:text-slate-200"
+        >
           {task.courseOffering.courseDefinition.shortTitle}
         </Link>
         <span>/</span>
-        <span className="text-slate-200 font-medium truncate max-w-xs">{task.title}</span>
+        <span className="text-slate-200 font-medium truncate max-w-xs">
+          {task.title}
+        </span>
       </div>
 
       {/* Task Header */}
@@ -107,14 +125,14 @@ export default async function TaskDetailPage({ params }: TaskPageProps) {
             {task.type === "LABORATORY"
               ? `Лабораторная работа #${task.number || "—"}`
               : task.type === "HOMEWORK"
-              ? "Домашнее задание"
-              : "Учебное задание"}
+                ? "Домашнее задание"
+                : "Учебное задание"}
           </Badge>
           <Badge variant="secondary" className="font-mono text-xs">
             {task.courseOffering.courseDefinition.shortTitle}
           </Badge>
           <Badge variant="info" className="text-xs">
-            Аудитория: Группа 40102
+            Для вашей группы
           </Badge>
         </div>
 
@@ -128,9 +146,11 @@ export default async function TaskDetailPage({ params }: TaskPageProps) {
         <div className="p-4 rounded-lg border border-sky-900/40 bg-sky-950/20 text-xs space-y-2">
           <div className="flex items-center gap-2 text-sky-400 font-semibold">
             <Quote className="w-3.5 h-3.5" />
-            <span>Источник информации (Provenance)</span>
+            <span>Источник информации</span>
             <Badge variant="info" className="text-[10px] py-0 px-1.5">
-              {task.sourceReference.confidence === "CONFIRMED" ? "Подтверждено" : "Требует проверки"}
+              {task.sourceReference.confidence === "CONFIRMED"
+                ? "Подтверждено"
+                : "Требует проверки"}
             </Badge>
           </div>
           {task.sourceReference.quoteText && (
@@ -161,17 +181,29 @@ export default async function TaskDetailPage({ params }: TaskPageProps) {
                 </Badge>
               </div>
 
-              {assignedVariant.spec && typeof assignedVariant.spec === "object" && (
-                <div className="p-3 bg-slate-950/80 rounded border border-slate-800 text-xs font-mono space-y-1 text-slate-300">
-                  {Object.entries(assignedVariant.spec as Record<string, unknown>).map(([key, val]) => (
-                    <div key={key} className="flex items-center justify-between">
-                      <span className="text-slate-500">{key}:</span>
-                      <span className="text-sky-300 font-semibold">{String(val)}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
+              {assignedVariant.spec &&
+                typeof assignedVariant.spec === "object" && (
+                  <div className="p-3 bg-slate-950/80 rounded border border-slate-800 text-xs font-mono space-y-1 text-slate-300">
+                    {Object.entries(
+                      assignedVariant.spec as Record<string, unknown>,
+                    ).map(([key, val]) => (
+                      <div
+                        key={key}
+                        className="flex items-center justify-between"
+                      >
+                        <span className="text-slate-500">{key}:</span>
+                        <span className="text-sky-300 font-semibold">
+                          {String(val)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
             </Card>
+          )}
+
+          {!assignedVariant && (
+            <p className="text-sm text-slate-400">Вариант не назначен</p>
           )}
 
           {/* Description & Requirements */}
@@ -187,14 +219,17 @@ export default async function TaskDetailPage({ params }: TaskPageProps) {
               </div>
             ) : (
               <p className="text-xs text-slate-500 italic">
-                Подробные требования не указаны. Ознакомьтесь с методическими указаниями к курсу.
+                Подробные требования не указаны. Ознакомьтесь с методическими
+                указаниями к курсу.
               </p>
             )}
 
             {task.courseOffering.softwareRequired && (
               <div className="pt-3 border-t border-slate-800 flex items-center gap-2 text-xs text-slate-400">
                 <Cpu className="w-3.5 h-3.5 text-slate-500" />
-                <span>Используемая среда: {task.courseOffering.softwareRequired}</span>
+                <span>
+                  Используемая среда: {task.courseOffering.softwareRequired}
+                </span>
               </div>
             )}
           </Card>
@@ -244,13 +279,14 @@ export default async function TaskDetailPage({ params }: TaskPageProps) {
                   {deadlineCalc.formattedDate}
                 </div>
                 <div className="text-[11px] text-slate-500">
-                  Тип: {primaryDeadline.type === "HARD" ? "Жесткий дедлайн (HARD)" : "Рекомендуемый срок (SOFT)"}
+                  Тип:{" "}
+                  {primaryDeadline.type === "HARD"
+                    ? "Окончательный срок"
+                    : "Рекомендуемый срок"}
                 </div>
               </div>
             ) : (
-              <div className="text-xs text-slate-400 py-1">
-                Срок не назначен преподавателем.
-              </div>
+              <div className="text-xs text-slate-400 py-1">Срок не указан.</div>
             )}
           </Card>
 
@@ -272,6 +308,13 @@ export default async function TaskDetailPage({ params }: TaskPageProps) {
               isCurrentUser={Boolean(user)}
             />
           </Card>
+
+          {canRecordResult && verificationTargets.length > 0 && (
+            <TaskVerificationForm
+              taskId={task.id}
+              students={verificationTargets}
+            />
+          )}
 
           {/* Student Private Notes */}
           {user && (

@@ -1,9 +1,15 @@
+import { confirmedDeadlineWhere } from "@/server/domain/deadline-visibility";
+import { getCurrentUser } from "@/lib/auth/session";
+import { taskVisibilityWhere } from "@/server/domain/access";
+import { effectiveDeadline } from "@/server/domain/deadline-date";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 
 export async function GET() {
+  const user=await getCurrentUser();
+  if(!user?.groupId) return NextResponse.json({error:"Необходимо войти"},{status:401});
   const deadlines = await prisma.deadline.findMany({
-    where: { status: "ACTIVE" },
+    where: { ...confirmedDeadlineWhere, task: await taskVisibilityWhere(user) },
     include: {
       task: {
         include: {
@@ -18,7 +24,7 @@ export async function GET() {
 
   const nowStr = new Date().toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
 
-  let icsContent = [
+  const icsContent = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
     "PRODID:-//Student Value 1.984//SPbPU 5130901/40102//RU",
@@ -30,7 +36,7 @@ export async function GET() {
 
   for (const dl of deadlines) {
     const course = dl.task.courseOffering.courseDefinition;
-    const deadlineDate = new Date(dl.date);
+    const deadlineDate = effectiveDeadline(dl.date, dl.isTimeStrict);
     const dtstart = deadlineDate.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
     
     // 1-hour window for the event
@@ -46,8 +52,8 @@ export async function GET() {
       `DTSTAMP:${nowStr}`,
       `DTSTART:${dtstart}`,
       `DTEND:${dtend}`,
-      `SUMMARY:${title.replace(/[,;]/g, " ")}`,
-      `DESCRIPTION:${desc.replace(/[,;]/g, " ")}`,
+      `SUMMARY:${title.replace(/[\r\n,;]/g, " ")}`,
+      `DESCRIPTION:${desc.replace(/[\r\n,;]/g, " ")}`,
       "STATUS:CONFIRMED",
       "END:VEVENT"
     );

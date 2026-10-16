@@ -1,7 +1,10 @@
+import { confirmedDeadlineWhere } from "@/server/domain/deadline-visibility";
+import { taskVisibilityWhere } from "@/server/domain/access";
+import { isTrustedAccepted, progressEvidenceInclude } from "@/server/domain/trust";
 import React from "react";
 import Link from "next/link";
 import { prisma } from "@/lib/db/prisma";
-import { getCurrentUser } from "@/lib/auth/session";
+import { requireCurrentUser } from "@/lib/auth/session";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import {
@@ -16,20 +19,21 @@ import {
 } from "lucide-react";
 
 export default async function AnalyticsPage() {
-  const user = await getCurrentUser();
+  const user = await requireCurrentUser();
+  const visibleTasks = await taskVisibilityWhere(user);
 
   const offerings = await prisma.courseOffering.findMany({
     where: {
       semester: { isCurrent: true },
-      groups: { some: { group: { code: "5130901/40102" } } },
+      groups: { some: { groupId: user.groupId } },
     },
     include: {
       courseDefinition: true,
       tasks: {
-        where: { status: "PUBLISHED" },
+        where: visibleTasks,
         include: {
-          progress: user ? { where: { userId: user.id } } : false,
-          deadlines: { where: { status: "ACTIVE" } },
+          progress: { where: { userId: user.id }, include: progressEvidenceInclude },
+          deadlines: { where: confirmedDeadlineWhere },
         },
       },
     },
@@ -41,7 +45,7 @@ export default async function AnalyticsPage() {
       courseCode: o.courseDefinition.code,
       courseTitle: o.courseDefinition.shortTitle,
       userProgress: t.progress?.[0],
-      isAccepted: t.progress?.[0]?.status === "ACCEPTED",
+      isAccepted: isTrustedAccepted(t.progress?.[0]),
       isSubmitted: t.progress?.[0]?.status === "SUBMITTED",
       isInProgress: t.progress?.[0]?.status === "IN_PROGRESS",
     }))
@@ -59,7 +63,7 @@ export default async function AnalyticsPage() {
   const courseStats = offerings.map((o) => {
     const tasks = o.tasks;
     const count = tasks.length;
-    const accepted = tasks.filter((t) => t.progress?.[0]?.status === "ACCEPTED").length;
+    const accepted = tasks.filter((t) => isTrustedAccepted(t.progress?.[0])).length;
     const submitted = tasks.filter((t) => t.progress?.[0]?.status === "SUBMITTED").length;
     const percent = count > 0 ? Math.round((accepted / count) * 100) : 0;
 

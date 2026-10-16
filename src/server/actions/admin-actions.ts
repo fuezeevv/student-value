@@ -1,210 +1,218 @@
 "use server";
-
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { prisma } from "@/lib/db/prisma";
-import { getCurrentUser } from "@/lib/auth/session";
-import { requirePermission } from "@/lib/permissions/checker";
-import { TeacherCourseStatus, EnrollmentStatus } from "@prisma/client";
-import { broadcastGroupNotification } from "@/server/services/notification-service";
-import { CreateAnnouncementSchema, CreateAnnouncementInput } from "@/lib/validations/schemas";
+import { requireCurrentUser } from "@/lib/auth/session";
+import { requirePermission, ForbiddenError } from "@/lib/permissions/checker";
+import { TeacherCourseStatus } from "@prisma/client";
+import { requireCoursePermission } from "@/server/domain/access";
+import { rescheduleDeadline } from "@/server/domain/deadlines";
+import {
+  CreateAnnouncementSchema,
+  CreateAnnouncementInput,
+} from "@/lib/validations/schemas";
 
-// Review AI Suggestion
 export async function reviewSuggestionAction(
   suggestionId: string,
   status: "APPROVED" | "REJECTED" | "EDITED",
-  reviewNotes?: string
+  reviewNotes?: string,
 ) {
-  const user = await getCurrentUser();
-  await requirePermission(user, "manage_tasks", "reviewSuggestionAction");
-
-  const suggestion = await prisma.aiSuggestion.update({
+  const user = await requireCurrentUser();
+  await requirePermission(user, "manage_tasks");
+  const proposal = await prisma.aiSuggestion.findUnique({
     where: { id: suggestionId },
-    data: {
-      status,
-      reviewNotes: reviewNotes || null,
-      reviewedById: user!.id,
-      reviewedAt: new Date(),
-    },
+    include: { source: true },
   });
-
-  await prisma.auditLog.create({
-    data: {
-      userId: user!.id,
-      action: "REVIEW_AI_SUGGESTION",
-      entityType: "AI_SUGGESTION",
-      entityId: suggestionId,
-      details: { status, reviewNotes },
-    },
+  if (!proposal?.source || proposal.source.groupId !== user.groupId)
+    throw new ForbiddenError("Источник предложения недоступен в этой группе");
+  const checked = z.enum(["APPROVED", "REJECTED", "EDITED"]).parse(status);
+  await prisma.$transaction(async (tx) => {
+    await tx.aiSuggestion.update({
+      where: { id: suggestionId },
+      data: {
+        status: checked,
+        reviewNotes,
+        reviewedById: user.id,
+        reviewedAt: new Date(),
+      },
+    });
+    await tx.auditLog.create({
+      data: {
+        userId: user.id,
+        action: "REVIEW_AI_SUGGESTION",
+        entityType: "AI_SUGGESTION",
+        entityId: suggestionId,
+        details: { groupId: user.groupId, status: checked, published: false },
+      },
+    });
   });
-
   revalidatePath("/admin");
-  return { success: true, suggestion };
+  return { success: true };
 }
-
-// Create Announcement
 export async function createAnnouncementAction(
-  rawInput: CreateAnnouncementInput
+  rawInput: CreateAnnouncementInput,
 ) {
-  const user = await getCurrentUser();
-  await requirePermission(user, "manage_announcements", "createAnnouncementAction");
-
-  const validated = CreateAnnouncementSchema.parse(rawInput);
-
-  const announcement = await prisma.announcement.create({
-    data: {
-      groupId: user!.groupId,
-      courseOfferingId: validated.courseOfferingId || null,
-      title: validated.title,
-      content: validated.content,
-      isPinned: validated.isPinned,
-      priority: validated.priority,
-      authorId: user!.id,
-    },
+  const user = await requireCurrentUser();
+  await requirePermission(user, "manage_announcements");
+  const input = CreateAnnouncementSchema.parse(rawInput);
+  if (input.courseOfferingId)
+    await requireCoursePermission(
+      user,
+      input.courseOfferingId,
+      "manage_announcements",
+    );
+  const announcement = await prisma.$transaction(async (tx) => {
+    const a = await tx.announcement.create({
+      data: {
+        groupId: user.groupId,
+        courseOfferingId: input.courseOfferingId,
+        title: input.title,
+        content: input.content,
+        isPinned: input.isPinned,
+        priority: input.priority,
+        authorId: user.id,
+      },
+    });
+    const members = await tx.groupMember.findMany({
+      where: { groupId: user.groupId },
+      select: { userId: true },
+    });
+    await tx.notification.createMany({
+      data: members.map((m) => ({
+        userId: m.userId,
+        title: input.title,
+        message: input.content.slice(0, 100),
+        type: "ANNOUNCEMENT",
+        link: input.courseOfferingId
+          ? `/courses/${input.courseOfferingId}`
+          : "/",
+      })),
+    });
+    await tx.auditLog.create({
+      data: {
+        userId: user.id,
+        action: "CREATE_ANNOUNCEMENT",
+        entityType: "ANNOUNCEMENT",
+        entityId: a.id,
+        details: { groupId: user.groupId, title: a.title },
+      },
+    });
+    return a;
   });
-
-  // Broadcast in-app notification to all group members
-  await broadcastGroupNotification(user!.groupId, {
-    title: `Объявление: ${validated.title}`,
-    message: validated.content.slice(0, 100),
-    type: "ANNOUNCEMENT",
-    link: validated.courseOfferingId ? `/courses/${validated.courseOfferingId}` : "/",
-  });
-
-  await prisma.auditLog.create({
-    data: {
-      userId: user!.id,
-      action: "CREATE_ANNOUNCEMENT",
-      entityType: "ANNOUNCEMENT",
-      entityId: announcement.id,
-      details: { title: announcement.title, priority: announcement.priority },
-    },
-  });
-
-  revalidatePath("/");
-  revalidatePath("/admin");
+  revalidatePath("/", "layout");
   return { success: true, announcementId: announcement.id };
 }
-
-// Update Teacher Info / Conflict status
 export async function updateTeacherCourseAction(
   courseOfferingId: string,
   teacherId: string,
   role?: string,
-  status: TeacherCourseStatus = TeacherCourseStatus.CONFIRMED,
-  notes?: string
+  status: TeacherCourseStatus = "CANDIDATE_UNVERIFIED",
+  notes?: string,
+  sourceReferenceId?: string,
 ) {
-  const user = await getCurrentUser();
-  await requirePermission(user, "manage_courses", "updateTeacherCourseAction");
-
-  await prisma.courseTeacher.upsert({
-    where: { id: `ct-${courseOfferingId}-${teacherId}` },
-    update: {
-      role: role || null,
-      status,
-      notes: notes || null,
-    },
-    create: {
-      id: `ct-${courseOfferingId}-${teacherId}`,
-      courseOfferingId,
-      teacherId,
-      role: role || null,
-      status,
-      notes: notes || null,
-    },
+  const user = await requireCurrentUser();
+  await requireCoursePermission(user, courseOfferingId, "manage_courses");
+  const checked = z.nativeEnum(TeacherCourseStatus).parse(status);
+  const source = sourceReferenceId
+    ? await prisma.sourceReference.findUnique({
+        where: { id: sourceReferenceId },
+        include: { source: true },
+      })
+    : null;
+  if (
+    checked === "CONFIRMED" &&
+    (!source ||
+      source.confidence !== "CONFIRMED" ||
+      source.source.groupId !== user.groupId ||
+      source.entityType !== "COURSE_TEACHER" ||
+      source.entityId !== `ct-${courseOfferingId}-${teacherId}`)
+  )
+    throw new ForbiddenError("Для подтверждения преподавателя нужен источник");
+  await prisma.$transaction(async (tx) => {
+    await tx.courseTeacher.upsert({
+      where: { id: `ct-${courseOfferingId}-${teacherId}` },
+      update: {
+        role,
+        status: checked,
+        notes,
+        sourceReferenceId: source?.id ?? null,
+      },
+      create: {
+        id: `ct-${courseOfferingId}-${teacherId}`,
+        courseOfferingId,
+        teacherId,
+        role,
+        status: checked,
+        notes,
+        sourceReferenceId: source?.id ?? null,
+      },
+    });
+    await tx.auditLog.create({
+      data: {
+        userId: user.id,
+        action: "UPDATE_TEACHER_COURSE",
+        entityType: "COURSE_TEACHER",
+        entityId: `ct-${courseOfferingId}-${teacherId}`,
+        details: { groupId: user.groupId, status: checked },
+      },
+    });
   });
-
-  await prisma.auditLog.create({
-    data: {
-      userId: user!.id,
-      action: "UPDATE_TEACHER_COURSE",
-      entityType: "COURSE_TEACHER",
-      entityId: `ct-${courseOfferingId}-${teacherId}`,
-      details: { courseOfferingId, teacherId, status, notes },
-    },
-  });
-
-  revalidatePath(`/courses/${courseOfferingId}`);
-  revalidatePath("/admin");
+  revalidatePath("/", "layout");
   return { success: true };
 }
-
-// Link Enrollment to User (Administrative verification)
-export async function linkEnrollmentAction(enrollmentId: string, targetUserId: string) {
-  const user = await getCurrentUser();
-  await requirePermission(user, "manage_members", "linkEnrollmentAction");
-
-  const updated = await prisma.enrollment.update({
-    where: { id: enrollmentId },
-    data: {
-      userId: targetUserId,
-      status: EnrollmentStatus.VERIFIED,
-      verifiedById: user!.id,
-      verifiedAt: new Date(),
-    },
+export async function linkEnrollmentAction(
+  enrollmentId: string,
+  targetUserId: string,
+) {
+  const user = await requireCurrentUser();
+  await requirePermission(user, "manage_members");
+  await requirePermission(user, "view_private_member_identity");
+  const enrollment = await prisma.enrollment.findFirst({
+    where: { id: enrollmentId, groupId: user.groupId },
   });
-
-  await prisma.auditLog.create({
-    data: {
-      userId: user!.id,
-      action: "LINK_ENROLLMENT_USER",
-      entityType: "ENROLLMENT",
-      entityId: enrollmentId,
-      details: { targetUserId, fullName: updated.fullName },
-    },
+  const member = await prisma.groupMember.findUnique({
+    where: { groupId_userId: { groupId: user.groupId, userId: targetUserId } },
   });
-
+  if (!enrollment || !member)
+    throw new ForbiddenError("Запись или участник недоступны в этой группе");
+  await prisma.$transaction(async (tx) => {
+    await tx.enrollment.update({
+      where: { id: enrollmentId },
+      data: {
+        userId: targetUserId,
+        status: "VERIFIED",
+        verifiedById: user.id,
+        verifiedAt: new Date(),
+      },
+    });
+    await tx.auditLog.create({
+      data: {
+        userId: user.id,
+        action: "LINK_ENROLLMENT_USER",
+        entityType: "ENROLLMENT",
+        entityId: enrollmentId,
+        details: { groupId: user.groupId, targetUserId },
+      },
+    });
+  });
+  revalidatePath("/admin");
   revalidatePath("/members");
-  revalidatePath("/admin");
   return { success: true };
 }
-
-// Update Deadline Date / Type / Provenance
 export async function updateDeadlineAction(
   deadlineId: string,
   newDate: string,
-  newType?: "HARD" | "SOFT"
+  newType?: "HARD" | "SOFT",
+  sourceNote?: string,
 ) {
-  const user = await getCurrentUser();
-  await requirePermission(user, "manage_tasks", "updateDeadlineAction");
-
-  const existing = await prisma.deadline.findUnique({
-    where: { id: deadlineId },
-    include: { task: true },
-  });
-
-  if (!existing) {
-    throw new Error("Дедлайн не найден");
-  }
-
-  const updated = await prisma.deadline.update({
-    where: { id: deadlineId },
-    data: {
-      date: new Date(newDate),
-      ...(newType ? { type: newType } : {}),
-      provenance: "HEADMAN_CONFIRMED",
-    },
-  });
-
-  await prisma.auditLog.create({
-    data: {
-      userId: user!.id,
-      action: "UPDATE_DEADLINE",
-      entityType: "DEADLINE",
-      entityId: deadlineId,
-      details: {
-        taskTitle: existing.task.title,
-        oldDate: existing.date.toISOString(),
-        newDate: updated.date.toISOString(),
-        type: updated.type,
-      },
-    },
-  });
-
-  revalidatePath("/");
-  revalidatePath("/deadlines");
-  revalidatePath("/calendar");
-  revalidatePath("/admin");
-  return { success: true, deadline: updated };
+  const user = await requireCurrentUser();
+  const deadline = await rescheduleDeadline(
+    user,
+    deadlineId,
+    newDate,
+    newType,
+    sourceNote,
+  );
+  revalidatePath("/", "layout");
+  return { success: true, deadline };
 }
-

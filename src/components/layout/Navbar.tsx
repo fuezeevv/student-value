@@ -29,9 +29,10 @@ import {
 interface NavbarProps {
   user: SessionUser | null;
   unreadCount?: number;
+  devAuthEnabled?: boolean;
 }
 
-export function Navbar({ user, unreadCount = 0 }: NavbarProps) {
+export function Navbar({ user, unreadCount = 0, devAuthEnabled = false }: NavbarProps) {
   const pathname = usePathname();
   const [isPending, startTransition] = useTransition();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -322,7 +323,7 @@ export function Navbar({ user, unreadCount = 0 }: NavbarProps) {
           )}
 
           {/* Development Switcher (Dev mode only) */}
-          {process.env.NODE_ENV === "development" && user && (
+          {devAuthEnabled && user && (
             <div className="pt-2 border-t border-slate-900 text-xs">
               <span className="text-[10px] text-slate-500 block mb-1">
                 Переключение роли (Dev):

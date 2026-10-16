@@ -13,6 +13,7 @@ describe("Gamification & XP Ledger Service", () => {
       userId: testUserId,
       taskId: testTaskId,
       ruleCode: testRule,
+      overridePoints: 50,
       reason: "Первая сдача задания",
     });
     expect(res1.awarded).toBe(true);
@@ -21,6 +22,7 @@ describe("Gamification & XP Ledger Service", () => {
       userId: testUserId,
       taskId: testTaskId,
       ruleCode: testRule,
+      overridePoints: 50,
       reason: "Повторная попытка сдачи того же задания",
     });
     expect(res2.awarded).toBe(false);

@@ -1,13 +1,13 @@
 import React from "react";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
-import { getCurrentUser } from "@/lib/auth/session";
+import { requireCurrentUser } from "@/lib/auth/session";
 import { getCalendarIntegrationStatus } from "@/server/services/calendar-service";
 import { SettingsClient } from "./SettingsClient";
 import { Settings } from "lucide-react";
 
 export default async function SettingsPage() {
-  const user = await getCurrentUser();
+  const user = await requireCurrentUser();
 
   if (!user) {
     redirect("/login");

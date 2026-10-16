@@ -6,11 +6,12 @@ describe("Task DTO Validation (Zod Schema)", () => {
   it("validates a complete valid laboratory task", () => {
     const validData = {
       courseOfferingId: "offering-otu",
+      sourceNote: "Преподаватель выдал задание на занятии; данные тестовые",
       title: "ЛР1: Изучение свойств ОУ",
       description: "Построение переходных процессов",
       type: TaskType.LABORATORY,
       number: 1,
-      deadlineDate: "2026-10-25T23:59:00.000Z",
+      deadlineDate: "2026-10-25",
       deadlineType: DeadlineType.HARD,
       isTimeStrict: false,
       variantNumber: "Вар. 4",
@@ -25,6 +26,7 @@ describe("Task DTO Validation (Zod Schema)", () => {
   it("validates task without deadline (deadline is optional)", () => {
     const dataWithoutDeadline = {
       courseOfferingId: "offering-otu",
+      sourceNote: "Преподаватель выдал задание на занятии; данные тестовые",
       title: "ЛР4: Частотный синтез системы управления",
       type: TaskType.LABORATORY,
       number: 4,
@@ -38,6 +40,7 @@ describe("Task DTO Validation (Zod Schema)", () => {
   it("fails validation if title is too short or empty", () => {
     const invalidData = {
       courseOfferingId: "offering-otu",
+      sourceNote: "Преподаватель выдал задание на занятии; данные тестовые",
       title: "ЛР",
       type: TaskType.LABORATORY,
     };

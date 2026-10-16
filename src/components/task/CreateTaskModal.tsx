@@ -11,18 +11,26 @@ interface CreateTaskModalProps {
   courses?: { id: string; title: string; shortTitle: string }[];
 }
 
-export function CreateTaskModal({ courseOfferingId, courses }: CreateTaskModalProps) {
+export function CreateTaskModal({
+  courseOfferingId,
+  courses,
+}: CreateTaskModalProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const [selectedCourseId, setSelectedCourseId] = useState(courseOfferingId || (courses?.[0]?.id ?? ""));
+  const [selectedCourseId, setSelectedCourseId] = useState(
+    courseOfferingId || (courses?.[0]?.id ?? ""),
+  );
+  const [sourceNote, setSourceNote] = useState("");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [type, setType] = useState<TaskType>(TaskType.LABORATORY);
   const [number, setNumber] = useState<string>("");
   const [deadlineDate, setDeadlineDate] = useState("");
-  const [deadlineType, setDeadlineType] = useState<DeadlineType>(DeadlineType.HARD);
+  const [deadlineType, setDeadlineType] = useState<DeadlineType>(
+    DeadlineType.HARD,
+  );
   const [variantNumber, setVariantNumber] = useState("");
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -39,10 +47,11 @@ export function CreateTaskModal({ courseOfferingId, courses }: CreateTaskModalPr
         await createTaskAction({
           courseOfferingId: selectedCourseId,
           title: title.trim(),
+          sourceNote,
           description: description.trim() || undefined,
           type,
           number: number ? parseInt(number, 10) : undefined,
-          deadlineDate: deadlineDate ? new Date(deadlineDate).toISOString() : undefined,
+          deadlineDate: deadlineDate || undefined,
           deadlineType,
           isTimeStrict: false,
           variantNumber: variantNumber.trim() || undefined,
@@ -91,7 +100,8 @@ export function CreateTaskModal({ courseOfferingId, courses }: CreateTaskModalPr
               Добавить учебное задание
             </h3>
             <p className="text-xs text-slate-400 mb-4">
-              Задание сразу появится у всей группы с расчетом прогресса и дедлайнов.
+              Задание сразу появится у всей группы с расчетом прогресса и
+              дедлайнов.
             </p>
 
             {errorMsg && (
@@ -101,6 +111,18 @@ export function CreateTaskModal({ courseOfferingId, courses }: CreateTaskModalPr
             )}
 
             <form onSubmit={handleSubmit} className="space-y-4">
+              <label className="block text-xs text-slate-300">
+                Источник задания и срока
+                <textarea
+                  aria-label="Источник задания и срока"
+                  required
+                  minLength={8}
+                  value={sourceNote}
+                  onChange={(e) => setSourceNote(e.target.value)}
+                  placeholder="Документ или слова преподавателя, дата и контекст"
+                  className="w-full bg-slate-800 p-2 rounded mt-1"
+                />
+              </label>
               {/* Course Selection if courses array is available */}
               {courses && courses.length > 0 && (
                 <div>
@@ -134,7 +156,9 @@ export function CreateTaskModal({ courseOfferingId, courses }: CreateTaskModalPr
                   >
                     <option value="LABORATORY">Лабораторная работа</option>
                     <option value="HOMEWORK">Домашнее задание</option>
-                    <option value="CALCULATION_WORK">Расчетная работа (РР)</option>
+                    <option value="CALCULATION_WORK">
+                      Расчетная работа (РР)
+                    </option>
                     <option value="EXERCISE">Упражнение на паре</option>
                     <option value="PRACTICAL">Практическое задание</option>
                     <option value="TEST">Контрольная работа / тест</option>
@@ -164,6 +188,7 @@ export function CreateTaskModal({ courseOfferingId, courses }: CreateTaskModalPr
                 </label>
                 <input
                   type="text"
+                  aria-label="Название задания"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   placeholder="Например: ЛР1: Ознакомительная работа по Lex"
@@ -197,7 +222,9 @@ export function CreateTaskModal({ courseOfferingId, courses }: CreateTaskModalPr
                     onChange={(e) => setDeadlineDate(e.target.value)}
                     className="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-sky-500"
                   />
-                  <span className="text-[10px] text-slate-500">Пусто = Срок не указан</span>
+                  <span className="text-[10px] text-slate-500">
+                    Пусто = Срок не указан
+                  </span>
                 </div>
 
                 <div>
@@ -206,7 +233,9 @@ export function CreateTaskModal({ courseOfferingId, courses }: CreateTaskModalPr
                   </label>
                   <select
                     value={deadlineType}
-                    onChange={(e) => setDeadlineType(e.target.value as DeadlineType)}
+                    onChange={(e) =>
+                      setDeadlineType(e.target.value as DeadlineType)
+                    }
                     className="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-sky-500"
                   >
                     <option value="HARD">Жесткий дедлайн (HARD)</option>

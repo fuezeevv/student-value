@@ -1,7 +1,10 @@
+import { confirmedDeadlineWhere } from "@/server/domain/deadline-visibility";
+import { taskVisibilityWhere } from "@/server/domain/access";
+import { isTrustedAccepted, progressEvidenceInclude } from "@/server/domain/trust";
 import React from "react";
 import Link from "next/link";
 import { prisma } from "@/lib/db/prisma";
-import { getCurrentUser } from "@/lib/auth/session";
+import { requireCurrentUser } from "@/lib/auth/session";
 import { calculateDeadlineStatus, DeadlineCalculationResult } from "@/server/services/deadline-service";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
@@ -40,7 +43,8 @@ interface DeadlinesPageProps {
 
 export default async function DeadlinesPage({ searchParams }: DeadlinesPageProps) {
   const params = await searchParams;
-  const user = await getCurrentUser();
+  const user = await requireCurrentUser();
+  const visibleTasks = await taskVisibilityWhere(user);
 
   const courseFilter = params.course || "";
   const typeFilter = params.type || "";
@@ -50,18 +54,18 @@ export default async function DeadlinesPage({ searchParams }: DeadlinesPageProps
   const offerings = await prisma.courseOffering.findMany({
     where: {
       semester: { isCurrent: true },
-      groups: { some: { group: { code: "5130901/40102" } } },
+      groups: { some: { groupId: user.groupId } },
     },
     include: {
       courseDefinition: true,
       tasks: {
-        where: { status: "PUBLISHED" },
+        where: visibleTasks,
         include: {
           deadlines: {
-            where: { status: "ACTIVE" },
+            where: confirmedDeadlineWhere,
             orderBy: { date: "asc" },
           },
-          progress: user ? { where: { userId: user.id } } : false,
+          progress: { where: { userId: user.id }, include: progressEvidenceInclude },
         },
       },
     },
@@ -70,13 +74,14 @@ export default async function DeadlinesPage({ searchParams }: DeadlinesPageProps
   const allItems: DeadlineBoardItem[] = offerings.flatMap((o) =>
     o.tasks.flatMap((t): DeadlineBoardItem[] => {
       const userProgress = t.progress?.[0];
-      const isAccepted = userProgress?.status === "ACCEPTED";
+      const isAccepted = isTrustedAccepted(userProgress);
       const primaryDeadline = t.deadlines[0];
 
       const calc = calculateDeadlineStatus(
         primaryDeadline ? primaryDeadline.date : null,
         new Date(),
-        isAccepted
+        isAccepted,
+        primaryDeadline?.isTimeStrict ?? true
       );
 
       return [

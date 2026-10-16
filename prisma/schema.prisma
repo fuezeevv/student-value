@@ -30,6 +30,7 @@ enum SourceType {
 }
 
 enum ConfidenceLevel {
+  UNVERIFIED
   CONFIRMED
   INFERRED
   DISPUTED
@@ -133,28 +134,28 @@ enum SessionType {
 }
 
 model User {
-  id            String         @id @default(uuid())
-  nickname      String         @unique
+  id            String   @id @default(uuid())
+  nickname      String   @unique
   avatarUrl     String?
   bio           String?
-  isSystemAdmin Boolean        @default(false)
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  isSystemAdmin Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  identities    AuthIdentity[]
-  sessions      Session[]
-  memberships   GroupMember[]
-  enrollments   Enrollment[]
-  progress      StudentTaskProgress[]
-  createdTasks  Task[]         @relation("TaskCreatedBy")
-  updatedTasks  Task[]         @relation("TaskUpdatedBy")
-  deadlines     Deadline[]     @relation("DeadlineCreatedBy")
-  announcements Announcement[] @relation("AnnouncementAuthor")
-  auditLogs     AuditLog[]
-  securityLogs  SecurityAccessLog[]
-  sourceRefs    SourceReference[]
-  verifiedProgress StudentTaskProgress[] @relation("ProgressVerifiedBy")
-  verifiedEnrollments Enrollment[]       @relation("EnrollmentVerifiedBy")
+  identities          AuthIdentity[]
+  sessions            Session[]
+  memberships         GroupMember[]
+  enrollments         Enrollment[]
+  progress            StudentTaskProgress[]
+  createdTasks        Task[]                   @relation("TaskCreatedBy")
+  updatedTasks        Task[]                   @relation("TaskUpdatedBy")
+  deadlines           Deadline[]               @relation("DeadlineCreatedBy")
+  announcements       Announcement[]           @relation("AnnouncementAuthor")
+  auditLogs           AuditLog[]
+  securityLogs        SecurityAccessLog[]
+  sourceRefs          SourceReference[]
+  verifiedProgress    StudentTaskProgress[]    @relation("ProgressVerifiedBy")
+  verifiedEnrollments Enrollment[]             @relation("EnrollmentVerifiedBy")
   notifications       Notification[]
   xpEvents            XpEvent[]
   gamificationProfile UserGamificationProfile?
@@ -171,42 +172,42 @@ model AuthIdentity {
   metadata       Json         @default("{}")
   createdAt      DateTime     @default(now())
 
-  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerUserId])
   @@index([userId])
 }
 
 model Session {
-  id         String   @id @default(uuid())
-  userId     String
-  tokenHash  String   @unique
-  expiresAt  DateTime
-  ipAddress  String?
-  userAgent  String?
-  createdAt  DateTime @default(now())
+  id        String   @id @default(uuid())
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
 
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
 }
 
 model StudyGroup {
-  id           String               @id @default(uuid())
-  code         String               @unique
-  name         String
-  department   String?
-  program      String?
-  calendarId   String?
-  createdAt    DateTime             @default(now())
+  id         String   @id @default(uuid())
+  code       String   @unique
+  name       String
+  department String?
+  program    String?
+  calendarId String?
+  createdAt  DateTime @default(now())
 
-  members      GroupMember[]
-  enrollments  Enrollment[]
-  courses      CourseOfferingGroup[]
+  members       GroupMember[]
+  enrollments   Enrollment[]
+  courses       CourseOfferingGroup[]
   announcements Announcement[]
-  sources      Source[]
-  audiences    TaskAudience[]
-  roles        Role[]
+  sources       Source[]
+  audiences     TaskAudience[]
+  roles         Role[]
 }
 
 model Enrollment {
@@ -222,11 +223,11 @@ model Enrollment {
   verifiedAt      DateTime?
   createdAt       DateTime         @default(now())
 
-  group           StudyGroup       @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  user            User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
-  verifiedBy      User?            @relation("EnrollmentVerifiedBy", fields: [verifiedById], references: [id], onDelete: SetNull)
-  variants        VariantAssignment[]
-  audiences       TaskAudience[]
+  group      StudyGroup          @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user       User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
+  verifiedBy User?               @relation("EnrollmentVerifiedBy", fields: [verifiedById], references: [id], onDelete: SetNull)
+  variants   VariantAssignment[]
+  audiences  TaskAudience[]
 
   @@unique([groupId, fullName])
   @@unique([groupId, userId])
@@ -235,11 +236,11 @@ model Enrollment {
 }
 
 model GroupMember {
-  id        String          @id @default(uuid())
-  groupId   String
-  userId    String
-  isOwner   Boolean         @default(false)
-  joinedAt  DateTime        @default(now())
+  id       String   @id @default(uuid())
+  groupId  String
+  userId   String
+  isOwner  Boolean  @default(false)
+  joinedAt DateTime @default(now())
 
   group     StudyGroup      @relation(fields: [groupId], references: [id], onDelete: Cascade)
   user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -251,10 +252,10 @@ model GroupMember {
 }
 
 model Role {
-  id          String           @id @default(uuid())
-  groupId     String
-  name        String
-  isDefault   Boolean          @default(false)
+  id        String  @id @default(uuid())
+  groupId   String
+  name      String
+  isDefault Boolean @default(false)
 
   group       StudyGroup       @relation(fields: [groupId], references: [id], onDelete: Cascade)
   permissions RolePermission[]
@@ -265,23 +266,23 @@ model Role {
 }
 
 model RolePermission {
-  id         String   @id @default(uuid())
+  id         String @id @default(uuid())
   roleId     String
   permission String
 
-  role       Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
 
   @@unique([roleId, permission])
   @@index([roleId])
 }
 
 model UserGroupRole {
-  id            String      @id @default(uuid())
+  id            String @id @default(uuid())
   groupMemberId String
   roleId        String
 
-  groupMember   GroupMember @relation(fields: [groupMemberId], references: [id], onDelete: Cascade)
-  role          Role        @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  groupMember GroupMember @relation(fields: [groupMemberId], references: [id], onDelete: Cascade)
+  role        Role        @relation(fields: [roleId], references: [id], onDelete: Cascade)
 
   @@unique([groupMemberId, roleId])
   @@index([groupMemberId])
@@ -289,70 +290,70 @@ model UserGroupRole {
 }
 
 model Semester {
-  id        String           @id @default(uuid())
+  id        String   @id @default(uuid())
   name      String
   number    Int
   startDate DateTime
   endDate   DateTime
-  isCurrent Boolean          @default(true)
+  isCurrent Boolean  @default(true)
 
   offerings CourseOffering[]
 }
 
 model CourseDefinition {
-  id          String           @id @default(uuid())
-  code        String           @unique
+  id          String  @id @default(uuid())
+  code        String  @unique
   title       String
   shortTitle  String
   description String?
 
-  offerings   CourseOffering[]
+  offerings CourseOffering[]
 }
 
 model Teacher {
-  id        String          @id @default(uuid())
+  id        String   @id @default(uuid())
   fullName  String
   email     String?
   telegram  String?
   notes     String?
-  createdAt DateTime        @default(now())
+  createdAt DateTime @default(now())
 
-  courses   CourseTeacher[]
-  sessions  ClassSession[]
-  sources   Source[]
+  courses  CourseTeacher[]
+  sessions ClassSession[]
+  sources  Source[]
 }
 
 model CourseOffering {
-  id                 String                @id @default(uuid())
+  id                 String   @id @default(uuid())
   courseDefinitionId String
   semesterId         String
   format             String?
   creditCondition    String?
   softwareRequired   String?
-  status             String                @default("ACTIVE")
-  createdAt          DateTime              @default(now())
+  status             String   @default("ACTIVE")
+  createdAt          DateTime @default(now())
 
-  courseDefinition   CourseDefinition      @relation(fields: [courseDefinitionId], references: [id], onDelete: Cascade)
-  semester           Semester              @relation(fields: [semesterId], references: [id], onDelete: Cascade)
-  groups             CourseOfferingGroup[]
-  teachers           CourseTeacher[]
-  tasks              Task[]
-  deadlines          Deadline[]
-  materials          CourseMaterial[]
-  sessions           ClassSession[]
-  announcements      Announcement[]
+  courseDefinition CourseDefinition      @relation(fields: [courseDefinitionId], references: [id], onDelete: Cascade)
+  semester         Semester              @relation(fields: [semesterId], references: [id], onDelete: Cascade)
+  groups           CourseOfferingGroup[]
+  teachers         CourseTeacher[]
+  tasks            Task[]
+  deadlines        Deadline[]
+  materials        CourseMaterial[]
+  sessions         ClassSession[]
+  announcements    Announcement[]
 
   @@index([courseDefinitionId])
   @@index([semesterId])
 }
 
 model CourseOfferingGroup {
-  id               String         @id @default(uuid())
+  id               String @id @default(uuid())
   courseOfferingId String
   groupId          String
 
-  courseOffering   CourseOffering @relation(fields: [courseOfferingId], references: [id], onDelete: Cascade)
-  group            StudyGroup     @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  courseOffering CourseOffering @relation(fields: [courseOfferingId], references: [id], onDelete: Cascade)
+  group          StudyGroup     @relation(fields: [groupId], references: [id], onDelete: Cascade)
 
   @@unique([courseOfferingId, groupId])
   @@index([courseOfferingId])
@@ -364,36 +365,36 @@ model CourseTeacher {
   courseOfferingId  String
   teacherId         String
   role              String?
-  status            TeacherCourseStatus @default(CONFIRMED)
+  status            TeacherCourseStatus @default(CANDIDATE_UNVERIFIED)
   sourceReferenceId String?
   notes             String?
 
-  courseOffering    CourseOffering      @relation(fields: [courseOfferingId], references: [id], onDelete: Cascade)
-  teacher           Teacher             @relation(fields: [teacherId], references: [id], onDelete: Cascade)
-  sourceReference   SourceReference?    @relation(fields: [sourceReferenceId], references: [id], onDelete: SetNull)
+  courseOffering  CourseOffering   @relation(fields: [courseOfferingId], references: [id], onDelete: Cascade)
+  teacher         Teacher          @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  sourceReference SourceReference? @relation(fields: [sourceReferenceId], references: [id], onDelete: SetNull)
 
   @@index([courseOfferingId])
   @@index([teacherId])
 }
 
 model Source {
-  id               String            @id @default(uuid())
+  id               String     @id @default(uuid())
   groupId          String
   type             SourceType
   title            String
   url              String?
-  documentMetadata Json              @default("{}")
+  documentMetadata Json       @default("{}")
   teacherId        String?
   classSessionId   String?
   transcriptId     String?
-  createdAt        DateTime          @default(now())
+  createdAt        DateTime   @default(now())
 
-  group            StudyGroup        @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  teacher          Teacher?          @relation(fields: [teacherId], references: [id], onDelete: SetNull)
-  classSession     ClassSession?     @relation(fields: [classSessionId], references: [id], onDelete: SetNull)
-  transcript       Transcript?       @relation(fields: [transcriptId], references: [id], onDelete: SetNull)
-  references       SourceReference[]
-  suggestions      AiSuggestion[]
+  group        StudyGroup        @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  teacher      Teacher?          @relation(fields: [teacherId], references: [id], onDelete: SetNull)
+  classSession ClassSession?     @relation(fields: [classSessionId], references: [id], onDelete: SetNull)
+  transcript   Transcript?       @relation(fields: [transcriptId], references: [id], onDelete: SetNull)
+  references   SourceReference[]
+  suggestions  AiSuggestion[]
 
   @@index([groupId])
 }
@@ -404,52 +405,54 @@ model SourceReference {
   entityType  String
   entityId    String
   quoteText   String?
-  confidence  ConfidenceLevel @default(CONFIRMED)
+  confidence  ConfidenceLevel @default(UNVERIFIED)
   offsetStart Int?
   offsetEnd   Int?
   createdById String?
   createdAt   DateTime        @default(now())
 
-  source      Source          @relation(fields: [sourceId], references: [id], onDelete: Cascade)
-  createdBy   User?           @relation(fields: [createdById], references: [id], onDelete: SetNull)
-  tasks       Task[]
-  deadlines   Deadline[]
-  teachers    CourseTeacher[]
-  announcements Announcement[]
+  source             Source                @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  createdBy          User?                 @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  tasks              Task[]
+  deadlines          Deadline[]
+  teachers           CourseTeacher[]
+  announcements      Announcement[]
+  verifiedProgress   StudentTaskProgress[] @relation("ProgressEvidence")
+  variantAssignments VariantAssignment[]
 
   @@index([sourceId])
   @@index([entityType, entityId])
 }
 
 model Task {
-  id                String           @id @default(uuid())
+  id                String     @id @default(uuid())
   courseOfferingId  String
   title             String
   description       String?
   type              TaskType
   number            Int?
-  status            TaskStatus       @default(PUBLISHED)
+  status            TaskStatus @default(PUBLISHED)
   sourceReferenceId String?
-  gradingMetadata   Json             @default("{}")
+  gradingMetadata   Json       @default("{}")
   createdById       String
   updatedById       String
-  publishedAt       DateTime         @default(now())
-  createdAt         DateTime         @default(now())
-  updatedAt         DateTime         @updatedAt
+  publishedAt       DateTime   @default(now())
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
 
-  courseOffering    CourseOffering   @relation(fields: [courseOfferingId], references: [id], onDelete: Cascade)
-  createdBy         User             @relation("TaskCreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
-  updatedBy         User             @relation("TaskUpdatedBy", fields: [updatedById], references: [id], onDelete: Cascade)
-  sourceReference   SourceReference? @relation(fields: [sourceReferenceId], references: [id], onDelete: SetNull)
-  
-  audiences         TaskAudience[]
-  variants          TaskVariant[]
-  deadlines         Deadline[]
-  progress          StudentTaskProgress[]
-  materials         TaskMaterial[]
-  dependencies      TaskDependency[] @relation("TaskRequires")
-  dependentOn       TaskDependency[] @relation("TaskIsRequiredBy")
-  xpEvents          XpEvent[]
+  courseOffering  CourseOffering   @relation(fields: [courseOfferingId], references: [id], onDelete: Cascade)
+  createdBy       User             @relation("TaskCreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
+  updatedBy       User             @relation("TaskUpdatedBy", fields: [updatedById], references: [id], onDelete: Cascade)
+  sourceReference SourceReference? @relation(fields: [sourceReferenceId], references: [id], onDelete: SetNull)
+
+  audiences    TaskAudience[]
+  variants     TaskVariant[]
+  deadlines    Deadline[]
+  progress     StudentTaskProgress[]
+  materials    TaskMaterial[]
+  dependencies TaskDependency[]      @relation("TaskRequires")
+  dependentOn  TaskDependency[]      @relation("TaskIsRequiredBy")
+  xpEvents     XpEvent[]
 
   @@index([courseOfferingId])
   @@index([status])
@@ -463,38 +466,41 @@ model TaskAudience {
   subgroupNumber Int?
   enrollmentId   String?
 
-  task           Task             @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  group          StudyGroup?      @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  enrollment     Enrollment?      @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  task       Task        @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  group      StudyGroup? @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  enrollment Enrollment? @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
 
   @@index([taskId])
 }
 
 model TaskVariant {
-  id            String              @id @default(uuid())
+  id            String  @id @default(uuid())
   taskId        String
   variantNumber String
   title         String?
-  spec          Json                @default("{}")
+  spec          Json    @default("{}")
   sourceUrl     String?
 
-  task          Task                @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  assignments   VariantAssignment[]
-  progress      StudentTaskProgress[]
+  task        Task                  @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  assignments VariantAssignment[]
+  progress    StudentTaskProgress[]
 
   @@unique([taskId, variantNumber])
   @@index([taskId])
 }
 
 model VariantAssignment {
-  id            String      @id @default(uuid())
-  taskVariantId String
-  enrollmentId  String
-  assignedBy    String      @default("HEADMAN")
-  assignedAt    DateTime    @default(now())
+  id                String           @id @default(uuid())
+  taskVariantId     String
+  enrollmentId      String
+  assignedBy        String           @default("HEADMAN")
+  assignedAt        DateTime         @default(now())
+  confidence        ConfidenceLevel  @default(UNVERIFIED)
+  sourceReferenceId String?
+  sourceReference   SourceReference? @relation(fields: [sourceReferenceId], references: [id], onDelete: SetNull)
 
-  taskVariant   TaskVariant @relation(fields: [taskVariantId], references: [id], onDelete: Cascade)
-  enrollment    Enrollment  @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  taskVariant TaskVariant @relation(fields: [taskVariantId], references: [id], onDelete: Cascade)
+  enrollment  Enrollment  @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
 
   @@unique([taskVariantId, enrollmentId])
   @@index([taskVariantId])
@@ -502,28 +508,28 @@ model VariantAssignment {
 }
 
 model Deadline {
-  id                 String                 @id @default(uuid())
+  id                 String             @id @default(uuid())
   taskId             String
   courseOfferingId   String
   title              String?
-  type               DeadlineType           @default(HARD)
+  type               DeadlineType       @default(HARD)
   date               DateTime
-  isTimeStrict       Boolean                @default(false)
-  status             DeadlineStatus         @default(ACTIVE)
-  provenance         DeadlineProvenance     @default(HEADMAN_CONFIRMED)
+  isTimeStrict       Boolean            @default(false)
+  status             DeadlineStatus     @default(ACTIVE)
+  provenance         DeadlineProvenance @default(UNKNOWN)
   originalDeadlineId String?
   sourceReferenceId  String?
   createdById        String
-  createdAt          DateTime               @default(now())
-  updatedAt          DateTime               @updatedAt
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
 
-  task               Task                   @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  courseOffering     CourseOffering         @relation(fields: [courseOfferingId], references: [id], onDelete: Cascade)
-  createdBy          User                   @relation("DeadlineCreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
-  sourceReference    SourceReference?       @relation(fields: [sourceReferenceId], references: [id], onDelete: SetNull)
-  originalDeadline   Deadline?              @relation("DeadlineHistory", fields: [originalDeadlineId], references: [id], onDelete: SetNull)
-  rescheduledDeadlines Deadline[]           @relation("DeadlineHistory")
-  calendarEvents     ExternalCalendarEvent[]
+  task                 Task                    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  courseOffering       CourseOffering          @relation(fields: [courseOfferingId], references: [id], onDelete: Cascade)
+  createdBy            User                    @relation("DeadlineCreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
+  sourceReference      SourceReference?        @relation(fields: [sourceReferenceId], references: [id], onDelete: SetNull)
+  originalDeadline     Deadline?               @relation("DeadlineHistory", fields: [originalDeadlineId], references: [id], onDelete: SetNull)
+  rescheduledDeadlines Deadline[]              @relation("DeadlineHistory")
+  calendarEvents       ExternalCalendarEvent[]
 
   @@index([taskId])
   @@index([courseOfferingId])
@@ -536,35 +542,37 @@ model ExternalCalendarEvent {
   integrationType String             @default("GOOGLE_CALENDAR")
   calendarId      String
   externalEventId String
-  syncStatus      CalendarSyncStatus @default(SYNCED)
+  syncStatus      CalendarSyncStatus @default(PENDING)
   lastSyncedAt    DateTime           @default(now())
   lastError       String?
 
-  deadline        Deadline           @relation(fields: [deadlineId], references: [id], onDelete: Cascade)
+  deadline Deadline @relation(fields: [deadlineId], references: [id], onDelete: Cascade)
 
   @@unique([calendarId, externalEventId])
   @@index([deadlineId])
 }
 
 model StudentTaskProgress {
-  id                 String                    @id @default(uuid())
-  taskId             String
-  userId             String
-  taskVariantId      String?
-  status             StudentTaskProgressStatus @default(NOT_STARTED)
-  isVerified         Boolean                   @default(false)
-  verifiedById       String?
-  verifiedAt         DateTime?
-  verificationSource VerificationSource?
-  studentNotes       String?
-  submittedAt        DateTime?
-  acceptedAt         DateTime?
-  updatedAt          DateTime                  @updatedAt
+  id                            String                    @id @default(uuid())
+  taskId                        String
+  userId                        String
+  taskVariantId                 String?
+  status                        StudentTaskProgressStatus @default(NOT_STARTED)
+  isVerified                    Boolean                   @default(false)
+  verifiedById                  String?
+  verifiedAt                    DateTime?
+  verificationSource            VerificationSource?
+  verificationSourceReferenceId String?
+  studentNotes                  String?
+  submittedAt                   DateTime?
+  acceptedAt                    DateTime?
+  updatedAt                     DateTime                  @updatedAt
 
-  task               Task                      @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  user               User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  taskVariant        TaskVariant?              @relation(fields: [taskVariantId], references: [id], onDelete: SetNull)
-  verifiedBy         User?                     @relation("ProgressVerifiedBy", fields: [verifiedById], references: [id], onDelete: SetNull)
+  task                 Task             @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user                 User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  taskVariant          TaskVariant?     @relation(fields: [taskVariantId], references: [id], onDelete: SetNull)
+  verifiedBy           User?            @relation("ProgressVerifiedBy", fields: [verifiedById], references: [id], onDelete: SetNull)
+  verificationEvidence SourceReference? @relation("ProgressEvidence", fields: [verificationSourceReferenceId], references: [id], onDelete: SetNull)
 
   @@unique([taskId, userId])
   @@index([taskId])
@@ -576,41 +584,41 @@ model TaskDependency {
   taskId          String
   dependsOnTaskId String
 
-  task            Task   @relation("TaskRequires", fields: [taskId], references: [id], onDelete: Cascade)
-  dependsOn       Task   @relation("TaskIsRequiredBy", fields: [dependsOnTaskId], references: [id], onDelete: Cascade)
+  task      Task @relation("TaskRequires", fields: [taskId], references: [id], onDelete: Cascade)
+  dependsOn Task @relation("TaskIsRequiredBy", fields: [dependsOnTaskId], references: [id], onDelete: Cascade)
 
   @@unique([taskId, dependsOnTaskId])
 }
 
 model CourseMaterial {
-  id               String         @id @default(uuid())
+  id               String       @id @default(uuid())
   courseOfferingId String
   title            String
   type             MaterialType
   url              String
   description      String?
   fileSize         BigInt?
-  createdAt        DateTime       @default(now())
+  createdAt        DateTime     @default(now())
 
-  courseOffering   CourseOffering @relation(fields: [courseOfferingId], references: [id], onDelete: Cascade)
-  tasks            TaskMaterial[]
+  courseOffering CourseOffering @relation(fields: [courseOfferingId], references: [id], onDelete: Cascade)
+  tasks          TaskMaterial[]
 
   @@index([courseOfferingId])
 }
 
 model TaskMaterial {
-  id         String         @id @default(uuid())
+  id         String @id @default(uuid())
   taskId     String
   materialId String
 
-  task       Task           @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  material   CourseMaterial @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  task     Task           @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  material CourseMaterial @relation(fields: [materialId], references: [id], onDelete: Cascade)
 
   @@unique([taskId, materialId])
 }
 
 model ClassSession {
-  id               String         @id @default(uuid())
+  id               String      @id @default(uuid())
   courseOfferingId String
   sessionDate      DateTime
   type             SessionType
@@ -619,44 +627,45 @@ model ClassSession {
   notes            String?
   teacherId        String?
 
-  courseOffering   CourseOffering @relation(fields: [courseOfferingId], references: [id], onDelete: Cascade)
-  teacher          Teacher?       @relation(fields: [teacherId], references: [id], onDelete: SetNull)
-  transcripts      Transcript[]
-  sources          Source[]
+  courseOffering CourseOffering @relation(fields: [courseOfferingId], references: [id], onDelete: Cascade)
+  teacher        Teacher?       @relation(fields: [teacherId], references: [id], onDelete: SetNull)
+  transcripts    Transcript[]
+  sources        Source[]
 
   @@index([courseOfferingId])
 }
 
 model Transcript {
-  id             String       @id @default(uuid())
+  id             String   @id @default(uuid())
   sessionId      String
   rawText        String
   audioSourceUrl String?
-  recordingPart  Int          @default(1)
-  createdAt      DateTime     @default(now())
+  recordingPart  Int      @default(1)
+  createdAt      DateTime @default(now())
 
-  session        ClassSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  sources        Source[]
+  session ClassSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  sources Source[]
 
   @@index([sessionId])
 }
 
 model Announcement {
-  id                String           @id @default(uuid())
+  id                String     @id @default(uuid())
   groupId           String
   courseOfferingId  String?
   title             String
   content           String
-  isPinned          Boolean          @default(false)
-  priority          String           @default("NORMAL")
+  status            TaskStatus @default(PUBLISHED)
+  isPinned          Boolean    @default(false)
+  priority          String     @default("NORMAL")
   sourceReferenceId String?
   authorId          String
-  publishedAt       DateTime         @default(now())
+  publishedAt       DateTime   @default(now())
 
-  group             StudyGroup       @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  courseOffering    CourseOffering?  @relation(fields: [courseOfferingId], references: [id], onDelete: SetNull)
-  author            User             @relation("AnnouncementAuthor", fields: [authorId], references: [id], onDelete: Cascade)
-  sourceReference   SourceReference? @relation(fields: [sourceReferenceId], references: [id], onDelete: SetNull)
+  group           StudyGroup       @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  courseOffering  CourseOffering?  @relation(fields: [courseOfferingId], references: [id], onDelete: SetNull)
+  author          User             @relation("AnnouncementAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  sourceReference SourceReference? @relation(fields: [sourceReferenceId], references: [id], onDelete: SetNull)
 
   @@index([groupId])
   @@index([courseOfferingId])
@@ -671,7 +680,7 @@ model AuditLog {
   details    Json     @default("{}")
   createdAt  DateTime @default(now())
 
-  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@index([entityType, entityId])
@@ -688,7 +697,7 @@ model SecurityAccessLog {
   details   Json     @default("{}")
   createdAt DateTime @default(now())
 
-  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@index([event])
@@ -704,15 +713,15 @@ model Notification {
   isRead    Boolean  @default(false)
   createdAt DateTime @default(now())
 
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, isRead])
   @@index([userId, createdAt])
 }
 
 model XpRule {
-  id          String   @id @default(uuid())
-  code        String   @unique
+  id          String  @id @default(uuid())
+  code        String  @unique
   name        String
   points      Int
   description String?
@@ -727,8 +736,8 @@ model XpEvent {
   reason    String
   createdAt DateTime @default(now())
 
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  task      Task?    @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  user User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  task Task? @relation(fields: [taskId], references: [id], onDelete: SetNull)
 
   @@unique([userId, taskId, ruleCode])
   @@index([userId])
@@ -745,29 +754,29 @@ model UserGamificationProfile {
   lastActivityDate   DateTime?
   updatedAt          DateTime  @updatedAt
 
-  user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model AchievementDefinition {
-  id          String            @id @default(uuid())
-  code        String            @unique
+  id          String @id @default(uuid())
+  code        String @unique
   title       String
   description String
   badgeIcon   String
-  points      Int               @default(50)
-  category    String            @default("GENERAL")
+  points      Int    @default(50)
+  category    String @default("GENERAL")
 
-  users       UserAchievement[]
+  users UserAchievement[]
 }
 
 model UserAchievement {
-  id              String                @id @default(uuid())
+  id              String   @id @default(uuid())
   userId          String
   achievementCode String
-  unlockedAt      DateTime              @default(now())
+  unlockedAt      DateTime @default(now())
 
-  user            User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
-  achievement     AchievementDefinition @relation(fields: [achievementCode], references: [code], onDelete: Cascade)
+  user        User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  achievement AchievementDefinition @relation(fields: [achievementCode], references: [code], onDelete: Cascade)
 
   @@unique([userId, achievementCode])
   @@index([userId])
@@ -786,9 +795,8 @@ model AiSuggestion {
   reviewedAt    DateTime?
   createdAt     DateTime  @default(now())
 
-  source        Source?   @relation(fields: [sourceId], references: [id], onDelete: SetNull)
-  reviewedBy    User?     @relation(fields: [reviewedById], references: [id], onDelete: SetNull)
+  source     Source? @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  reviewedBy User?   @relation(fields: [reviewedById], references: [id], onDelete: SetNull)
 
   @@index([status])
 }
-

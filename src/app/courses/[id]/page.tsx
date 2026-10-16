@@ -1,8 +1,16 @@
+import { hasPermission } from "@/lib/permissions/checker";
+import { assignedVariants } from "@/server/domain/variants";
+import { confirmedDeadlineWhere } from "@/server/domain/deadline-visibility";
+import { taskVisibilityWhere } from "@/server/domain/access";
+import {
+  isTrustedAccepted,
+  progressEvidenceInclude,
+} from "@/server/domain/trust";
 import React from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
-import { getCurrentUser } from "@/lib/auth/session";
+import { requireCurrentUser } from "@/lib/auth/session";
 import { calculateDeadlineStatus } from "@/server/services/deadline-service";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
@@ -25,30 +33,29 @@ interface CoursePageProps {
 
 export default async function CourseDetailPage({ params }: CoursePageProps) {
   const { id } = await params;
-  const user = await getCurrentUser();
+  const user = await requireCurrentUser();
+  const visibleTasks = await taskVisibilityWhere(user);
 
   const offering = await prisma.courseOffering.findUnique({
-    where: { id },
+    where: { id, groups: { some: { groupId: user.groupId } } },
     include: {
       courseDefinition: true,
       teachers: {
         include: { teacher: true },
       },
       tasks: {
+        where: visibleTasks,
         orderBy: [{ type: "asc" }, { number: "asc" }],
         include: {
           deadlines: {
-            where: { status: "ACTIVE" },
+            where: confirmedDeadlineWhere,
             orderBy: { date: "asc" },
           },
-          variants: {
-            include: {
-              assignments: {
-                include: { enrollment: true },
-              },
-            },
+
+          progress: {
+            where: { userId: user.id },
+            include: progressEvidenceInclude,
           },
-          progress: user ? { where: { userId: user.id } } : false,
           sourceReference: true,
         },
       },
@@ -60,39 +67,52 @@ export default async function CourseDetailPage({ params }: CoursePageProps) {
     notFound();
   }
 
-  // Find user's enrollment
-  const userEnrollment = user
-    ? await prisma.enrollment.findFirst({
-        where: { userId: user.id, group: { code: "5130901/40102" } },
-      })
-    : null;
+  const personalVariants = await assignedVariants(
+    user,
+    offering.tasks.map((task) => task.id),
+  );
 
   // Separate tasks by type
   const labs = offering.tasks.filter((t) => t.type === "LABORATORY");
   const homeworks = offering.tasks.filter(
-    (t) => t.type === "HOMEWORK" || t.type === "EXERCISE" || t.type === "CALCULATION_WORK"
+    (t) =>
+      t.type === "HOMEWORK" ||
+      t.type === "EXERCISE" ||
+      t.type === "CALCULATION_WORK",
   );
   const otherTasks = offering.tasks.filter(
-    (t) => t.type !== "LABORATORY" && t.type !== "HOMEWORK" && t.type !== "EXERCISE" && t.type !== "CALCULATION_WORK"
+    (t) =>
+      t.type !== "LABORATORY" &&
+      t.type !== "HOMEWORK" &&
+      t.type !== "EXERCISE" &&
+      t.type !== "CALCULATION_WORK",
   );
 
   const totalLabs = labs.length;
-  const acceptedLabs = labs.filter(
-    (l) => l.progress?.[0]?.status === "ACCEPTED"
+  const acceptedLabs = labs.filter((l) =>
+    isTrustedAccepted(l.progress?.[0]),
   ).length;
 
-  const canManageTasks = user?.permissions.includes("manage_tasks") ?? false;
-  const canVerifyProgress = user?.permissions.includes("verify_progress") ?? false;
+  const canManageTasks =
+    hasPermission(user, "manage_tasks") ||
+    user.permissions.includes(`manage_course:${offering.id}`);
+  const canVerifyProgress = false; // Own results require an independent verifier.
 
   return (
     <div className="space-y-6">
       {/* Breadcrumbs */}
       <div className="flex items-center gap-2 text-xs text-slate-400">
-        <Link href="/" className="hover:text-slate-200">Главная</Link>
+        <Link href="/" className="hover:text-slate-200">
+          Главная
+        </Link>
         <span>/</span>
-        <Link href="/courses" className="hover:text-slate-200">Дисциплины</Link>
+        <Link href="/courses" className="hover:text-slate-200">
+          Дисциплины
+        </Link>
         <span>/</span>
-        <span className="text-slate-200 font-medium">{offering.courseDefinition.shortTitle}</span>
+        <span className="text-slate-200 font-medium">
+          {offering.courseDefinition.shortTitle}
+        </span>
       </div>
 
       {/* Course Header */}
@@ -117,11 +137,13 @@ export default async function CourseDetailPage({ params }: CoursePageProps) {
           {canManageTasks && (
             <CreateTaskModal
               courseOfferingId={offering.id}
-              courses={[{
-                id: offering.id,
-                title: offering.courseDefinition.title,
-                shortTitle: offering.courseDefinition.shortTitle,
-              }]}
+              courses={[
+                {
+                  id: offering.id,
+                  title: offering.courseDefinition.title,
+                  shortTitle: offering.courseDefinition.shortTitle,
+                },
+              ]}
             />
           )}
         </div>
@@ -136,17 +158,23 @@ export default async function CourseDetailPage({ params }: CoursePageProps) {
               offering.teachers.map((ct) => (
                 <div key={ct.id} className="flex items-center gap-2">
                   <User className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-                  <span className="font-medium text-slate-200">{ct.teacher.fullName}</span>
-                  {ct.role && <span className="text-slate-400">({ct.role})</span>}
-                  {ct.status === "DISPUTED" && (
+                  <span className="font-medium text-slate-200">
+                    {ct.teacher.fullName}
+                  </span>
+                  {ct.role && (
+                    <span className="text-slate-400">({ct.role})</span>
+                  )}
+                  {ct.status !== "CONFIRMED" && (
                     <Badge variant="warning" className="text-[9px] px-1 py-0">
-                      Конфликт данных
+                      Требует уточнения
                     </Badge>
                   )}
                 </div>
               ))
             ) : (
-              <span className="text-slate-500 italic">Преподаватель уточняется</span>
+              <span className="text-slate-500 italic">
+                Преподаватель уточняется
+              </span>
             )}
           </div>
 
@@ -156,7 +184,9 @@ export default async function CourseDetailPage({ params }: CoursePageProps) {
             </span>
             <div className="flex items-center gap-2">
               <Cpu className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-              <span>{offering.softwareRequired || "Специальное ПО не зафиксировано"}</span>
+              <span>
+                {offering.softwareRequired || "Специальное ПО не зафиксировано"}
+              </span>
             </div>
           </div>
         </div>
@@ -166,7 +196,7 @@ export default async function CourseDetailPage({ params }: CoursePageProps) {
           <div className="pt-3 border-t border-slate-800 space-y-1.5">
             <div className="flex items-center justify-between text-xs">
               <span className="text-slate-400 font-medium">
-                Условие аттестации: сдача лабораторного практикума
+                Прогресс по опубликованным лабораторным
               </span>
               <span className="font-bold text-sky-400">
                 Зачтено {acceptedLabs} из {totalLabs} ЛР
@@ -193,18 +223,17 @@ export default async function CourseDetailPage({ params }: CoursePageProps) {
           <div className="space-y-3">
             {labs.map((task) => {
               const userProg = task.progress?.[0];
-              const isAccepted = userProg?.status === "ACCEPTED";
+              const isAccepted = isTrustedAccepted(userProg);
               const deadline = task.deadlines[0];
               const deadlineCalc = calculateDeadlineStatus(
                 deadline ? deadline.date : null,
                 new Date(),
-                isAccepted
+                isAccepted,
+                deadline?.isTimeStrict ?? true,
               );
 
               // Assigned variant for current student
-              const assignedVariant = task.variants.find((v) =>
-                v.assignments.some((a) => a.enrollmentId === userEnrollment?.id)
-              ) || task.variants[0];
+              const assignedVariant = personalVariants.get(task.id);
 
               return (
                 <Card
@@ -215,14 +244,25 @@ export default async function CourseDetailPage({ params }: CoursePageProps) {
                     {/* Task Info */}
                     <div className="space-y-2 min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
-                        <Badge variant="default" className="text-xs font-semibold">
+                        <Badge
+                          variant="default"
+                          className="text-xs font-semibold"
+                        >
                           ЛР #{task.number || "—"}
                         </Badge>
                         <Badge variant={deadlineCalc.badgeVariant}>
                           {deadlineCalc.badgeLabel}
                         </Badge>
+                        {!assignedVariant && (
+                          <span className="text-xs text-slate-400">
+                            Вариант не назначен
+                          </span>
+                        )}
                         {assignedVariant && (
-                          <Badge variant="secondary" className="font-mono text-xs">
+                          <Badge
+                            variant="secondary"
+                            className="font-mono text-xs"
+                          >
                             {assignedVariant.variantNumber}
                           </Badge>
                         )}
@@ -247,7 +287,8 @@ export default async function CourseDetailPage({ params }: CoursePageProps) {
                         </span>
                         {task.sourceReference && (
                           <span className="text-sky-400/80">
-                            Источник: {task.sourceReference.quoteText?.slice(0, 45)}...
+                            Источник:{" "}
+                            {task.sourceReference.quoteText?.slice(0, 45)}...
                           </span>
                         )}
                       </div>
@@ -292,12 +333,13 @@ export default async function CourseDetailPage({ params }: CoursePageProps) {
           <div className="space-y-3">
             {homeworks.map((task) => {
               const userProg = task.progress?.[0];
-              const isAccepted = userProg?.status === "ACCEPTED";
+              const isAccepted = isTrustedAccepted(userProg);
               const deadline = task.deadlines[0];
               const deadlineCalc = calculateDeadlineStatus(
                 deadline ? deadline.date : null,
                 new Date(),
-                isAccepted
+                isAccepted,
+                deadline?.isTimeStrict ?? true,
               );
 
               return (
@@ -309,7 +351,9 @@ export default async function CourseDetailPage({ params }: CoursePageProps) {
                     <div className="space-y-2 flex-1">
                       <div className="flex items-center gap-2">
                         <Badge variant="secondary" className="text-xs">
-                          {task.type === "HOMEWORK" ? "Домашняя работа" : "Упражнение"}
+                          {task.type === "HOMEWORK"
+                            ? "Домашняя работа"
+                            : "Упражнение"}
                         </Badge>
                         <Badge variant={deadlineCalc.badgeVariant}>
                           {deadlineCalc.badgeLabel}
@@ -356,6 +400,36 @@ export default async function CourseDetailPage({ params }: CoursePageProps) {
         </div>
       )}
 
+      {otherTasks.length > 0 && (
+        <div className="space-y-3">
+          <h2 className="font-semibold">Другие задания</h2>
+          {otherTasks.map((task) => (
+            <Link
+              className="block p-4 border border-slate-800 rounded-lg"
+              key={task.id}
+              href={`/tasks/${task.id}`}
+            >
+              {task.title}
+            </Link>
+          ))}
+        </div>
+      )}
+      {offering.materials.length > 0 && (
+        <div className="space-y-3">
+          <h2 className="font-semibold">Материалы</h2>
+          {offering.materials.map((material) => (
+            <a
+              className="block text-sky-400"
+              key={material.id}
+              href={material.url}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              {material.title}
+            </a>
+          ))}
+        </div>
+      )}
       {/* Empty State if no tasks */}
       {offering.tasks.length === 0 && (
         <div className="p-8 rounded-xl border border-slate-800 bg-slate-900/40 text-center space-y-2">
@@ -364,7 +438,8 @@ export default async function CourseDetailPage({ params }: CoursePageProps) {
             По этому предмету пока нет опубликованных заданий
           </h3>
           <p className="text-xs text-slate-400 max-w-md mx-auto">
-            Преподаватель еще не выдавал заданий, либо староста добавит их после следующего занятия.
+            Преподаватель еще не выдавал заданий, либо староста добавит их после
+            следующего занятия.
           </p>
         </div>
       )}

@@ -17,32 +17,47 @@ export class ForbiddenError extends Error {
   }
 }
 
-export function hasPermission(user: SessionUser | null, permission: string): boolean {
+export function hasPermission(
+  user: SessionUser | null,
+  permission: string,
+  groupId = user?.groupId,
+): boolean {
   if (!user) return false;
-  if (user.isSystemAdmin || user.isOwner) return true;
+  if (user.isSystemAdmin) return true;
+  if (!groupId || user.groupId !== groupId) return false;
+  if (user.isOwner) return true;
   return user.permissions.includes(permission);
 }
 
 export async function requirePermission(
   user: SessionUser | null,
   permission: string,
-  contextPath = "action"
+  contextPath = "action",
+  groupId = user?.groupId,
 ): Promise<void> {
   if (!user) {
-    throw new UnauthorizedError("Для совершения этого действия необходимо войти в систему.");
+    throw new UnauthorizedError(
+      "Для совершения этого действия необходимо войти в систему.",
+    );
   }
 
-  if (!hasPermission(user, permission)) {
+  if (!hasPermission(user, permission, groupId)) {
     // Minimal Security Log (ADR-013 & user note 4: lightweight, does not delay flow)
     try {
-      if (user.id && (user.id.startsWith("user-dev-") || user.id.length === 36)) {
+      if (
+        user.id &&
+        (user.id.startsWith("user-dev-") || user.id.length === 36)
+      ) {
         await prisma.securityAccessLog.create({
           data: {
             userId: user.id,
             event: "403_FORBIDDEN",
             path: contextPath,
             method: "ACTION",
-            details: { requiredPermission: permission, userNickname: user.nickname },
+            details: {
+              requiredPermission: permission,
+              userNickname: user.nickname,
+            },
           },
         });
       }
@@ -51,7 +66,7 @@ export async function requirePermission(
     }
 
     throw new ForbiddenError(
-      `Отказ в доступе: требуется право '${permission}'. Ваши текущие права не позволяют выполнить это действие.`
+      `Отказ в доступе: требуется право '${permission}'. Ваши текущие права не позволяют выполнить это действие.`,
     );
   }
 }
