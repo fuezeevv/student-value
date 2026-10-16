@@ -14,6 +14,8 @@ coverage
 prisma/test-fixtures.ts
 scripts/repair-academic-data.ts
 scripts/issue-google-invite.ts
+scripts/import-reviewed-academic.mjs
+scripts/lib/reviewed-import.mjs
 scripts/check-*
 !scripts/check-function-traces.mjs
 scripts/test-*

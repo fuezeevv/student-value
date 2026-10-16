@@ -8,9 +8,11 @@ import { createEnrollmentGrant } from "../src/server/domain/google-login";
 // Trusted release operator only. No endpoint exposes this command or migration credentials.
 async function main() {
   const env = assertNeonMigrationEnvironment(process.env);
-  const [enrollmentId, recipient] = process.argv.slice(2);
+  const [enrollmentId, recipient, existingUserId] = process.argv.slice(2);
   if (!enrollmentId || !recipient)
-    throw Error("Usage: issue-google-invite.ts ENROLLMENT_ID RECIPIENT_EMAIL");
+    throw Error(
+      "Usage: issue-google-invite.ts ENROLLMENT_ID RECIPIENT_EMAIL [EXPLICIT_EXISTING_USER_ID]",
+    );
   const p = new PrismaClient({ datasourceUrl: env.DATABASE_URL });
   try {
     const e = await p.enrollment.findUniqueOrThrow({
@@ -20,11 +22,20 @@ async function main() {
     if (
       e.group.code !== APP_GROUP_CODE ||
       e.status === "ARCHIVED" ||
-      e.userId ||
+      e.userId !== (existingUserId ?? null) ||
       e.claimToken
     )
       throw Error("Enrollment is not available for a first invitation");
-    const grant = createEnrollmentGrant(e.id, recipient, null);
+    if (
+      e.userId &&
+      (await p.authIdentity.findFirst({
+        where: { userId: e.userId, provider: "GOOGLE" },
+      }))
+    )
+      throw Error(
+        "An existing Google identity cannot be replaced by invitation",
+      );
+    const grant = createEnrollmentGrant(e.id, recipient, e.userId);
     const dir = path.resolve("secrets");
     fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
     const file = path.join(dir, `google-invite-${e.id}.txt`);
@@ -35,7 +46,7 @@ async function main() {
         const updated = await tx.enrollment.updateMany({
           where: {
             id: e.id,
-            userId: null,
+            userId: e.userId,
             claimToken: null,
             status: { not: "ARCHIVED" },
           },
@@ -51,6 +62,7 @@ async function main() {
             details: {
               groupId: e.groupId,
               operator: "TRUSTED_RELEASE",
+              existingUserId: e.userId,
               recipientHash: JSON.parse(grant.stored).recipient,
             },
           },

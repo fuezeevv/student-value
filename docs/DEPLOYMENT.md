@@ -66,3 +66,17 @@ Google client credentials, reviewed production data import, привязка н�
 ## Приглашения
 
 scripts/issue-google-invite.ts — только доверенный release-инструмент, не веб-API. Получает точный Enrollment ID и email, отказывает для чужой группы/архивной/уже связанной записи и пишет код только в ignored secrets/ mode 0600. Использовать direct migration environment; production URL не передавать тестовому CI. При переносе существующих реальных профилей сначала отдельно проверить соответствие Enrollment и сохранить реальный progress; не классифицировать тестовые данные по одному префиксу ID.
+
+Для уже существующего проверенного профиля команда требует третий аргумент EXPLICIT_EXISTING_USER_ID, точно совпадающий с текущим Enrollment.userId. Код связан с этим userId и подтверждённым Google email; существующая Google identity не заменяется. Привязка сохраняет прежние progress, nickname, membership и статус VERIFIED. Обычный новый участник не получает owner/admin роли.
+
+## Первый перенос данных в Neon — 2026-10-17
+
+Перед переносом: Git tag checkpoint-before-neon-data-20261017, отдельные проверенные custom pg_dump локальной БД и Neon. Для PostgreSQL 17 использован keg-only libpq client 18 с verify-full/system root CAs; локальный PostgreSQL 16 не обновлялся и не перезапускался.
+
+scripts/import-reviewed-academic.mjs принимает только приватный reviewed manifest под secrets/ и точный SHA-256. Проверяет production Neon endpoint, пустоту всех application tables, выполняет только CREATE в единой serializable transaction, записывает digest/counts/exclusions/transformations в AuditLog. Повтор с тем же digest — no-op, не перезаписывает последующую работу; другой digest/непустая база без marker отклоняются. Идентичности, sessions, локальные claim tokens и интеграционные credentials не импортируются. Инструмент и приватный manifest исключены из Vercel upload.
+
+Пробный перенос фактического reviewed набора прошёл на отдельной local studentvalue_test_import_20261017: FK/date/JSON, отсутствие auth credentials, сохранность прогресса при повторном запуске, отказ на другой digest/добавление sessions. После проверки неизменности fingerprint локальной БД шесть production migrations проверены (pending нет), initial transfer применён к Neon. Readback каждого импортированного scalar/JSON/date совпал с manifest через ограниченную runtime role.
+
+Перенесены: группа, 30 Enrollment, 10 предметов/offerings, 9 teacher candidates с прежними статусами, 6 Source, 17 SourceReference, 11 Task (10 опубликованных, 1 draft; отсутствие TaskAudience не исправляется догадкой), 10 Audience, 10 Deadline (6 подтверждённых ACTIVE, 4 CANCELLED/UNKNOWN), 3 Announcement с прежним lifecycle, 4 личных Progress владельца, 27 исходных audit records, остальные связанные реальные справочники/настройки. Два прежних назначения вариантов остаются UNVERIFIED и не выдаются за персональные подтверждённые задания.
+
+Исключены только точно установленные прежним repair E2E-задачи/объявления и их зависимости, unbound demo profile без Enrollment с явно DEMO XP и его данные. Локальные строки не удалялись. Сохранены профиль владельца и system-bootstrap как неаутентифицируемый исторический автор. У владельца сохранены group ownership/roles, глобальный isSystemAdmin установлен false; до реального Google-входа ни одной production identity/session нет. Новый Google client/rotated secret прочитаны только из secrets/google-oauth.env и помещены в sensitive production env; старый secret не использовался.

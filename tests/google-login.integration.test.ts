@@ -23,6 +23,83 @@ async function invitation(groupId = "test-group") {
   return { identity, enrollment, grant };
 }
 describe("Google identity and enrollment transaction", () => {
+  it("links an explicitly invited existing owner without replacing progress or privileges", async () => {
+    const user = await prisma.user.create({
+      data: { nickname: "[TEST] migrated-owner-" + randomUUID() },
+    });
+    const member = await prisma.groupMember.create({
+      data: { userId: user.id, groupId: "test-group", isOwner: true },
+    });
+    const verifiedAt = new Date("2026-10-16T12:00:00Z");
+    const enrollment = await prisma.enrollment.create({
+      data: {
+        groupId: "test-group",
+        userId: user.id,
+        fullName: "[TEST] Migrated " + randomUUID(),
+        status: "VERIFIED",
+        verifiedAt,
+        verifiedById: "user-dev-owner",
+      },
+    });
+    const progress = await prisma.studentTaskProgress.create({
+      data: {
+        userId: user.id,
+        taskId: "task-otu-lab1",
+        status: "IN_PROGRESS",
+        studentNotes: "[TEST] Existing private work",
+      },
+    });
+    const identity = {
+      sub: randomUUID(),
+      email: randomUUID() + "@example.invalid",
+      name: "New Google name",
+    };
+    const grant = createEnrollmentGrant(enrollment.id, identity.email, user.id);
+    await prisma.enrollment.update({
+      where: { id: enrollment.id },
+      data: { claimToken: grant.stored },
+    });
+    await expect(
+      completeGoogleLogin(
+        { ...identity, email: "wrong@example.invalid" },
+        "test-group",
+        grant.code,
+      ),
+    ).rejects.toThrow();
+    const result = await completeGoogleLogin(
+      identity,
+      "test-group",
+      grant.code,
+    );
+    expect(result.userId).toBe(user.id);
+    expect(
+      await prisma.studentTaskProgress.findUnique({
+        where: { id: progress.id },
+      }),
+    ).toEqual(progress);
+    expect(
+      await prisma.groupMember.findUnique({ where: { id: member.id } }),
+    ).toEqual(member);
+    expect(await prisma.user.findUnique({ where: { id: user.id } })).toEqual(
+      user,
+    );
+    expect(
+      await prisma.enrollment.findUnique({ where: { id: enrollment.id } }),
+    ).toMatchObject({
+      userId: user.id,
+      status: "VERIFIED",
+      verifiedAt,
+      verifiedById: "user-dev-owner",
+      claimToken: null,
+    });
+    await expect(
+      completeGoogleLogin(
+        { ...identity, sub: randomUUID() },
+        "test-group",
+        grant.code,
+      ),
+    ).rejects.toThrow();
+  });
   it("creates an unprivileged account, consumes the invitation and stores a hashed session", async () => {
     const { identity, enrollment, grant } = await invitation();
     const result = await completeGoogleLogin(
