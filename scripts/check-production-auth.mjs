@@ -74,8 +74,8 @@ try {
     assert.equal(r.status, 401);
   }
   const text = await (await fetch(base + "/login")).text();
-  assert(!text.includes("Студент [Тестовый аккаунт]"));
-  assert(!text.includes("Батукаев Расул (Староста / Owner)"));
+  assert(!text.includes("Локальный вход"));
+  assert(!text.includes("<form"), "No local login forms in production");
   console.log(
     "PASS production runtime rejects absent/forged sessions and dev cookies with ALLOW_DEV_AUTH=true (56 requests).",
   );

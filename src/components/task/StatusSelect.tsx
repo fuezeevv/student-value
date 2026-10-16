@@ -1,11 +1,21 @@
 "use client";
 
-import React, { useState, useTransition } from "react";
+import React, { useState, useTransition, useId } from "react";
 import { StudentTaskProgressStatus, VerificationSource } from "@prisma/client";
-import { updateStudentProgressAction, verifyTaskProgressAction } from "@/server/actions/task-actions";
+import {
+  updateStudentProgressAction,
+  verifyTaskProgressAction,
+} from "@/server/actions/task-actions";
 import { formatVerificationSource } from "@/lib/utils/formatters";
 import { Badge } from "@/components/ui/Badge";
-import { CheckCircle2, Clock, AlertCircle, FileCheck, ShieldCheck, Loader2 } from "lucide-react";
+import {
+  CheckCircle2,
+  Clock,
+  AlertCircle,
+  FileCheck,
+  ShieldCheck,
+  Loader2,
+} from "lucide-react";
 
 interface StatusSelectProps {
   taskId: string;
@@ -28,23 +38,32 @@ export function StatusSelect({
   canVerify,
   isCurrentUser,
 }: StatusSelectProps) {
+  const selectId = useId();
   const [isPending, startTransition] = useTransition();
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const getStatusBadge = (status: StudentTaskProgressStatus, verified: boolean) => {
+  const getStatusBadge = (
+    status: StudentTaskProgressStatus,
+    verified: boolean,
+  ) => {
     switch (status) {
       case "ACCEPTED":
         return (
-          <Badge variant="success" className="gap-1.5 font-semibold">
+          <Badge
+            variant={verified ? "success" : "warning"}
+            className="gap-1.5 font-semibold"
+          >
             <CheckCircle2 className="w-3.5 h-3.5" />
-            {verified ? "Результат подтверждён" : "Подтверждение требует проверки"}
+            {verified
+              ? "Результат подтверждён"
+              : "Подтверждение требует проверки"}
           </Badge>
         );
       case "SUBMITTED":
         return (
           <Badge variant="info" className="gap-1.5">
             <FileCheck className="w-3.5 h-3.5" />
-            Сдано (Ожидает зачета)
+            На проверке
           </Badge>
         );
       case "READY":
@@ -57,8 +76,7 @@ export function StatusSelect({
       case "IN_PROGRESS":
         return (
           <Badge variant="default" className="gap-1.5">
-            <Clock className="w-3.5 h-3.5" />
-            В работе
+            <Clock className="w-3.5 h-3.5" />В работе
           </Badge>
         );
       case "NEEDS_FIX":
@@ -103,7 +121,7 @@ export function StatusSelect({
           taskId,
           targetUserId,
           accept,
-          VerificationSource.HEADMAN_CONFIRMED
+          VerificationSource.HEADMAN_CONFIRMED,
         );
       } catch (err: unknown) {
         if (err instanceof Error) {
@@ -127,7 +145,9 @@ export function StatusSelect({
           <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
           <span>
             {formatVerificationSource(verificationSource)}
-            {verifiedAt ? ` • ${new Date(verifiedAt).toLocaleDateString("ru-RU")}` : ""}
+            {verifiedAt
+              ? ` • ${new Date(verifiedAt).toLocaleDateString("ru-RU", { timeZone: "Europe/Moscow" })}`
+              : ""}
           </span>
         </div>
       )}
@@ -135,19 +155,30 @@ export function StatusSelect({
       {/* Student self-reported control */}
       {isCurrentUser && (
         <div className="flex flex-col gap-1 mt-1">
-          <label className="text-xs text-slate-400">Личный статус:</label>
+          <label htmlFor={selectId} className="text-xs text-slate-400">
+            Мой этап работы
+          </label>
           <select
+            id={selectId}
+            aria-label="Мой этап работы"
             value={currentStatus}
             onChange={handleStudentChange}
-            disabled={isPending}
-            className="bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded px-2.5 py-1.5 focus:outline-none focus:border-sky-500 cursor-pointer disabled:opacity-50"
+            disabled={isPending || currentStatus === "ACCEPTED"}
+            className="min-h-11 w-full bg-slate-800 border border-slate-700 text-slate-200 text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-sky-500 cursor-pointer disabled:opacity-50"
           >
             <option value="NOT_STARTED">Не начато</option>
             <option value="IN_PROGRESS">В работе</option>
-            <option value="READY">Готово к показу / отправке</option>
-            <option value="SUBMITTED">Сдано (отчет отправлен)</option>
+            {currentStatus === "NEEDS_FIX" && (
+              <option value="NEEDS_FIX" disabled>
+                Нужны правки
+              </option>
+            )}
+            <option value="READY">Готово к сдаче</option>
+            <option value="SUBMITTED">Отправлено на проверку</option>
             <option value="ACCEPTED" disabled={!canVerify}>
-              {canVerify ? "Принято (как модератор)" : "Принято (требуется проверка преподавателем)"}
+              {canVerify
+                ? "Принято (как модератор)"
+                : "Зачтено — после подтверждения"}
             </option>
           </select>
         </div>
@@ -175,7 +206,10 @@ export function StatusSelect({
       )}
 
       {errorMsg && (
-        <div className="text-xs text-red-400 bg-red-950/40 border border-red-800/40 p-2 rounded mt-1">
+        <div
+          role="alert"
+          className="text-xs text-red-400 bg-red-950/40 border border-red-800/40 p-2 rounded mt-1"
+        >
           {errorMsg}
         </div>
       )}

@@ -1,592 +1,321 @@
-import { hasPermission } from "@/lib/permissions/checker";
-import { confirmedDeadlineWhere } from "@/server/domain/deadline-visibility";
-import { taskVisibilityWhere } from "@/server/domain/access";
-import {
-  isTrustedAccepted,
-  progressEvidenceInclude,
-} from "@/server/domain/trust";
-import React from "react";
 import Link from "next/link";
+import { chooseFocus } from "@/lib/study/priority";
+import { ArrowRight, ArrowUpRight, CornerDownRight } from "lucide-react";
 import { prisma } from "@/lib/db/prisma";
 import { requireCurrentUser } from "@/lib/auth/session";
-import { calculateDeadlineStatus } from "@/server/services/deadline-service";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/Card";
-import { Badge } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
-import { CreateTaskModal } from "@/components/task/CreateTaskModal";
-import { formatTaskStatus } from "@/lib/utils/formatters";
+import { hasPermission } from "@/lib/permissions/checker";
+import { isTrustedAccepted } from "@/server/domain/trust";
 import {
-  Clock,
-  AlertTriangle,
-  ArrowRight,
-  Megaphone,
-  CheckCircle2,
-  Calendar,
-  Layers,
-  FileText,
-  Flame,
-  Trophy,
-  Sparkles,
-  Bot,
-  ExternalLink,
-} from "lucide-react";
+  loadStudyWorkspace,
+  byDeadline,
+  progressLabel,
+} from "@/server/queries/study-workspace";
+import { StudyTaskRow } from "@/components/study/StudyTaskRow";
+import { FluidRibbon } from "@/components/study/FluidRibbon";
+import { CreateTaskModal } from "@/components/task/CreateTaskModal";
 
-export default async function DashboardPage() {
+export default async function TodayPage() {
   const user = await requireCurrentUser();
-  const visibleTasks = await taskVisibilityWhere(user);
-
-  // Load group courses
-  const offerings = await prisma.courseOffering.findMany({
-    where: {
-      semester: { isCurrent: true },
-      groups: { some: { groupId: user.groupId } },
-    },
-    include: {
-      courseDefinition: true,
-      tasks: {
-        where: visibleTasks,
-        include: {
-          deadlines: {
-            where: confirmedDeadlineWhere,
-            orderBy: { date: "asc" },
-          },
-          progress: {
-            where: { userId: user.id },
-            include: progressEvidenceInclude,
-          },
-          variants: true,
-        },
-      },
-      announcements: {
-        orderBy: { publishedAt: "desc" },
-        take: 3,
-      },
-    },
-  });
-
-  // Flat tasks array with user progress and deadline calculation
-  const allTasks = offerings.flatMap((o) =>
-    o.tasks.map((t) => {
-      const userProgress = t.progress?.[0];
-      const isAccepted = isTrustedAccepted(userProgress);
-      const primaryDeadline = t.deadlines[0];
-      const deadlineCalc = calculateDeadlineStatus(
-        primaryDeadline ? primaryDeadline.date : null,
-        new Date(),
-        isAccepted,
-        primaryDeadline?.isTimeStrict ?? true,
-      );
-
-      return {
-        ...t,
-        courseCode: o.courseDefinition.code,
-        courseTitle: o.courseDefinition.title,
-        courseShortTitle: o.courseDefinition.shortTitle,
-        userProgress,
-        primaryDeadline,
-        deadlineCalc,
-        isAccepted,
-      };
+  const { offerings, tasks, now } = await loadStudyWorkspace(user);
+  const [announcements, changes] = await Promise.all([
+    prisma.announcement.findMany({
+      where: { groupId: user.groupId, status: "PUBLISHED" },
+      orderBy: [{ isPinned: "desc" }, { publishedAt: "desc" }],
+      take: 3,
+      include: { sourceReference: { include: { source: true } } },
     }),
-  );
-
-  // Focus tasks: Overdue first, then DUE_TODAY, DUE_TOMORROW, DUE_URGENT
-  const urgentTasks = allTasks
-    .filter((t) => !t.isAccepted && t.deadlineCalc.urgency !== "NO_DEADLINE")
-    .sort((a, b) => {
-      const order = {
-        OVERDUE: 0,
-        DUE_TODAY: 1,
-        DUE_TOMORROW: 2,
-        DUE_URGENT: 3,
-        UPCOMING: 4,
-        ACCEPTED: 5,
-        NO_DEADLINE: 6,
-      };
-      return (
-        order[a.deadlineCalc.urgency] - order[b.deadlineCalc.urgency] ||
-        (a.primaryDeadline?.date.getTime() ?? Infinity) -
-          (b.primaryDeadline?.date.getTime() ?? Infinity)
-      );
-    });
-
-  const focusTask = urgentTasks[0] || allTasks.find((t) => !t.isAccepted);
-
-  // Active tasks (in progress, ready, or submitted)
-  const activeTasks = allTasks.filter(
-    (t) =>
-      t.userProgress?.status === "IN_PROGRESS" ||
-      t.userProgress?.status === "READY" ||
-      t.userProgress?.status === "SUBMITTED" ||
-      t.userProgress?.status === "NEEDS_FIX",
-  );
-
-  // Progress metrics
-  const totalTasks = allTasks.length;
-  const completedTasks = allTasks.filter((t) => t.isAccepted).length;
-  const submittedTasks = allTasks.filter(
+    prisma.notification.findMany({
+      where: { userId: user.id, isRead: false },
+      orderBy: { createdAt: "desc" },
+      take: 3,
+    }),
+  ]);
+  const open = tasks.filter((t) => !t.accepted);
+  const overdue = open
+    .filter((t) => t.timing.urgency === "OVERDUE")
+    .sort(byDeadline);
+  const upcoming = open
+    .filter((t) => t.deadline && t.timing.urgency !== "OVERDUE")
+    .sort(byDeadline);
+  const active = open
+    .filter((t) =>
+      ["IN_PROGRESS", "READY", "NEEDS_FIX"].includes(
+        t.userProgress?.status ?? "",
+      ),
+    )
+    .sort(byDeadline);
+  const focus = chooseFocus(tasks);
+  const otherActive = active.filter((t) => t.id !== focus?.id);
+  const accepted = tasks.filter((t) => t.accepted).length;
+  const submitted = tasks.filter(
     (t) => t.userProgress?.status === "SUBMITTED",
   ).length;
-  const progressPercent =
-    totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
-
-  // Group announcements
-  const announcements = await prisma.announcement.findMany({
-    where: { groupId: user.groupId, status: "PUBLISHED" },
-    include: { author: true },
-    orderBy: { publishedAt: "desc" },
-    take: 4,
+  const courseOrder = [...offerings].sort((a, b) => {
+    const rank = (id: string) =>
+      tasks.filter((t) => t.courseId === id && !t.accepted).length ? 0 : 1;
+    return rank(a.id) - rank(b.id);
   });
-
-  // User Gamification stats
-  const gamificationProfile = user
-    ? await prisma.userGamificationProfile.findUnique({
-        where: { userId: user.id },
-      })
-    : null;
-
-  // Pending AI suggestions for admins
-  const pendingSuggestionsCount =
-    user?.isOwner || user?.permissions.includes("manage_tasks")
-      ? await prisma.aiSuggestion.count({
-          where: { status: "PENDING", source: { groupId: user.groupId } },
-        })
-      : 0;
-
-  const canManageTasks = hasPermission(user, "manage_tasks");
-
-  const coursesListForModal = offerings.map((o) => ({
-    id: o.id,
-    title: o.courseDefinition.title,
-    shortTitle: o.courseDefinition.shortTitle,
-  }));
-
+  const date = now.toLocaleDateString("ru-RU", {
+    timeZone: "Europe/Moscow",
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  });
   return (
-    <div className="space-y-6">
-      {/* Top Banner / Brand Subhead */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-slate-800/80">
+    <>
+      <div className="page-heading">
         <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight text-white flex items-center gap-2">
-              Student Value{" "}
-              <span className="text-cyan-400 font-mono">1.984</span>
-            </h1>
-            <Badge variant="default" className="text-[10px] font-mono">
-              BETA 5130901/40102
-            </Badge>
-          </div>
-          <p className="text-xs sm:text-sm text-slate-400 mt-0.5">
-            Оперативный центр учебного семестра · СПбПУ ИКНК
+          <p className="eyebrow">{date}</p>
+          <h1 className="page-title">Сегодня</h1>
+          <p className="page-intro">
+            Ваши работы, ближайшие сроки и новости группы.
           </p>
         </div>
-
-        <div className="flex items-center gap-2.5">
-          <Link href="/deadlines">
-            <Button size="sm" variant="outline" className="text-xs">
-              Все дедлайны
-            </Button>
-          </Link>
-          {canManageTasks && <CreateTaskModal courses={coursesListForModal} />}
-        </div>
-      </div>
-
-      {/* ADMIN AI INGESTION CALLOUT (Only shown if pending suggestions exist) */}
-      {pendingSuggestionsCount > 0 && (
-        <div className="p-3.5 rounded-xl border border-cyan-500/30 bg-cyan-950/20 flex items-center justify-between gap-3 text-xs">
-          <div className="flex items-center gap-2.5">
-            <Bot className="w-4 h-4 text-cyan-400 shrink-0" />
-            <span className="text-slate-200">
-              В очереди AI Ingestion есть{" "}
-              <strong className="text-cyan-300 font-semibold">
-                {pendingSuggestionsCount}
-              </strong>{" "}
-              извлеченных предложений из транскрипций на ревью.
-            </span>
-          </div>
-          <Link
-            href="/admin"
-            className="text-cyan-400 hover:text-cyan-300 font-semibold flex items-center gap-1 shrink-0"
-          >
-            <span>Ревью</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </Link>
-        </div>
-      )}
-
-      {/* TOP ROW: FOCUS TASK + GAMIFICATION WIDGET */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left: What should I do now? (8 cols) */}
-        <div className="lg:col-span-8">
-          {focusTask ? (
-            <Card className="glass-panel border-cyan-500/40 relative overflow-hidden h-full flex flex-col justify-between">
-              <div className="absolute top-0 left-0 w-1.5 h-full bg-cyan-400" />
-              <CardHeader className="pb-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <span className="flex h-2 w-2 rounded-full bg-cyan-400 animate-pulse" />
-                    <span className="text-xs uppercase tracking-wider font-bold text-cyan-400">
-                      Фокус: Что делать прямо сейчас
-                    </span>
-                  </div>
-                  <Badge variant={focusTask.deadlineCalc.badgeVariant}>
-                    {focusTask.deadlineCalc.badgeLabel}
-                  </Badge>
-                </div>
-                <CardTitle className="text-lg sm:text-xl text-white mt-1">
-                  [{focusTask.courseShortTitle}] {focusTask.title}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {focusTask.description && (
-                  <p className="text-sm text-slate-300 line-clamp-2">
-                    {focusTask.description}
-                  </p>
-                )}
-                <div className="flex flex-wrap items-center justify-between gap-4 pt-3 border-t border-slate-800/80">
-                  <div className="flex items-center gap-4 text-xs text-slate-400">
-                    <div className="flex items-center gap-1.5">
-                      <Calendar className="w-3.5 h-3.5 text-cyan-400" />
-                      <span>
-                        Дедлайн: {focusTask.deadlineCalc.formattedDate}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <Clock className="w-3.5 h-3.5 text-slate-400" />
-                      <span>
-                        Статус:{" "}
-                        <strong className="text-slate-200">
-                          {formatTaskStatus(focusTask.userProgress?.status)}
-                        </strong>
-                      </span>
-                    </div>
-                  </div>
-
-                  <Link href={`/tasks/${focusTask.id}`}>
-                    <Button
-                      size="sm"
-                      variant="primary"
-                      className="gap-1.5 font-semibold"
-                    >
-                      <span>Перейти к сдаче</span>
-                      <ArrowRight className="w-3.5 h-3.5" />
-                    </Button>
-                  </Link>
-                </div>
-              </CardContent>
-            </Card>
-          ) : (
-            <Card className="glass-panel border-slate-800 p-6 text-center h-full flex flex-col justify-center items-center">
-              <CheckCircle2 className="w-10 h-10 text-emerald-400 mb-2" />
-              <h3 className="text-base font-semibold text-slate-100">
-                Все первоочередные задачи закрыты!
-              </h3>
-              <p className="text-xs text-slate-400 mt-1">
-                На данный момент срочных или просроченных заданий нет.
-              </p>
-            </Card>
-          )}
-        </div>
-
-        {/* Right: Gamification & Streak Widget (4 cols) */}
-        <div className="lg:col-span-4">
-          <Card className="glass-panel border-slate-800 h-full flex flex-col justify-between p-5">
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-xs uppercase font-bold tracking-wider text-slate-400 flex items-center gap-1.5">
-                  <Trophy className="w-4 h-4 text-cyan-400" />
-                  Рейтинг и активность
-                </span>
-                <Link
-                  href="/leaderboard"
-                  className="text-xs text-cyan-400 hover:text-cyan-300 flex items-center gap-0.5"
-                >
-                  Таблица
-                  <ArrowRight className="w-3 h-3" />
-                </Link>
-              </div>
-
-              <div className="flex items-center gap-4">
-                <div className="relative flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-br from-cyan-500/20 to-blue-600/20 border border-cyan-500/30">
-                  <span className="text-xl font-mono font-black text-white">
-                    {gamificationProfile?.level ?? 1}
-                  </span>
-                  <span className="absolute -bottom-1 text-[9px] uppercase font-bold text-cyan-300">
-                    УР.
-                  </span>
-                </div>
-
-                <div className="space-y-1">
-                  <div className="text-sm font-bold text-white flex items-center gap-1.5">
-                    <span>{gamificationProfile?.totalXp ?? 0} XP</span>
-                    <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
-                  </div>
-                  <div className="text-xs text-slate-400 flex items-center gap-1.5">
-                    <Flame className="w-3.5 h-3.5 text-rose-500 animate-pulse" />
-                    <span>
-                      Ударный режим: {gamificationProfile?.currentStreak ?? 0}{" "}
-                      дн.
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="pt-4 border-t border-slate-800/80 mt-4">
-              <div className="flex items-center justify-between text-xs text-slate-400 mb-1.5">
-                <span>
-                  Прогресс до уровня {(gamificationProfile?.level ?? 1) + 1}
-                </span>
-                <span className="text-slate-300 font-mono">
-                  {(gamificationProfile?.totalXp ?? 0) % 100} / 100 XP
-                </span>
-              </div>
-              <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
-                <div
-                  className="bg-cyan-400 h-1.5 rounded-full transition-all duration-500"
-                  style={{
-                    width: `${(gamificationProfile?.totalXp ?? 0) % 100}%`,
-                  }}
-                />
-              </div>
-            </div>
-          </Card>
-        </div>
-      </div>
-
-      {/* SEMESTER PROGRESSION METRICS */}
-      <Card className="glass-panel border-slate-800/80">
-        <CardContent className="p-4 sm:p-5">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2.5">
-            <div className="flex items-center gap-2">
-              <Layers className="w-4 h-4 text-cyan-400" />
-              <span className="font-semibold text-sm text-slate-200">
-                Ваш прогресс по опубликованным заданиям
-              </span>
-              <span className="text-xs text-slate-400">
-                · Зачтено: {completedTasks} · Сдано на проверку:{" "}
-                {submittedTasks} · Всего: {totalTasks}
-              </span>
-            </div>
-            <div className="text-sm font-bold text-cyan-400 font-mono">
-              {progressPercent}%
-            </div>
-          </div>
-
-          <div className="w-full bg-slate-800/80 rounded-full h-2.5 overflow-hidden">
-            <div
-              className="bg-gradient-to-r from-cyan-500 to-blue-500 h-2.5 rounded-full transition-all duration-500"
-              style={{ width: `${progressPercent}%` }}
+        {hasPermission(user, "manage_tasks") && (
+          <div className="heading-action">
+            <CreateTaskModal
+              courses={offerings.map((o) => ({
+                id: o.id,
+                title: o.courseDefinition.title,
+                shortTitle: o.courseDefinition.shortTitle,
+              }))}
             />
           </div>
-        </CardContent>
-      </Card>
-
-      {/* TWO-COLUMN WORKSPACE */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left Column: Deadlines & Active Tasks (7 cols) */}
-        <div className="lg:col-span-7 space-y-6">
-          {/* Urgent Deadlines List */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4 text-cyan-400" />
-                Контрольные сроки ({urgentTasks.length})
-              </h2>
-              <Link
-                href="/deadlines"
-                className="text-xs text-cyan-400 hover:text-cyan-300"
-              >
-                Все дедлайны →
-              </Link>
-            </div>
-
-            {urgentTasks.length > 0 ? (
-              <div className="space-y-2">
-                {urgentTasks.map((task) => (
-                  <Link
-                    key={task.id}
-                    href={`/tasks/${task.id}`}
-                    className="block group"
-                  >
-                    <div className="p-3.5 rounded-xl border border-slate-800/80 bg-slate-900/50 hover:bg-slate-900 hover:border-cyan-500/40 transition-all flex items-center justify-between gap-3">
-                      <div className="space-y-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <Badge
-                            variant="secondary"
-                            className="text-[10px] px-1.5 py-0 font-mono"
-                          >
-                            {task.courseShortTitle}
-                          </Badge>
-                          <span className="font-medium text-sm text-slate-200 group-hover:text-cyan-300 transition-colors truncate">
-                            {task.title}
-                          </span>
-                        </div>
-                        <div className="text-xs text-slate-400 flex items-center gap-3">
-                          <span>Срок: {task.deadlineCalc.formattedDate}</span>
-                          <span>·</span>
-                          <span>
-                            {task.primaryDeadline?.type === "HARD"
-                              ? "Жесткий"
-                              : "Рекомендуемый"}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="shrink-0 flex items-center gap-2">
-                        <Badge variant={task.deadlineCalc.badgeVariant}>
-                          {task.deadlineCalc.badgeLabel}
-                        </Badge>
-                        <ArrowRight className="w-4 h-4 text-slate-500 group-hover:text-cyan-400 transition-colors" />
-                      </div>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            ) : (
-              <div className="p-4 rounded-xl border border-slate-800/80 bg-slate-900/40 text-center text-xs text-slate-400">
-                На ближайшее время дедлайнов нет.
-              </div>
-            )}
-          </div>
-
-          {/* Active Tasks in Progress */}
-          <div className="space-y-3">
-            <h2 className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">
-              <Clock className="w-4 h-4 text-cyan-400" />
-              Задачи в активной работе ({activeTasks.length})
-            </h2>
-
-            {activeTasks.length > 0 ? (
-              <div className="space-y-2">
-                {activeTasks.map((task) => (
-                  <Link
-                    key={task.id}
-                    href={`/tasks/${task.id}`}
-                    className="block group"
-                  >
-                    <div className="p-3.5 rounded-xl border border-slate-800/80 bg-slate-900/50 hover:bg-slate-900 hover:border-cyan-500/40 transition-all flex items-center justify-between gap-3">
-                      <div className="space-y-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <Badge
-                            variant="secondary"
-                            className="text-[10px] px-1.5 py-0 font-mono"
-                          >
-                            {task.courseShortTitle}
-                          </Badge>
-                          <span className="font-medium text-sm text-slate-200 group-hover:text-cyan-300 transition-colors truncate">
-                            {task.title}
-                          </span>
-                        </div>
-                        <div className="text-xs text-slate-400">
-                          {task.userProgress?.status === "SUBMITTED"
-                            ? "Сдано на проверку"
-                            : task.userProgress?.status === "READY"
-                              ? "Сделано, готово к сдаче"
-                              : "В процессе выполнения"}
-                        </div>
-                      </div>
-
-                      <div className="shrink-0">
-                        <Badge
-                          variant={
-                            task.userProgress?.status === "SUBMITTED"
-                              ? "info"
-                              : "default"
-                          }
-                        >
-                          {formatTaskStatus(task.userProgress?.status)}
-                        </Badge>
-                      </div>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            ) : (
-              <div className="p-4 rounded-xl border border-slate-800/80 bg-slate-900/40 text-center text-xs text-slate-400">
-                Нет задач со статусом «В работе». Перейдите в дисциплины для
-                выбора задания.
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Right Column: Announcements & Quick Access (5 cols) */}
-        <div className="lg:col-span-5 space-y-6">
-          {/* Announcements Stream */}
-          <div className="space-y-3">
-            <h2 className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">
-              <Megaphone className="w-4 h-4 text-cyan-400" />
-              Объявления и важные изменения
-            </h2>
-
-            {announcements.length > 0 ? (
-              <div className="space-y-2.5">
-                {announcements.map((ann) => (
-                  <Card
-                    key={ann.id}
-                    className="glass-panel border-slate-800 p-4 space-y-2"
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-semibold text-sm text-slate-200">
-                        {ann.title}
-                      </span>
-                      {ann.isPinned && (
-                        <Badge variant="warning" className="text-[10px]">
-                          Закреплено
-                        </Badge>
-                      )}
-                    </div>
-                    <p className="text-xs text-slate-300 leading-relaxed">
-                      {ann.content}
-                    </p>
-                    <div className="text-[11px] text-slate-500 pt-1.5 border-t border-slate-800/60 flex items-center justify-between">
-                      <span>Автор: {ann.author.nickname}</span>
-                      <span>
-                        {new Date(ann.publishedAt).toLocaleDateString("ru-RU")}
-                      </span>
-                    </div>
-                  </Card>
-                ))}
-              </div>
-            ) : (
-              <div className="p-4 rounded-xl border border-slate-800/80 bg-slate-900/40 text-center text-xs text-slate-400">
-                Новых объявлений нет.
-              </div>
-            )}
-          </div>
-
-          {/* Quick Study Resources */}
-          <div className="space-y-3">
-            <h2 className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">
-              <FileText className="w-4 h-4 text-slate-400" />
-              Быстрый переход
-            </h2>
-            <div className="space-y-2">
-              <Link
-                href="/courses"
-                className="p-3 rounded-xl border border-slate-800 bg-slate-900/50 hover:bg-slate-900 flex items-center justify-between text-xs text-slate-300 hover:text-cyan-300 transition-colors"
-              >
-                <span>Все 10 дисциплин 5-го семестра</span>
-                <ArrowRight className="w-3.5 h-3.5 text-slate-500" />
-              </Link>
-              <Link
-                href="/transcripts"
-                className="p-3 rounded-xl border border-slate-800 bg-slate-900/50 hover:bg-slate-900 flex items-center justify-between text-xs text-slate-300 hover:text-cyan-300 transition-colors"
-              >
-                <span>Транскрипции лекций и занятий</span>
-                <ArrowRight className="w-3.5 h-3.5 text-slate-500" />
-              </Link>
-              <Link
-                href="/calendar"
-                className="p-3 rounded-xl border border-slate-800 bg-slate-900/50 hover:bg-slate-900 flex items-center justify-between text-xs text-slate-300 hover:text-cyan-300 transition-colors"
-              >
-                <span>Академический календарь и Google Calendar</span>
-                <ArrowRight className="w-3.5 h-3.5 text-slate-500" />
-              </Link>
-            </div>
-          </div>
-        </div>
+        )}
       </div>
-    </div>
+      <div className="daily-grid">
+        <section className="daily-focus" aria-label="На чём сосредоточиться">
+          <div className="focus-sheet">
+            <FluidRibbon />
+            <p className="eyebrow">
+              {focus
+                ? ["IN_PROGRESS", "READY", "NEEDS_FIX"].includes(
+                    focus.userProgress?.status ?? "",
+                  )
+                  ? "Продолжить работу"
+                  : focus.timing.urgency === "OVERDUE"
+                    ? "Вернуться к работе"
+                    : "Следующий шаг"
+                : tasks.length
+                  ? "На сегодня"
+                  : "Ваше пространство"}
+            </p>
+            <h2>
+              {focus
+                ? focus.title
+                : tasks.length
+                  ? "Все работы отправлены или зачтены"
+                  : "Начните с предмета"}
+            </h2>
+            <p>
+              {focus
+                ? focus.deadline
+                  ? `${focus.courseShortTitle} · ${focus.timing.badgeLabel}`
+                  : `${focus.courseShortTitle} · срок пока не указан`
+                : tasks.length
+                  ? "Проверяйте результаты и объявления группы здесь."
+                  : "Опубликованные задания появятся здесь. Пока можно посмотреть, что есть по вашим предметам."}
+            </p>
+            {focus && (
+              <div className="focus-meta">
+                <span>
+                  {focus.deadline
+                    ? `Срок: ${focus.timing.formattedDate}`
+                    : "Можно работать без привязки к дате"}
+                </span>
+                <span>· {progressLabel(focus)}</span>
+              </div>
+            )}
+            <div className="focus-actions">
+              <Link
+                className="action-primary"
+                href={focus ? `/tasks/${focus.id}` : "/courses"}
+              >
+                {focus ? (
+                  <>
+                    <span className="hidden sm:inline">Открыть работу</span>
+                    <span className="sm:hidden">К работе</span>
+                  </>
+                ) : (
+                  "К предметам"
+                )}
+                <ArrowRight size={17} />
+              </Link>
+              {focus && (
+                <Link className="text-link" href={`/courses/${focus.courseId}`}>
+                  <span className="hidden sm:inline">Всё по предмету</span>
+                  <span className="sm:hidden">К предмету</span>
+                  <ArrowUpRight size={15} />
+                </Link>
+              )}
+            </div>
+          </div>
+          {overdue.length > 0 && (
+            <div className="overdue-note">
+              <CornerDownRight size={17} />
+              <span>
+                Срок прошёл: {overdue.length}. Зачёт не отмечен.{" "}
+                <Link href="/deadlines#overdue">Разобраться со сроками</Link>
+              </span>
+            </div>
+          )}
+          <div className="progress-summary" aria-label="Мой учебный прогресс">
+            <div>
+              <strong>
+                {accepted}
+                <span>зачтено из {tasks.length}</span>
+              </strong>
+            </div>
+            <div>
+              <strong>
+                {active.length}
+                <span>в работе</span>
+              </strong>
+            </div>
+            <div>
+              <strong>
+                {submitted}
+                <span>на проверке</span>
+              </strong>
+            </div>
+            <Link
+              href="/analytics"
+              className="text-link"
+              aria-label="Подробнее о моём прогрессе"
+            >
+              <ArrowUpRight size={19} />
+            </Link>
+          </div>
+          {otherActive.length > 0 && (
+            <div className="mt-6">
+              {otherActive.slice(0, 2).map((task) => (
+                <StudyTaskRow key={task.id} task={task} showDate={false} />
+              ))}
+            </div>
+          )}
+        </section>
+        <section className="daily-deadlines">
+          <div className="section-heading">
+            <h2>
+              Впереди<span className="count">{upcoming.length}</span>
+            </h2>
+            <Link className="text-link" href="/deadlines">
+              Все сроки
+              <ArrowUpRight size={15} />
+            </Link>
+          </div>
+          {upcoming.length ? (
+            <>
+              {upcoming.slice(0, 3).map((task) => (
+                <StudyTaskRow key={task.id} task={task} />
+              ))}
+              {!upcoming.some(
+                (t) => (t.timing.daysRemaining ?? Infinity) <= 7,
+              ) && (
+                <p className="text-xs text-slate-400 leading-relaxed mt-4">
+                  На ближайшие 7 дней подтверждённых сроков нет.
+                </p>
+              )}
+            </>
+          ) : (
+            <p className="quiet-empty">
+              Предстоящие сроки пока не указаны. Задания без даты доступны в
+              предметах.
+            </p>
+          )}
+        </section>
+        <section className="daily-courses">
+          <div className="section-heading">
+            <h2>
+              Мои предметы<span className="count">{offerings.length}</span>
+            </h2>
+            <Link className="text-link" href="/courses">
+              Все предметы
+              <ArrowUpRight size={15} />
+            </Link>
+          </div>
+          {courseOrder.slice(0, 5).map((o) => {
+            const done = o.tasks.filter((t) =>
+              isTrustedAccepted(t.progress[0]),
+            ).length;
+            return (
+              <Link
+                className={`course-line compact ${courseOrder.indexOf(o) > 2 ? "mobile-extra" : ""}`}
+                key={o.id}
+                href={`/courses/${o.id}`}
+              >
+                <span className="course-code">
+                  {o.courseDefinition.shortTitle}
+                </span>
+                <span className="course-name">
+                  {o.courseDefinition.title}
+                  <span className="block text-slate-400 mt-1">
+                    {o.tasks.length
+                      ? `${done} из ${o.tasks.length} зачтено`
+                      : "Задания пока не опубликованы"}
+                  </span>
+                </span>
+                <ArrowUpRight size={16} className="text-slate-500" />
+              </Link>
+            );
+          })}
+          {!offerings.length && (
+            <p className="quiet-empty">
+              Предметы текущего семестра ещё не добавлены.
+            </p>
+          )}
+        </section>
+        <section className="daily-changes">
+          <div className="section-heading">
+            <h2>В группе</h2>
+            <Link className="text-link" href="/notifications">
+              Изменения
+              <ArrowUpRight size={15} />
+            </Link>
+          </div>
+          {changes.map((change) => (
+            <Link href="/notifications" key={change.id} className="change-link">
+              <span className="eyebrow !text-blue-300">Непрочитанное</span>
+              {change.title}
+              <span>{change.message}</span>
+            </Link>
+          ))}
+          {announcements.map((a) => (
+            <article key={a.id} className="announcement-entry">
+              <time dateTime={a.publishedAt?.toISOString()}>
+                {a.publishedAt.toLocaleDateString("ru-RU", {
+                  timeZone: "Europe/Moscow",
+                  day: "numeric",
+                  month: "long",
+                })}
+                {a.isPinned ? " · Закреплено" : ""}
+              </time>
+              <h3>{a.title}</h3>
+              <p>{a.content}</p>
+              {a.sourceReference && (
+                <details className="mt-3 text-xs text-slate-400 leading-relaxed">
+                  <summary className="min-h-8">
+                    Источник ·{" "}
+                    {a.sourceReference.confidence === "CONFIRMED"
+                      ? "подтверждён"
+                      : "требует проверки"}
+                  </summary>
+                  <p className="!text-xs mt-2">
+                    {a.sourceReference.source.title}
+                  </p>
+                  <p className="!text-xs mt-2">{a.sourceReference.quoteText}</p>
+                </details>
+              )}
+            </article>
+          ))}
+          {!announcements.length && !changes.length && (
+            <p className="quiet-empty">
+              Новых сообщений нет. Изменения сроков и результаты проверки
+              появятся в уведомлениях.
+            </p>
+          )}
+        </section>
+      </div>
+    </>
   );
 }

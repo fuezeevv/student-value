@@ -38,4 +38,11 @@ Run typecheck, lint, unit/integration tests, isolated critical E2E, migration re
 
 ## UX and scope
 
-The product helps students understand what to do now, nearby deadlines, changes, progress and course materials. Use natural Russian, calm navy/blue styling, usable desktop and mobile layouts. Keep administrative details secondary. Preserve adaptive sections and avoid giant components. No redesign, OAuth, Calendar API, Telegram, new AI pipeline or decorative features during the reliable-core phase. Never claim a simulated integration works. Highlight untrusted text with React nodes, never unsafe HTML.
+The product helps students understand what to do now, nearby deadlines, changes, progress and course materials. Use natural Russian, calm navy/blue styling, usable desktop and mobile layouts. Keep administrative details secondary. Preserve adaptive sections and avoid giant components. The reliable-core phase is complete. The daily UX phase may change information architecture, navigation, layout and visual design. Keep OAuth, Calendar API, Telegram and new AI ingestion out of this phase. Never claim a simulated integration works. Highlight untrusted text with React nodes, never unsafe HTML.
+
+
+## Daily student interface
+
+Primary navigation is Сегодня / Предметы / Сроки, with a persistent bottom bar on phones. Group tools and administration are secondary. The daily page prioritizes an actionable near-term submission or current work, keeps old overdue dates visible without making them the permanent focus, and distinguishes self-reported work from trusted acceptance. Do not infer that an empty application means no assignment was issued in class. Explain missing dates, materials and personal variants honestly.
+
+Use the navy shell, cold light work surfaces, blue actions and restrained burgundy accents; the abstract fluid mark is code-native SVG. Avoid neon, glow, graduation-cap imagery, giant coefficient tiles and repeated dashboard card grids. Inspect actual browser output on desktop and mobile after substantial layout changes. Read-only screenshots of real local data are separate from isolated E2E fixtures; do not change real progress for presentation.

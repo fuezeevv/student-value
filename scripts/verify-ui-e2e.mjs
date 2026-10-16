@@ -291,6 +291,53 @@ try {
       );
     },
   );
+  await scenario(
+    "daily navigation works on phone and desktop without horizontal overflow",
+    async () => {
+      for (const width of [360, 390, 768, 1440]) {
+        await page.setViewport({ width, height: 900 });
+        for (const route of [
+          "/",
+          "/courses",
+          "/courses/test-course",
+          "/tasks/task-otu-lab1",
+          "/deadlines",
+          "/analytics",
+          "/search?q=TEST",
+          "/notifications",
+          "/settings",
+        ]) {
+          await go(route);
+          assert(
+            await page.evaluate(
+              () => document.documentElement.scrollWidth <= innerWidth,
+            ),
+            `${route} overflows at ${width}`,
+          );
+          assert.equal(
+            await page.$$eval("main h1", (nodes) => nodes.length),
+            1,
+            `${route} has one page heading`,
+          );
+        }
+      }
+      await page.setViewport({ width: 390, height: 844 });
+      await go("/");
+      await page.click('.mobile-nav a[href="/courses"]');
+      await page.waitForFunction(() => location.pathname === "/courses");
+      await page.click('main a[href="/courses/test-course"]');
+      await page.waitForFunction(
+        () => location.pathname === "/courses/test-course",
+      );
+      await page.click('main a[href="/tasks/task-otu-lab1"]');
+      await page.waitForSelector('select[aria-label="Мой этап работы"]');
+      await page.click('button[aria-label="Открыть меню"]');
+      await page.waitForSelector("#account-menu");
+      await page.keyboard.press("Escape");
+      assert.equal(await page.$("#account-menu"), null);
+      await page.setViewport({ width: 1280, height: 900 });
+    },
+  );
   await setUser("test-manager");
   await scenario(
     "task editor receives no private enrollment payload",
@@ -306,6 +353,9 @@ try {
     "headman records another student result with an explicit source",
     async () => {
       await go("/tasks/task-otu-lab1");
+      await page.click(
+        'details:has(select[aria-label="Студент для подтверждения"]) summary',
+      );
       await page.select(
         'select[aria-label="Студент для подтверждения"]',
         "test-peer",

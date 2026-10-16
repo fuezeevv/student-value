@@ -3,12 +3,20 @@ import { prisma } from "@/lib/db/prisma";
 import { requireCurrentUser } from "@/lib/auth/session";
 import { TranscriptViewer } from "./TranscriptViewer";
 import { formatInTimeZone } from "date-fns-tz";
-export default async function TranscriptsPage() {
+export default async function TranscriptsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ course?: string }>;
+}) {
+  const { course } = await searchParams;
   const user = await requireCurrentUser();
   const items = await prisma.transcript.findMany({
     where: {
       session: {
-        courseOffering: { groups: { some: { groupId: user.groupId } } },
+        courseOffering: {
+          groups: { some: { groupId: user.groupId } },
+          ...(course ? { courseDefinition: { code: course } } : {}),
+        },
       },
     },
     include: {
@@ -24,7 +32,17 @@ export default async function TranscriptsPage() {
   });
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">Транскрипции занятий и материалы</h1>
+      <div className="page-heading">
+        <div>
+          <p className="eyebrow">Записи и содержание занятий</p>
+          <h1 className="page-title">Стенограммы</h1>
+          <p className="page-intro">
+            {course
+              ? "Записи по выбранному предмету."
+              : "Ищите по тексту добавленных занятий вашей группы."}
+          </p>
+        </div>
+      </div>
       {items.length ? (
         <TranscriptViewer
           transcripts={items.map((t) => ({
@@ -44,8 +62,8 @@ export default async function TranscriptsPage() {
         />
       ) : (
         <p className="text-slate-400">
-          Транскрипции ещё не добавлены. Локальный академический корпус хранится
-          отдельно от приложения.
+          Записи занятий пока не добавлены. Когда они появятся, здесь можно
+          будет найти нужную тему и прочитать текст.
         </p>
       )}
     </div>

@@ -1,315 +1,138 @@
 "use client";
-
-import React, { useState, useTransition } from "react";
+import { useState, useTransition } from "react";
+import Link from "next/link";
 import {
-  User,
-  Shield,
-  Calendar,
-  Bell,
-  Eye,
-  CheckCircle2,
-  AlertCircle,
-  ExternalLink,
-  LogOut,
-} from "lucide-react";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/Card";
-import { Badge } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
-import {
-  toggleLeaderboardOptInAction,
   updateProfileSettingsAction,
+  toggleLeaderboardOptInAction,
   logoutUserAction,
 } from "@/server/actions/user-actions";
 
-export interface SettingsClientProps {
-  user: {
-    id: string;
-    nickname: string;
-    bio: string | null;
-    avatarUrl: string | null;
-    isSystemAdmin: boolean;
-    isOwner: boolean;
-    identities: Array<{
-      provider: string;
-      email: string | null;
-      providerUserId: string;
-    }>;
-  };
-  gamification: {
-    totalXp: number;
-    level: number;
-    isLeaderboardOptIn: boolean;
-  } | null;
-  calendarStatus: {
-    isConfigured: boolean;
-    groupCalendarId: string | null;
-    totalSyncedEvents: number;
-  };
-}
-
 export function SettingsClient({
-  user,
-  gamification,
-  calendarStatus,
-}: SettingsClientProps) {
-  const [nickname, setNickname] = useState(user.nickname);
-  const [bio, setBio] = useState(user.bio || "");
-  const [isLeaderboardOptIn, setIsLeaderboardOptIn] = useState(
-    gamification?.isLeaderboardOptIn ?? true,
-  );
-  const [statusMessage, setStatusMessage] = useState<string | null>(null);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
-
-  const handleSaveProfile = (e: React.FormEvent) => {
-    e.preventDefault();
-    setStatusMessage(null);
-    setErrorMessage(null);
-
+  nickname: initialNickname,
+  bio: initialBio,
+  leaderboardOptIn,
+}: {
+  nickname: string;
+  bio: string | null;
+  leaderboardOptIn: boolean;
+}) {
+  const [nickname, setNickname] = useState(initialNickname);
+  const [bio, setBio] = useState(initialBio ?? "");
+  const [optIn, setOptIn] = useState(leaderboardOptIn);
+  const [pending, startTransition] = useTransition();
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const attempt = (action: () => Promise<unknown>, success: string) =>
     startTransition(async () => {
+      setError("");
+      setMessage("");
       try {
-        await updateProfileSettingsAction(nickname, bio);
-        setStatusMessage("Настройки профиля успешно сохранены!");
-      } catch (err: any) {
-        setErrorMessage(err.message || "Ошибка при сохранении");
-      }
-    });
-  };
-
-  const handleToggleOptIn = (checked: boolean) => {
-    setIsLeaderboardOptIn(checked);
-    startTransition(async () => {
-      try {
-        await toggleLeaderboardOptInAction(checked);
-        setStatusMessage(
-          checked
-            ? "Вы включены в публичную таблицу лидеров"
-            : "Ваш профиль в рейтинге скрыт (приватный режим)",
+        await action();
+        setMessage(success);
+      } catch (e) {
+        setError(
+          e instanceof Error ? e.message : "Не удалось сохранить изменения",
         );
-      } catch (err: any) {
-        setErrorMessage(err.message);
       }
     });
-  };
-
+  const inputClass =
+    "block w-full min-h-12 mt-2 bg-[#142139] border border-slate-600 rounded-xl px-4 text-base text-white";
   return (
-    <div className="space-y-6">
-      {statusMessage && (
-        <div className="p-3 rounded-xl border border-emerald-500/30 bg-emerald-950/20 text-xs text-emerald-300 flex items-center gap-2">
-          <CheckCircle2 className="w-4 h-4 shrink-0" />
-          <span>{statusMessage}</span>
-        </div>
-      )}
-
-      {errorMessage && (
-        <div className="p-3 rounded-xl border border-rose-500/30 bg-rose-950/20 text-xs text-rose-300 flex items-center gap-2">
-          <AlertCircle className="w-4 h-4 shrink-0" />
-          <span>{errorMessage}</span>
-        </div>
-      )}
-
-      {/* 1. Profile Settings */}
-      <Card className="glass-panel border-slate-800 p-5 space-y-4">
-        <h2 className="text-sm font-bold uppercase tracking-wider text-slate-200 flex items-center gap-2">
-          <User className="w-4 h-4 text-cyan-400" />
-          Профиль пользователя
-        </h2>
-
-        <form onSubmit={handleSaveProfile} className="space-y-4">
-          <div className="flex items-center gap-4">
-            <img
-              src={
-                user.avatarUrl ||
-                "https://api.dicebear.com/7.x/bottts/svg?seed=user"
-              }
-              alt={user.nickname}
-              className="w-14 h-14 rounded-full bg-slate-800 border border-cyan-500/30"
-            />
-            <div className="space-y-0.5">
-              <span className="text-xs text-slate-400">Аватар аккаунта</span>
-              <div className="text-xs text-slate-500">
-                Генерируется на основе никнейма и провайдера авторизации
-              </div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-300">
-                Публичный никнейм
-              </label>
-              <input
-                type="text"
-                value={nickname}
-                onChange={(e) => setNickname(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-xs text-white focus:outline-hidden focus:border-cyan-400"
-                required
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-300">
-                Статус / Био
-              </label>
-              <input
-                type="text"
-                value={bio}
-                onChange={(e) => setBio(e.target.value)}
-                placeholder="Студент группы 5130901/40102"
-                className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-xs text-white focus:outline-hidden focus:border-cyan-400"
-              />
-            </div>
-          </div>
-
-          <Button
-            type="submit"
-            size="sm"
-            variant="primary"
-            disabled={isPending}
-            className="text-xs"
-          >
-            Сохранить изменения
-          </Button>
-        </form>
-      </Card>
-
-      {/* 2. Privacy & Leaderboard Opt-in */}
-      <Card className="glass-panel border-slate-800 p-5 space-y-4">
-        <h2 className="text-sm font-bold uppercase tracking-wider text-slate-200 flex items-center gap-2">
-          <Eye className="w-4 h-4 text-cyan-400" />
-          Приватность и рейтинг
-        </h2>
-
-        <div className="flex items-center justify-between p-3.5 rounded-xl border border-slate-800 bg-slate-950/60">
-          <div className="space-y-0.5">
-            <div className="text-xs font-semibold text-white">
-              Отображение в таблице лидеров (Leaderboard)
-            </div>
-            <div className="text-[11px] text-slate-400">
-              Если опция выключена, ваше имя и аватар заменяются на «Анонимный
-              студент»
-            </div>
-          </div>
-
-          <label className="relative inline-flex items-center cursor-pointer">
-            <input
-              type="checkbox"
-              checked={isLeaderboardOptIn}
-              onChange={(e) => handleToggleOptIn(e.target.checked)}
-              disabled={isPending}
-              className="sr-only peer"
-            />
-            <div className="w-11 h-6 bg-slate-800 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-500"></div>
-          </label>
-        </div>
-      </Card>
-
-      {/* 3. Connected Identities (Google / Telegram) */}
-      <Card className="glass-panel border-slate-800 p-5 space-y-4">
-        <h2 className="text-sm font-bold uppercase tracking-wider text-slate-200 flex items-center gap-2">
-          <Shield className="w-4 h-4 text-cyan-400" />
-          Способы входа
-        </h2>
-
-        <div className="space-y-2.5 text-xs">
-          {user.identities.map((id, idx) => (
-            <div
-              key={idx}
-              className="p-3 rounded-xl border border-slate-800 bg-slate-950/60 flex items-center justify-between"
-            >
-              <div className="space-y-0.5">
-                <span className="font-semibold text-white font-mono">
-                  {(
-                    {
-                      LOCAL_DEV: "Тестовый вход",
-                      GOOGLE: "Google",
-                      TELEGRAM: "Telegram",
-                    } as Record<string, string>
-                  )[id.provider] ?? id.provider}
-                </span>
-                <span className="text-slate-400 block">
-                  {id.email || id.providerUserId}
-                </span>
-              </div>
-              <Badge variant="success" className="text-[10px]">
-                Подключен
-              </Badge>
-            </div>
-          ))}
-
-          <div className="p-3 rounded-xl border border-slate-800/80 bg-slate-950/30 flex items-center justify-between text-slate-400">
-            <div className="space-y-0.5">
-              <span className="font-semibold text-slate-300">
-                Telegram Bot Notifications
-              </span>
-              <span className="text-[11px] block">
-                Оповещения в личные сообщения Telegram
-              </span>
-            </div>
-            <Badge variant="muted" className="text-[10px]">
-              Скоро
-            </Badge>
-          </div>
-        </div>
-      </Card>
-
-      {/* 4. Google Calendar Preferences */}
-      <Card className="glass-panel border-slate-800 p-5 space-y-4">
-        <h2 className="text-sm font-bold uppercase tracking-wider text-slate-200 flex items-center gap-2">
-          <Calendar className="w-4 h-4 text-cyan-400" />
-          Синхронизация Google Календаря
-        </h2>
-
-        <div className="space-y-2 text-xs text-slate-300">
-          <p>
-            Прямая синхронизация Google Calendar пока не реализована. Доступен
-            экспорт .ics.
-          </p>
-          <div className="p-3 rounded-xl border border-slate-800 bg-slate-950/60 flex items-center justify-between">
-            <span>Статус интеграции:</span>
-            <Badge
-              variant={calendarStatus.isConfigured ? "success" : "warning"}
-            >
-              {calendarStatus.isConfigured ? "Активно" : "Не реализована"}
-            </Badge>
-          </div>
-        </div>
-      </Card>
-
-      {/* 5. Session & Logout */}
-      <Card className="glass-panel border-slate-800 p-5 space-y-4">
-        <h2 className="text-sm font-bold uppercase tracking-wider text-slate-200 flex items-center gap-2">
-          <LogOut className="w-4 h-4 text-rose-400" />
-          Сессия и выход из системы
-        </h2>
-
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl border border-slate-800 bg-slate-950/60">
-          <div className="space-y-0.5">
-            <span className="text-xs font-semibold text-white">
-              Текущий вход: @{user.nickname}
-            </span>
-            <div className="text-[11px] text-slate-400">
-              Завершить текущий сеанс и вернуться к выбору аккаунта
-            </div>
-          </div>
-
-          <Button
-            type="button"
-            variant="destructive"
-            size="sm"
-            onClick={() => {
-              startTransition(async () => {
-                await logoutUserAction();
-              });
+    <div className="space-y-9">
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          attempt(
+            () => updateProfileSettingsAction(nickname, bio),
+            "Профиль сохранён",
+          );
+        }}
+        className="space-y-5 border-t border-slate-700 pt-7"
+      >
+        <label className="block text-sm text-slate-300">
+          Публичный никнейм
+          <input
+            required
+            value={nickname}
+            onChange={(e) => setNickname(e.target.value)}
+            className={inputClass}
+          />
+        </label>
+        <label className="block text-sm text-slate-300">
+          О себе
+          <input
+            value={bio}
+            onChange={(e) => setBio(e.target.value)}
+            placeholder="Пара слов для группы"
+            className={inputClass}
+          />
+        </label>
+        <button
+          type="submit"
+          disabled={pending}
+          className="action-primary disabled:opacity-50"
+        >
+          {pending ? "Сохраняю…" : "Сохранить профиль"}
+        </button>
+      </form>
+      <section className="border-t border-slate-700 pt-7">
+        <h2 className="text-lg mb-4">Приватность</h2>
+        <label className="flex items-start gap-4 text-sm leading-relaxed cursor-pointer">
+          <input
+            type="checkbox"
+            checked={optIn}
+            disabled={pending}
+            onChange={(e) => {
+              const next = e.target.checked;
+              attempt(
+                async () => {
+                  await toggleLeaderboardOptInAction(next);
+                  setOptIn(next);
+                },
+                next
+                  ? "Вы участвуете в рейтинге"
+                  : "Ваш профиль скрыт из рейтинга",
+              );
             }}
-            disabled={isPending}
-            className="text-xs gap-1.5"
-          >
-            <LogOut className="w-3.5 h-3.5" />
-            <span>Выйти из аккаунта</span>
-          </Button>
-        </div>
-      </Card>
+            className="mt-1 w-5 h-5 accent-blue-500 shrink-0"
+          />
+          <span>
+            Показывать меня в рейтинге группы
+            <span className="block text-slate-400 text-xs mt-1">
+              Если выключить, ваш профиль не попадёт в общую таблицу.
+            </span>
+          </span>
+        </label>
+        <Link className="text-link mt-3" href="/leaderboard">
+          Посмотреть рейтинг ↗
+        </Link>
+      </section>
+      {message && (
+        <p role="status" className="text-blue-200 text-sm">
+          {message}
+        </p>
+      )}
+      {error && (
+        <p role="alert" className="text-rose-300 text-sm">
+          {error}
+        </p>
+      )}
+      <section className="border-t border-slate-700 pt-7 flex justify-between gap-4 items-center">
+        <p className="text-sm text-slate-400">
+          Текущий вход: {initialNickname}
+        </p>
+        <button
+          disabled={pending}
+          className="text-rose-300 text-sm min-h-11 px-4 border border-slate-600 rounded-xl"
+          onClick={() =>
+            startTransition(async () => {
+              await logoutUserAction();
+            })
+          }
+        >
+          Выйти
+        </button>
+      </section>
     </div>
   );
 }
