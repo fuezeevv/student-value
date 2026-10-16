@@ -20,6 +20,8 @@ const env = {
   VERCEL_ENV: "production",
   APP_ORIGIN: "https://studentvalue1984.eu.cc",
   ALLOW_DEV_AUTH: "false",
+  GOOGLE_CLIENT_ID: "",
+  GOOGLE_CLIENT_SECRET: "",
   NEXT_SERVER_ACTIONS_ENCRYPTION_KEY: randomBytes(32).toString("base64"),
   DATABASE_URL:
     "postgresql://studentvalue_app:only-a-test@ep-runtime-fixture-pooler.eu-central-1.aws.neon.tech/neondb",

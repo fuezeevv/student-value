@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { isDevAuthEnabled } from "./dev-policy";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/db/prisma";
+import { APP_GROUP_CODE } from "./google";
 
 export interface SessionUser {
   id: string;
@@ -36,7 +37,7 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
     targetUserId = devCookie;
   } else {
     const sessionToken = cookieStore.get("__Host-session")?.value;
-    if (!sessionToken) return null;
+    if (!sessionToken || !/^[a-zA-Z0-9_-]{43}$/.test(sessionToken)) return null;
 
     const dbSession = await prisma.session.findUnique({
       where: {
@@ -45,7 +46,7 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
       include: { user: true },
     });
 
-    if (!dbSession || dbSession.expiresAt < new Date()) {
+    if (!dbSession || dbSession.expiresAt <= new Date()) {
       return null;
     }
 
@@ -57,6 +58,21 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
     where: { id: targetUserId },
     include: {
       memberships: {
+        ...(isDevAuth
+          ? {}
+          : {
+              where: {
+                group: {
+                  code: APP_GROUP_CODE,
+                  enrollments: {
+                    some: {
+                      userId: targetUserId,
+                      status: { in: ["CLAIMED" as const, "VERIFIED" as const] },
+                    },
+                  },
+                },
+              },
+            }),
         orderBy: { joinedAt: "asc" },
         include: {
           group: true,
@@ -78,6 +94,7 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
 
   // For this group (5130901/40102)
   const defaultMembership = user.memberships[0];
+  if (!isDevAuth && !defaultMembership) return null;
   const isOwner = defaultMembership?.isOwner ?? false;
   const groupId = defaultMembership?.groupId ?? "";
 

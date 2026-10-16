@@ -13,3 +13,12 @@ docs
 coverage
 prisma/test-fixtures.ts
 scripts/repair-academic-data.ts
+scripts/issue-google-invite.ts
+scripts/check-*
+scripts/test-*
+scripts/prepare-test-*
+scripts/verify-*
+scripts/visual-*
+scripts/take-screenshots.mjs
+scripts/cloud-cli.mjs
+scripts/production-migrate.mjs

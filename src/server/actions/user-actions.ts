@@ -93,7 +93,13 @@ export async function logoutUserAction() {
       where: { tokenHash: createHash("sha256").update(token).digest("hex") },
     });
   cookieStore.delete("study_dev_user_id");
-  cookieStore.delete("__Host-session");
+  cookieStore.set("__Host-session", "", {
+    path: "/",
+    secure: true,
+    httpOnly: true,
+    sameSite: "lax",
+    maxAge: 0,
+  });
   revalidatePath("/");
   redirect("/login");
 }

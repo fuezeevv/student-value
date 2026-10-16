@@ -29,7 +29,7 @@ npm run cloud:neon -- login
 
 Настройки смотреть в .env.production.example. Постоянный NEXT_SERVER_ACTIONS_ENCRYPTION_KEY — случайные 32 bytes base64; один и тот же key в build/runtime, не генерировать заново при каждом build. Secrets только в provider secret storage и, при необходимости, в локальных ignored файлах mode 0600. Никаких NEXT_PUBLIC secrets.
 
-APP_ORIGIN=https://studentvalue1984.eu.cc; ALLOW_DEV_AUTH=false; TZ=Europe/Moscow. VERCEL и VERCEL_ENV предоставляет платформа. DATABASE_URL — pooled connection ограниченной роли приложения. DIRECT_DATABASE_URL с migration role не передаётся Vercel runtime, previews или test CI. Создание роли приложения/выдача grants выполняются после доступа к реальному Neon, до публикации.
+APP_ORIGIN=https://studentvalue1984.eu.cc; ALLOW_DEV_AUTH=false. TZ — зарезервированная переменная Vercel: не добавлять её в Project Env, runtime устанавливает Europe/Moscow сам, а арифметика сроков использует явную зону. VERCEL и VERCEL_ENV предоставляет платформа. DATABASE_URL — pooled connection ограниченной роли приложения. DIRECT_DATABASE_URL с migration role не передаётся Vercel runtime, previews или test CI. Создание роли приложения/выдача grants выполняются после доступа к реальному Neon, до публикации.
 
 ## Миграции и release
 
@@ -43,10 +43,14 @@ APP_ORIGIN=https://studentvalue1984.eu.cc; ALLOW_DEV_AUTH=false; TZ=Europe/Mosco
 
 ## Данные и вход студентов
 
-Публикация существующей закрытой страницы login не означает готовый запуск. Google OAuth и явная привязка Google sub к конкретному Enrollment являются обязательной следующей частью запуска. Не привязывать по совпадению имени/email, не создавать default owner и не включать production dev-auth. До session issuer вход остаётся закрытым. OAuth callback/credentials оформляются после подготовки соответствующего кода и Google Cloud приложения; владелец вводит секреты напрямую, не в чат.
+Публикация существующей закрытой страницы login не означает готовый запуск. Google OAuth реализован: PKCE S256, state/nonce, зашифрованная HttpOnly cookie, проверка RS256/JWKS, issuer/audience/expiry/verified email. Первый вход требует одноразового кода, связанного с Enrollment, текущим userId, email получателя и сроком 72 часа; в БД только хеши. Повторный вход — по Google sub, без email/name merge. Транзакция привязывает identity, создаёт обычное membership и хешированную сессию на 14 дней. Она не выдаёт owner/admin/teacher права. Архивирование Enrollment отзывает доступ даже для существующих сессий. Не привязывать по совпадению имени/email, не создавать default owner и не включать production dev-auth. Без Google client credentials вход остаётся закрытым. OAuth callback/credentials оформляются после подготовки соответствующего кода и Google Cloud приложения; владелец вводит секреты напрямую, не в чат.
 
 Учебные данные переносить только после отдельной проверки набора: source references и provenance сохраняются; sessions, LOCAL_DEV identities, fixtures и технические пользователи не попадают в production автоматически. bootstrap и сырой локальный dump не являются планом миграции реальных данных.
 
 ## Состояние этого checkpoint
 
-Конфигурация и локальные проверки подготовлены. Cloud accounts/project access, реальное применение migrations, production data import, Google OAuth, cloud smoke test и DNS/HTTPS ещё не выполнены. Не объявлять сайт запущенным до проверки фактического публичного URL и реального входа.
+Конфигурация и локальные проверки подготовлены. Vercel Hobby project studentvalue1984 и Neon Free project still-haze-41105849 созданы. PostgreSQL 17, Frankfurt, fixed 0.25 CU; suspend_timeout_seconds=0 означает default плана, фактическое засыпание наблюдалось примерно через 5 минут. Все шесть миграций применены. Runtime role studentvalue_app не имеет CREATE/owner/migration permissions; pooled TLS и read transaction проверены на реальной Neon. В Vercel настроены только production variables, два секрета типа sensitive. Production data import, Google client credentials, cloud deployment smoke test и DNS ещё предстоят. Не объявлять сайт запущенным до проверки фактического публичного URL и реального входа.
+
+## Приглашения
+
+scripts/issue-google-invite.ts — только доверенный release-инструмент, не веб-API. Получает точный Enrollment ID и email, отказывает для чужой группы/архивной/уже связанной записи и пишет код только в ignored secrets/ mode 0600. Использовать direct migration environment; production URL не передавать тестовому CI. При переносе существующих реальных профилей сначала отдельно проверить соответствие Enrollment и сохранить реальный progress; не классифицировать тестовые данные по одному префиксу ID.

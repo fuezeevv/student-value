@@ -27,6 +27,9 @@ export function testEnvironment() {
     TEST_DATABASE_URL: test.href,
     SV_TEST_ISOLATED: "1",
     TZ: "UTC",
+    // Tests must not inherit provider credentials or placeholders from local development.
+    GOOGLE_CLIENT_ID: "",
+    GOOGLE_CLIENT_SECRET: "",
   };
 }
 export function run(command, args, env, options = {}) {

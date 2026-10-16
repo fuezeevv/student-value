@@ -18,7 +18,7 @@ All schema changes require saved migrations, verified on a separate fresh databa
 
 ## Authentication and authorization
 
-Dev authentication is enabled only when NODE_ENV is exactly development AND ALLOW_DEV_AUTH is exactly true. No default user. Never bypass this policy in a production build or runtime. Google OAuth is not implemented; do not call the session reader a complete production login.
+Dev authentication is enabled only when NODE_ENV is exactly development AND ALLOW_DEV_AUTH is exactly true. No default user. Never bypass this policy in a production build or runtime. Google OAuth uses real signed ID tokens, PKCE, state/nonce and recipient-bound one-time enrollment invitations. It stays unavailable until the owner configures the Google Cloud client. Never merge by matching display name/email; issue no session before the enrollment transaction succeeds.
 
 Enforce scope on the server: current group, course offering, task publication and explicit audience. Missing TaskAudience grants no access. Resolve subgroup/individual recipients from Enrollment, never from caller-supplied identity. Apply the same visibility to direct URLs, mutations, search and calendar export. Do not serialize private Enrollment fields unless the viewer has view_private_member_identity and the screen needs them.
 

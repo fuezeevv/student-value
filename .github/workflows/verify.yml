@@ -58,6 +58,7 @@ jobs:
       - run: npm run test:production-auth
       - run: npm run test:production-health
       - run: npm run test:production-artifact
+      - run: npm run test:google-oauth
       - name: Build Vercel artifact without database access
         run: npm run build:vercel
         env:

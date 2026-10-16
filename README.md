@@ -1,6 +1,6 @@
 # Student Value 1.984
 
-Учебная платформа группы СПбПУ 5130901/40102: работы, сроки, материалы и личный прогресс. [Учебное ядро](docs/RELIABLE_CORE.md), [ежедневный интерфейс](docs/daily-student-ux.md), [production deployment](docs/DEPLOYMENT.md). Google OAuth, Telegram и Calendar API ещё не реализованы.
+Учебная платформа группы СПбПУ 5130901/40102: работы, сроки, материалы и личный прогресс. [Учебное ядро](docs/RELIABLE_CORE.md), [ежедневный интерфейс](docs/daily-student-ux.md), [production deployment](docs/DEPLOYMENT.md). Google OAuth реализован и ожидает настройки клиента Google Cloud; Telegram и Calendar API не подключены.
 
 ## Локальный запуск
 
