@@ -58,3 +58,10 @@ jobs:
       - run: npm run test:production-auth
       - run: npm run test:production-health
       - run: npm run test:production-artifact
+      - name: Build Vercel artifact without database access
+        run: npm run build:vercel
+        env:
+          NEXT_DIST_DIR: .next-vercel-check
+          VERCEL: "1"
+          VERCEL_ENV: production
+      - run: npm run test:vercel-runtime

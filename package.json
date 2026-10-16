@@ -21,10 +21,14 @@
     "test:production-auth": "node scripts/check-production-auth.mjs",
     "format:check": "prettier --check src/server/domain src/components/task/TaskVerificationForm.tsx src/components/text tests/core.integration.test.ts",
     "build:production": "node scripts/production-build.mjs",
+    "build:vercel": "node scripts/vercel-build.mjs",
     "start:production": "node scripts/production-start.mjs",
     "db:migrate:production": "node scripts/production-migrate.mjs",
     "test:production-health": "node scripts/check-production-health.mjs",
-    "test:production-artifact": "node scripts/check-production-artifact.mjs"
+    "test:production-artifact": "node scripts/check-production-artifact.mjs",
+    "test:vercel-runtime": "node scripts/check-vercel-runtime.mjs",
+    "cloud:vercel": "node scripts/cloud-cli.mjs vercel",
+    "cloud:neon": "node scripts/cloud-cli.mjs neon"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

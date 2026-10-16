@@ -69,8 +69,6 @@ export function assertProductionEnvironment(env, { database = true } = {}) {
       fail(
         "DATABASE_URL must target a remote, non-test PostgreSQL database with credentials",
       );
-    // Render's private PostgreSQL endpoint supports TLS with self-signed certificates.
-    // sslmode=require encrypts traffic; access is additionally confined to the private network.
     url.searchParams.set("sslmode", "require");
     url.searchParams.set("connection_limit", "5");
     url.searchParams.set("connect_timeout", "3");
@@ -78,6 +76,97 @@ export function assertProductionEnvironment(env, { database = true } = {}) {
     result.DATABASE_URL = url.href;
   }
   return result;
+}
+
+/** Vercel has no `npm start` hook. Shared by its build, runtime and release tooling. */
+export function assertVercelEnvironment(env, { database = true } = {}) {
+  if (env.VERCEL_ENV !== "production")
+    throw new Error(
+      "Production configuration: only the Vercel production environment is enabled",
+    );
+  const result = assertProductionEnvironment(env, { database });
+  if (result.APP_ORIGIN !== "https://studentvalue1984.eu.cc")
+    throw new Error(
+      "Production configuration: APP_ORIGIN must be the canonical Student Value origin",
+    );
+  if (database) result.DATABASE_URL = neonUrl(result.DATABASE_URL, true);
+  return result;
+}
+
+export function assertNeonMigrationEnvironment(env) {
+  const runtime = assertVercelEnvironment(env);
+  const direct = neonUrl(env.DIRECT_DATABASE_URL, false);
+  const a = new URL(runtime.DATABASE_URL);
+  const b = new URL(direct);
+  if (
+    a.hostname.replace("-pooler.", ".") !== b.hostname ||
+    a.pathname !== b.pathname
+  )
+    throw new Error(
+      "Production configuration: migration and runtime must target the same Neon endpoint and database",
+    );
+  return { ...runtime, DATABASE_URL: direct };
+}
+
+function neonUrl(value, pooled) {
+  const fail = () => {
+    throw new Error(
+      `Production configuration: ${pooled ? "DATABASE_URL must be a pooled" : "DIRECT_DATABASE_URL must be an unpooled"} Neon PostgreSQL URL`,
+    );
+  };
+  let url;
+  try {
+    url = new URL(value);
+  } catch {
+    fail();
+  }
+  let databaseName;
+  try {
+    databaseName = decodeURIComponent(url.pathname.slice(1));
+  } catch {
+    fail();
+  }
+  const allowed = new Set([
+    "schema",
+    "sslmode",
+    "sslaccept",
+    "connection_limit",
+    "connect_timeout",
+    "pool_timeout",
+    "channel_binding",
+    "application_name",
+  ]);
+  if (
+    !["postgres:", "postgresql:"].includes(url.protocol) ||
+    !url.username ||
+    !url.password ||
+    !url.hostname.endsWith(".eu-central-1.aws.neon.tech") ||
+    !/^ep-[a-z0-9-]+\./.test(url.hostname) ||
+    url.hostname.split(".")[0].endsWith("-pooler") !== pooled ||
+    (url.port && url.port !== "5432") ||
+    !databaseName ||
+    /(^|[_-])(test|demo)([_-]|$)/i.test(databaseName) ||
+    url.hash ||
+    [...url.searchParams.keys()].some((key) => !allowed.has(key)) ||
+    (url.searchParams.has("schema") &&
+      url.searchParams.get("schema") !== "public")
+  )
+    fail();
+  url.searchParams.set("sslmode", "require");
+  url.searchParams.set("sslaccept", "strict");
+  url.searchParams.set("connection_limit", pooled ? "3" : "1");
+  url.searchParams.set("connect_timeout", "15");
+  url.searchParams.set("pool_timeout", "15");
+  return url.href;
+}
+
+export function configureVercelRuntime(env, required = false) {
+  if (!required && env.VERCEL !== "1") return;
+  const configured = assertVercelEnvironment(env);
+  // Only publish normalized runtime settings; never copy arbitrary secrets into logs.
+  env.DATABASE_URL = configured.DATABASE_URL;
+  env.APP_ORIGIN = configured.APP_ORIGIN;
+  env.TZ = configured.TZ;
 }
 function isLocalHost(host) {
   return (

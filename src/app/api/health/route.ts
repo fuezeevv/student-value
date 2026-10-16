@@ -11,7 +11,7 @@ export async function GET() {
     await Promise.race([
       prisma.$queryRaw`SELECT 1`,
       new Promise((_, reject) => {
-        timer = setTimeout(() => reject(new Error("unavailable")), 2500);
+        timer = setTimeout(() => reject(new Error("unavailable")), 17000);
       }),
     ]);
     return NextResponse.json({ status: "ok" }, { headers });

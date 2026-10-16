@@ -1,0 +1,15 @@
+.env*
+.git
+.github
+.next*
+.test-work
+backups
+secrets
+tests
+docs
+*.dump
+*.backup
+*.log
+coverage
+prisma/test-fixtures.ts
+scripts/repair-academic-data.ts

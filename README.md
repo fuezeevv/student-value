@@ -28,6 +28,8 @@ Dev-вход требует одновременно NODE_ENV=development и ALL
 
 ## Production
 
-Подготовлен `render.yaml`: постоянно работающий Node-сервис и managed PostgreSQL в Frankfurt, HTTPS на `studentvalue1984.eu.cc`, secrets через Render, CI перед deployment. **Применение создаёт платные ресурсы; аккаунт, стоимость и DNS должен подтвердить владелец.** Внешний вход пока не реализован: инфраструктурный deployment не означает готовность студенческого пилота.
+Выбран Vercel Hobby + Neon Free (Frankfurt), домен `studentvalue1984.eu.cc`. `vercel.json` закрепляет build и регион, автоматические Git deployments отключены. Runtime guards выполняются внутри Vercel Functions, а не только через `npm start`.
 
-Команды: `npm run build:production`, `npm run db:migrate:production`, `npm run start:production`. Не использовать `dev`, локальную `.env`, fixture seed или dev-вход в production. Secrets и порядок создания ресурсов описаны в [DEPLOYMENT.md](docs/DEPLOYMENT.md).
+`npm run build:vercel` не соединяется с БД. `npm run db:migrate:production` использует отдельный direct Neon URL и выполняется перед release, не в build/preview/CI. `npm run test:vercel-runtime` проверяет guards на production-сборке без `npm start`. Secrets и порядок релиза — в [DEPLOYMENT.md](docs/DEPLOYMENT.md).
+
+Облачный deployment и Google OAuth пока не выполнены: не выдавать закрытую страницу входа за готовый пилот. Не использовать dev-вход, fixture seed или автоматическое восстановление локального dump в production.

@@ -3,6 +3,9 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  // Public build target, never a secret. Baked into the server artifact so runtime
+  // configuration cannot accidentally disable Vercel's production guards.
+  env: { SV_DEPLOYMENT_TARGET: process.env.SV_DEPLOYMENT_TARGET ?? "node" },
   async headers() {
     return [
       {

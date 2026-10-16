@@ -1,8 +1,8 @@
 import { spawnSync } from "node:child_process";
-import { assertProductionEnvironment } from "./lib/production-env.mjs";
+import { assertNeonMigrationEnvironment } from "./lib/production-env.mjs";
 let env;
 try {
-  env = assertProductionEnvironment(process.env);
+  env = assertNeonMigrationEnvironment(process.env);
 } catch (error) {
   console.error(error.message);
   process.exit(1);

@@ -32,9 +32,11 @@
     "**/*.ts",
     "**/*.tsx",
     ".next-e2e/types/**/*.ts",
+    ".next-production-check/types/**/*.ts",
+    ".next-ux/types/**/*.ts",
     ".next/types/**/*.ts",
     "next-env.d.ts",
-    ".next-production-check/types/**/*.ts"
+    ".next-vercel-check/types/**/*.ts"
   ],
   "exclude": [
     "node_modules"
