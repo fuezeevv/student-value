@@ -15,6 +15,7 @@ prisma/test-fixtures.ts
 scripts/repair-academic-data.ts
 scripts/issue-google-invite.ts
 scripts/check-*
+!scripts/check-function-traces.mjs
 scripts/test-*
 scripts/prepare-test-*
 scripts/verify-*

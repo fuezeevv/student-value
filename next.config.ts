@@ -3,6 +3,21 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  outputFileTracingExcludes: {
+    "/*": [
+      "./.env*",
+      "./secrets/**",
+      "./.test-work/**",
+      "./tests/**",
+      "./prisma/test-fixtures.ts",
+      "./node_modules/puppeteer*/**",
+      "./node_modules/@puppeteer/**",
+      "./node_modules/vitest/**",
+      "./node_modules/@vitest/**",
+      "./node_modules/eslint*/**",
+      "./node_modules/@eslint*/**",
+    ],
+  },
   // Public build target, never a secret. Baked into the server artifact so runtime
   // configuration cannot accidentally disable Vercel's production guards.
   env: { SV_DEPLOYMENT_TARGET: process.env.SV_DEPLOYMENT_TARGET ?? "node" },

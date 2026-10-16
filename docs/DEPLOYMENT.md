@@ -5,12 +5,14 @@
 ## Runtime и сборка
 
 - Node 24.x, npm ci, существующие Next.js 15 / Prisma 6. Регион Vercel fra1, Neon AWS Frankfurt (eu-central-1), PostgreSQL 17, Free.
+- Локальные проверки/CI/CLI закреплены на Node 24.22.0. Vercel управляет patch-версией Node 24.x самостоятельно (первая облачная сборка: 24.21.0); engines закрепляет major, не обещает одинаковый patch у провайдера.
 - vercel.json задаёт install/build/region/duration. Автоматические Git deployments отключены. Изменение main не публикует непроверенный код.
 - npm run build:vercel требует production origin и постоянный action key. В build DATABASE_URL заменяется на недоступный локальный placeholder, DIRECT_DATABASE_URL удаляется. Generate и next build не выполняют миграции или seed.
 - Vercel не вызывает npm start. Build target vercel закреплён в artifact, поэтому отключение системной переменной VERCEL не отключает guards. src/instrumentation.ts валидирует настройки server instance; lazy Prisma повторяет проверку перед инициализацией. На неверной конфигурации запросы блокируются. Preview и development Vercel environments сейчас отключены, чтобы не получить случайный доступ к production DB.
 - Runtime URL должен быть Neon pooled endpoint во Frankfurt; sslmode=require + sslaccept=strict, 3 соединения, 15 s connect/pool timeout. Query-параметры, переопределяющие host/schema/TLS roots, запрещены. Readiness ждёт wake-up до 17 s; максимальная функция 30 s.
 - /api/health/live не обращается к БД. /api/health проверяет SELECT 1; не ставить DB-readiness на частый uptime polling, иначе Neon не засыпает.
 - .vercelignore исключает .env, dumps, test fixtures, .test-work и служебные файлы из CLI upload. .vercel/ игнорируется Git. Vercel должен упаковать только traced server dependencies; проверить actual function artifacts после привязки аккаунта.
+- Next outputFileTracingExcludes дополнительно исключает env, secrets, fixtures и test/browser tooling. scripts/check-function-traces.mjs выполняется внутри каждой Vercel сборки после next build и отказывает при запрещённых файлах, отсутствии Prisma native engine или non-Linux engine в Linux build. Vercel Files API показывает source tree и карту lambda bundles, но не выдаёт их внутренний архив через File Contents API; не считать просмотр source tree полным аудитом архива провайдера.
 
 ## Аккаунты и инструменты
 
@@ -49,7 +51,13 @@ APP_ORIGIN=https://studentvalue1984.eu.cc; ALLOW_DEV_AUTH=false. TZ — заре
 
 ## Состояние этого checkpoint
 
-Конфигурация и локальные проверки подготовлены. Vercel Hobby project studentvalue1984 и Neon Free project still-haze-41105849 созданы. PostgreSQL 17, Frankfurt, fixed 0.25 CU; suspend_timeout_seconds=0 означает default плана, фактическое засыпание наблюдалось примерно через 5 минут. Все шесть миграций применены. Runtime role studentvalue_app не имеет CREATE/owner/migration permissions; pooled TLS и read transaction проверены на реальной Neon. В Vercel настроены только production variables, два секрета типа sensitive. Production data import, Google client credentials, cloud deployment smoke test и DNS ещё предстоят. Не объявлять сайт запущенным до проверки фактического публичного URL и реального входа.
+2026-10-16: Vercel Hobby project studentvalue1984 (prj_nkpqq729cG5o6eeoLDJ3bqq8azfS) и Neon Free project still-haze-41105849 созданы. PostgreSQL 17, Frankfurt, fixed 0.25 CU; suspend_timeout_seconds=0 означает default плана, фактическое засыпание наблюдалось примерно через 5 минут. Все шесть миграций применены. Runtime role studentvalue_app не имеет CREATE/owner/migration permissions; pooled TLS и read transaction проверены на реальной Neon. В Vercel настроены только production variables, два секрета типа sensitive; direct migration credential в runtime отсутствует.
+
+Первая облачная сборка c00b488, dpl_2jrCjHPtX1Nkf5yGdQVvQYjZXbpW — READY, promoted. Публичный технический адрес: https://studentvalue1984-fuezeev-2459.vercel.app. Readiness вернул 200 через реальную Neon; HTTP x-vercel-id и deployment metadata подтверждают runtime fra1. Live/login/privacy отвечают 200, корень/admin с поддельными dev/session cookies отправляют на login, calendar export возвращает 401, Google start без credentials — 503. Истинный студенческий вход ещё не проверен. Проверены защитные headers и адаптивная страница login в браузере. Preview и уникальные deployment URLs сохраняют Vercel Authentication; текущий production alias публичен.
+
+Домен добавлен к проекту и подтверждён Vercel; DNS пока не изменён, TLS целевого домена ещё не проверен. Vercel считает studentvalue1984.eu.cc apex доменом. Актуальный ответ Domains Config рекомендует A 216.198.79.1 / 64.29.17.1 (rank 1); точные DNS нужно повторно проверить перед изменением. Не ставить обычный CNAME на apex. Авторитетные NS a6.share-dns.com / b6.share-dns.net остаются у владельца.
+
+Google client credentials, reviewed production data import, привязка настоящего владельца без потери прогресса, независимые backups/restore и проверка реального студенческого входа ещё предстоят. В production нет demo пользователей, fixtures или автоматически скопированных local identities. Не объявлять сайт запущенным до проверки целевого HTTPS URL и реального входа.
 
 ## Приглашения
 

@@ -18,6 +18,7 @@ delete env.DIRECT_DATABASE_URL;
 for (const args of [
   ["node_modules/prisma/build/index.js", "generate"],
   ["node_modules/next/dist/bin/next", "build"],
+  ["scripts/check-function-traces.mjs"],
 ]) {
   const result = spawnSync(process.execPath, args, { env, stdio: "inherit" });
   if (result.status !== 0) process.exit(result.status ?? 1);
