@@ -35,18 +35,19 @@ export async function requirePermission(
   if (!hasPermission(user, permission)) {
     // Minimal Security Log (ADR-013 & user note 4: lightweight, does not delay flow)
     try {
-      await prisma.securityAccessLog.create({
-        data: {
-          userId: user.id,
-          event: "403_FORBIDDEN",
-          path: contextPath,
-          method: "ACTION",
-          details: { requiredPermission: permission, userNickname: user.nickname },
-        },
-      });
+      if (user.id && (user.id.startsWith("user-dev-") || user.id.length === 36)) {
+        await prisma.securityAccessLog.create({
+          data: {
+            userId: user.id,
+            event: "403_FORBIDDEN",
+            path: contextPath,
+            method: "ACTION",
+            details: { requiredPermission: permission, userNickname: user.nickname },
+          },
+        });
+      }
     } catch {
       // In case logging fails, do not block throwing the security exception
-      console.warn(`[Security] 403 Forbidden for user ${user.nickname} on permission ${permission}`);
     }
 
     throw new ForbiddenError(

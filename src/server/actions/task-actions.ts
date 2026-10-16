@@ -10,24 +10,15 @@ import {
   TaskType,
   DeadlineType,
   TaskAudienceType,
+  VerificationSource,
+  DeadlineProvenance,
 } from "@prisma/client";
-
-// --- DTO Validation Schemas ---
-
-export const CreateTaskSchema = z.object({
-  courseOfferingId: z.string().min(1, "Выберите курс"),
-  title: z.string().min(3, "Название задания должно быть не менее 3 символов"),
-  description: z.string().optional(),
-  type: z.nativeEnum(TaskType),
-  number: z.number().int().positive().optional().nullable(),
-  deadlineDate: z.string().optional().nullable(), // ISO string from date input
-  deadlineType: z.nativeEnum(DeadlineType).default(DeadlineType.HARD),
-  isTimeStrict: z.boolean().default(false),
-  variantNumber: z.string().optional().nullable(),
-  variantTitle: z.string().optional().nullable(),
-});
-
-export type CreateTaskInput = z.infer<typeof CreateTaskSchema>;
+import { awardXp, checkAndUnlockAchievement } from "@/server/services/gamification-service";
+import {
+  createNotification,
+  broadcastGroupNotification,
+} from "@/server/services/notification-service";
+import { CreateTaskSchema, CreateTaskInput } from "@/lib/validations/schemas";
 
 // --- Actions ---
 
@@ -76,8 +67,21 @@ export async function updateStudentProgressAction(
     },
   });
 
+  // Server-side idempotent XP Ledger reward for submission
+  if (isNowSubmitted) {
+    await awardXp({
+      userId: user.id,
+      taskId,
+      ruleCode: "TASK_SUBMISSION",
+      reason: "Задание отправлено на проверку",
+    });
+    await checkAndUnlockAchievement(user.id, "FIRST_STEP");
+  }
+
   revalidatePath("/");
   revalidatePath(`/tasks/${taskId}`);
+  revalidatePath("/deadlines");
+  revalidatePath("/analytics");
   return { success: true };
 }
 
@@ -85,7 +89,7 @@ export async function verifyTaskProgressAction(
   taskId: string,
   targetUserId: string,
   isAccepted: boolean,
-  verificationSource = "Подтверждено старостой / преподавателем"
+  verificationSource: VerificationSource = VerificationSource.HEADMAN_CONFIRMED
 ) {
   const user = await getCurrentUser();
   await requirePermission(user, "verify_progress", "verifyTaskProgressAction");
@@ -116,17 +120,47 @@ export async function verifyTaskProgressAction(
     },
   });
 
+  // If verified ACCEPTED: award XP
+  if (isAccepted) {
+    const isTeacher = verificationSource === VerificationSource.TEACHER_CONFIRMED;
+    await awardXp({
+      userId: targetUserId,
+      taskId,
+      ruleCode: "TASK_ACCEPTED",
+      reason: isTeacher
+        ? "Работа зачтена преподавателем"
+        : "Выполнение работы подтверждено старостой",
+    });
+
+    // Only award ACCEPTED_MASTER achievement if officially confirmed by teacher
+    if (isTeacher) {
+      await checkAndUnlockAchievement(targetUserId, "ACCEPTED_MASTER");
+    }
+
+    const task = await prisma.task.findUnique({
+      where: { id: taskId },
+      select: { title: true },
+    });
+
+    await createNotification({
+      userId: targetUserId,
+      title: isTeacher ? "Зачет преподавателем подтвержден!" : "Статус подтвержден старостой",
+      message: `Работа «${task?.title ?? "Задание"}» отмечена как принятая.`,
+      type: "PROGRESS_VERIFIED",
+      link: `/tasks/${taskId}`,
+    });
+  }
+
   // Record into domain AuditLog
   await prisma.auditLog.create({
     data: {
       userId: user!.id,
-      action: "VERIFY_TASK_PROGRESS",
+      action: "VERIFY_PROGRESS",
       entityType: "TASK_PROGRESS",
-      entityId: updated.id,
+      entityId: `${taskId}:${targetUserId}`,
       details: {
-        taskId,
-        targetUserId,
         isAccepted,
+        newStatus,
         verificationSource,
       },
     },
@@ -134,6 +168,8 @@ export async function verifyTaskProgressAction(
 
   revalidatePath("/");
   revalidatePath(`/tasks/${taskId}`);
+  revalidatePath("/deadlines");
+  revalidatePath("/analytics");
   return { success: true };
 }
 
@@ -170,7 +206,6 @@ export async function createTaskAction(rawInput: CreateTaskInput) {
           groupId: primaryGroup?.groupId ?? null,
         },
       },
-      // Variant if specified
       ...(validated.variantNumber
         ? {
             variants: {
@@ -194,8 +229,19 @@ export async function createTaskAction(rawInput: CreateTaskInput) {
         type: validated.deadlineType,
         date: new Date(validated.deadlineDate),
         isTimeStrict: validated.isTimeStrict,
+        provenance: DeadlineProvenance.HEADMAN_CONFIRMED,
         createdById: user!.id,
       },
+    });
+  }
+
+  // Broadcast in-app notification if group exists
+  if (primaryGroup?.groupId) {
+    await broadcastGroupNotification(primaryGroup.groupId, {
+      title: "Новое задание добавлено",
+      message: `Курс: ${validated.title}`,
+      type: "TASK_NEW",
+      link: `/tasks/${task.id}`,
     });
   }
 
@@ -216,12 +262,15 @@ export async function createTaskAction(rawInput: CreateTaskInput) {
   });
 
   revalidatePath("/");
+  revalidatePath("/deadlines");
   revalidatePath(`/courses/${validated.courseOfferingId}`);
   return { success: true, taskId: task.id };
 }
 
 export async function switchDevUserAction(userId: string) {
-  if (process.env.NODE_ENV !== "development") {
+  const isDevAuth =
+    process.env.NODE_ENV === "development" || process.env.ALLOW_DEV_AUTH === "true";
+  if (!isDevAuth) {
     throw new Error("Смена тестового пользователя доступна только в режиме разработки.");
   }
   await setDevUserCookie(userId);

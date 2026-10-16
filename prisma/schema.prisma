@@ -81,6 +81,21 @@ enum DeadlineStatus {
   CANCELLED
 }
 
+enum DeadlineProvenance {
+  TEACHER
+  OFFICIAL
+  HEADMAN_CONFIRMED
+  PERSONAL
+  UNKNOWN
+}
+
+enum VerificationSource {
+  SELF_REPORTED
+  HEADMAN_CONFIRMED
+  TEACHER_CONFIRMED
+  SYSTEM_VERIFIED
+}
+
 enum StudentTaskProgressStatus {
   NOT_STARTED
   IN_PROGRESS
@@ -140,6 +155,11 @@ model User {
   sourceRefs    SourceReference[]
   verifiedProgress StudentTaskProgress[] @relation("ProgressVerifiedBy")
   verifiedEnrollments Enrollment[]       @relation("EnrollmentVerifiedBy")
+  notifications       Notification[]
+  xpEvents            XpEvent[]
+  gamificationProfile UserGamificationProfile?
+  achievements        UserAchievement[]
+  reviewedSuggestions AiSuggestion[]
 }
 
 model AuthIdentity {
@@ -373,6 +393,7 @@ model Source {
   classSession     ClassSession?     @relation(fields: [classSessionId], references: [id], onDelete: SetNull)
   transcript       Transcript?       @relation(fields: [transcriptId], references: [id], onDelete: SetNull)
   references       SourceReference[]
+  suggestions      AiSuggestion[]
 
   @@index([groupId])
 }
@@ -428,6 +449,7 @@ model Task {
   materials         TaskMaterial[]
   dependencies      TaskDependency[] @relation("TaskRequires")
   dependentOn       TaskDependency[] @relation("TaskIsRequiredBy")
+  xpEvents          XpEvent[]
 
   @@index([courseOfferingId])
   @@index([status])
@@ -488,6 +510,7 @@ model Deadline {
   date               DateTime
   isTimeStrict       Boolean                @default(false)
   status             DeadlineStatus         @default(ACTIVE)
+  provenance         DeadlineProvenance     @default(HEADMAN_CONFIRMED)
   originalDeadlineId String?
   sourceReferenceId  String?
   createdById        String
@@ -532,7 +555,7 @@ model StudentTaskProgress {
   isVerified         Boolean                   @default(false)
   verifiedById       String?
   verifiedAt         DateTime?
-  verificationSource String?
+  verificationSource VerificationSource?
   studentNotes       String?
   submittedAt        DateTime?
   acceptedAt         DateTime?
@@ -670,3 +693,102 @@ model SecurityAccessLog {
   @@index([userId])
   @@index([event])
 }
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  title     String
+  message   String
+  type      String
+  link      String?
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+  @@index([userId, createdAt])
+}
+
+model XpRule {
+  id          String   @id @default(uuid())
+  code        String   @unique
+  name        String
+  points      Int
+  description String?
+}
+
+model XpEvent {
+  id        String   @id @default(uuid())
+  userId    String
+  taskId    String?
+  ruleCode  String
+  points    Int
+  reason    String
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  task      Task?    @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, taskId, ruleCode])
+  @@index([userId])
+}
+
+model UserGamificationProfile {
+  id                 String    @id @default(uuid())
+  userId             String    @unique
+  totalXp            Int       @default(0)
+  level              Int       @default(1)
+  currentStreak      Int       @default(0)
+  longestStreak      Int       @default(0)
+  isLeaderboardOptIn Boolean   @default(true)
+  lastActivityDate   DateTime?
+  updatedAt          DateTime  @updatedAt
+
+  user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model AchievementDefinition {
+  id          String            @id @default(uuid())
+  code        String            @unique
+  title       String
+  description String
+  badgeIcon   String
+  points      Int               @default(50)
+  category    String            @default("GENERAL")
+
+  users       UserAchievement[]
+}
+
+model UserAchievement {
+  id              String                @id @default(uuid())
+  userId          String
+  achievementCode String
+  unlockedAt      DateTime              @default(now())
+
+  user            User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  achievement     AchievementDefinition @relation(fields: [achievementCode], references: [code], onDelete: Cascade)
+
+  @@unique([userId, achievementCode])
+  @@index([userId])
+}
+
+model AiSuggestion {
+  id            String    @id @default(uuid())
+  sourceId      String?
+  entityType    String
+  title         String
+  suggestedData Json
+  confidence    Float     @default(0.85)
+  status        String    @default("PENDING")
+  reviewNotes   String?
+  reviewedById  String?
+  reviewedAt    DateTime?
+  createdAt     DateTime  @default(now())
+
+  source        Source?   @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  reviewedBy    User?     @relation(fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@index([status])
+}
+

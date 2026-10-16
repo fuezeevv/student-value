@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { CreateTaskSchema } from "../src/server/actions/task-actions";
+import { CreateTaskSchema } from "../src/lib/validations/schemas";
 import { TaskType, DeadlineType } from "@prisma/client";
 
 describe("Task DTO Validation (Zod Schema)", () => {

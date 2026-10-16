@@ -10,13 +10,15 @@ import {
   TaskAudienceType,
   DeadlineType,
   DeadlineStatus,
+  DeadlineProvenance,
+  VerificationSource,
   StudentTaskProgressStatus,
 } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log("🌱 Starting seed...");
+  console.log("🌱 Starting Student Value 1.984 seed...");
 
   // 1. Semester: Fall 2026 (5 semester)
   const semester = await prisma.semester.upsert({
@@ -35,17 +37,21 @@ async function main() {
   // 2. Study Group: 5130901/40102
   const group = await prisma.studyGroup.upsert({
     where: { code: "5130901/40102" },
-    update: {},
+    update: {
+      name: "Группа 5130901/40102",
+      department: "Институт компьютерных наук и кибербезопасности (ИКНК)",
+      program: "09.03.01 Информатика и вычислительная техника",
+    },
     create: {
       code: "5130901/40102",
       name: "Группа 5130901/40102",
-      department: "ИКНК (Институт компьютерных наук и кибербезопасности)",
+      department: "Институт компьютерных наук и кибербезопасности (ИКНК)",
       program: "09.03.01 Информатика и вычислительная техника",
-      calendarId: null, // Google Calendar ID will be connected later
+      calendarId: null,
     },
   });
 
-  // 3. Roles and Permissions for Group 40102
+  // 3. Roles and Permissions
   const ownerRole = await prisma.role.upsert({
     where: { groupId_name: { groupId: group.id, name: "Owner" } },
     update: {},
@@ -87,15 +93,18 @@ async function main() {
     });
   }
 
-  // 4. Users: dev-owner (Rasul) and dev-student
+  // 4. Users: Rasul (Owner/Headman) & Demo Student
   const devOwner = await prisma.user.upsert({
     where: { nickname: "rasul" },
-    update: {},
+    update: {
+      bio: "Староста группы 5130901/40102 · СПбПУ",
+      avatarUrl: "https://api.dicebear.com/7.x/bottts/svg?seed=rasul-batukaev",
+    },
     create: {
       id: "user-dev-owner",
       nickname: "rasul",
-      avatarUrl: "https://api.dicebear.com/7.x/bottts/svg?seed=rasul",
-      bio: "Староста группы 5130901/40102",
+      avatarUrl: "https://api.dicebear.com/7.x/bottts/svg?seed=rasul-batukaev",
+      bio: "Староста группы 5130901/40102 · СПбПУ",
       isSystemAdmin: true,
     },
   });
@@ -112,19 +121,22 @@ async function main() {
       userId: devOwner.id,
       provider: AuthProvider.LOCAL_DEV,
       providerUserId: "dev-owner-uid",
-      email: null,
+      email: "batukaev.rr@edu.spbstu.ru",
       metadata: { role: "headman" },
     },
   });
 
   const devStudent = await prisma.user.upsert({
     where: { nickname: "ivan_student" },
-    update: {},
+    update: {
+      bio: "Студент группы 40102",
+      avatarUrl: "https://api.dicebear.com/7.x/bottts/svg?seed=ivan-student",
+    },
     create: {
       id: "user-dev-student",
       nickname: "ivan_student",
-      avatarUrl: "https://api.dicebear.com/7.x/bottts/svg?seed=ivan",
-      bio: "Студент группы 40102 [DEMO]",
+      avatarUrl: "https://api.dicebear.com/7.x/bottts/svg?seed=ivan-student",
+      bio: "Студент группы 40102",
       isSystemAdmin: false,
     },
   });
@@ -146,10 +158,10 @@ async function main() {
     },
   });
 
-  // Group Memberships
+  // Memberships
   const ownerMember = await prisma.groupMember.upsert({
     where: { groupId_userId: { groupId: group.id, userId: devOwner.id } },
-    update: {},
+    update: { isOwner: true },
     create: {
       groupId: group.id,
       userId: devOwner.id,
@@ -173,7 +185,7 @@ async function main() {
 
   const studentMember = await prisma.groupMember.upsert({
     where: { groupId_userId: { groupId: group.id, userId: devStudent.id } },
-    update: {},
+    update: { isOwner: false },
     create: {
       groupId: group.id,
       userId: devStudent.id,
@@ -195,55 +207,96 @@ async function main() {
     },
   });
 
-  // 5. Enrollments (Academic Roster)
-  const ownerEnrollment = await prisma.enrollment.upsert({
+  // 5. Official Roster of Group 5130901/40102 (from attendance sheet)
+  const officialStudents = [
+    "Адонин Валерий Валерьевич",
+    "Андреева Алиса Вадимовна",
+    "Астафьев Даниил Вячеславович",
+    "Бай Хаовэнь",
+    "Батукаев Расул Русланович",
+    "Бондарук Николай Андреевич",
+    "Буздаев Роберт Алексеевич",
+    "Валтышев Даниил Денисович",
+    "Вишневский Евфимий Антонович",
+    "Галимов Айдар Фидаелович",
+    "Гармажапов Жаргал Аюрович",
+    "Дмитриевский Михаил Николаевич",
+    "Зохиров Манучехр Фаррухович",
+    "Кононенко Тимофей Степанович",
+    "Краснов Роман Алексеевич",
+    "Лахмери Скандер",
+    "Митюнин Егор Дмитриевич",
+    "Оздоев Адам Магомет-Амирович",
+    "Рахимкулова Рената Шавкатовна",
+    "Ребик Никита Владимирович",
+    "Рзаев Тамерлан Абульфат Оглы",
+    "Саидов Саиджон Сохибназарович",
+    "Сорокин Никита Денисович",
+    "Тимофеенко Сергей Владимирович",
+    "Тимохин Дмитрий Эдуардович",
+    "Ульянов Ярослав Алексеевич",
+    "Фомченков Георгий Андреевич",
+    "Шестоперов Ярослав Александрович",
+    "Юдин Олег Вадимович",
+    "Ярощенко Игорь Евгеньевич",
+  ];
+
+  // Remove legacy demo enrollments
+  await prisma.enrollment.deleteMany({
     where: {
-      groupId_fullName: {
-        groupId: group.id,
-        fullName: "Батукаев Расул Русланович",
-      },
-    },
-    update: { userId: devOwner.id, status: EnrollmentStatus.VERIFIED },
-    create: {
       groupId: group.id,
-      userId: devOwner.id,
-      fullName: "Батукаев Расул Русланович",
-      subgroup: 1,
-      status: EnrollmentStatus.VERIFIED,
+      fullName: { contains: "[DEMO]" },
     },
   });
 
-  const studentEnrollment = await prisma.enrollment.upsert({
-    where: {
-      groupId_fullName: {
-        groupId: group.id,
-        fullName: "Иванов Иван Иванович [DEMO]",
+  let ownerEnrollmentId = "";
+
+  for (let i = 0; i < officialStudents.length; i++) {
+    const fullName = officialStudents[i];
+    const isRasul = fullName === "Батукаев Расул Русланович";
+
+    const enrollment = await prisma.enrollment.upsert({
+      where: {
+        groupId_fullName: {
+          groupId: group.id,
+          fullName,
+        },
       },
-    },
-    update: { userId: devStudent.id, status: EnrollmentStatus.VERIFIED },
-    create: {
-      groupId: group.id,
-      userId: devStudent.id,
-      fullName: "Иванов Иван Иванович [DEMO]",
-      subgroup: 1,
-      status: EnrollmentStatus.VERIFIED,
-    },
-  });
+      update: {
+        userId: isRasul ? devOwner.id : null,
+        status: isRasul ? EnrollmentStatus.VERIFIED : EnrollmentStatus.PENDING_CLAIM,
+        subgroup: null, // Source roster has no subgroup division
+        studentIdNumber: null, // No official student ID numbers in source sheet
+      },
+      create: {
+        groupId: group.id,
+        userId: isRasul ? devOwner.id : null,
+        fullName,
+        subgroup: null,
+        studentIdNumber: null,
+        status: isRasul ? EnrollmentStatus.VERIFIED : EnrollmentStatus.PENDING_CLAIM,
+      },
+    });
+
+    if (isRasul) {
+      ownerEnrollmentId = enrollment.id;
+    }
+  }
 
   // 6. Teachers
   const teacherNesterov = await prisma.teacher.upsert({
     where: { id: "teacher-nesterov" },
-    update: {},
+    update: { fullName: "Нестеров Сергей Александрович", notes: "Основы теории управления (лекции и лабораторные работы)" },
     create: {
       id: "teacher-nesterov",
-      fullName: "Нестеров С.А.",
-      notes: "Основы теории управления, лекции и лабораторные",
+      fullName: "Нестеров Сергей Александрович",
+      notes: "Основы теории управления (лекции и лабораторные работы)",
     },
   });
 
   const teacherTsygan = await prisma.teacher.upsert({
     where: { id: "teacher-tsygan" },
-    update: {},
+    update: { email: "tsygan1412@yandex.ru" },
     create: {
       id: "teacher-tsygan",
       fullName: "Цыган Владимир Николаевич",
@@ -254,11 +307,11 @@ async function main() {
 
   const teacherTarasov = await prisma.teacher.upsert({
     where: { id: "teacher-tarasov" },
-    update: {},
+    update: { fullName: "Тарасов", notes: "Архитектура процессоров и вычислительных систем (инициалы не указаны в источнике)" },
     create: {
       id: "teacher-tarasov",
       fullName: "Тарасов",
-      notes: "Архитектура процессоров, TVBuilder",
+      notes: "Архитектура процессоров и вычислительных систем (инициалы не указаны в источнике)",
     },
   });
 
@@ -268,58 +321,68 @@ async function main() {
     create: {
       id: "teacher-semenov",
       fullName: "Семенов Константин Константинович",
-      notes: "Статистическая обработка больших данных (кандидат)",
+      notes: "Статистическая обработка больших данных (кандидат, статус: Оспаривается)",
     },
   });
 
   const teacherKadrgulov = await prisma.teacher.upsert({
     where: { id: "teacher-kadrgulov" },
-    update: {},
+    update: { fullName: "Кадргулов Расул Расилевич" },
     create: {
       id: "teacher-kadrgulov",
-      fullName: "Кадргулов Расул Расилиевич",
-      notes: "Статистическая обработка больших данных (кандидат, конфликт источников)",
+      fullName: "Кадргулов Расул Расилевич",
+      notes: "Статистическая обработка больших данных (указан в титульном листе расчетной работы)",
     },
   });
 
   const teacherBolsunovskaya = await prisma.teacher.upsert({
     where: { id: "teacher-bolsunovskaya" },
-    update: {},
+    update: { fullName: "Болсуновская Марина Владимировна" },
     create: {
       id: "teacher-bolsunovskaya",
-      fullName: "Болсуновская",
+      fullName: "Болсуновская Марина Владимировна",
       notes: "Инженерная и компьютерная графика / VR",
     },
   });
 
   const teacherSushnikov = await prisma.teacher.upsert({
     where: { id: "teacher-sushnikov" },
-    update: {},
+    update: { fullName: "Сушников Виктор Александрович" },
     create: {
       id: "teacher-sushnikov",
-      fullName: "Сушников В.А.",
+      fullName: "Сушников Виктор Александрович",
       notes: "Математическое моделирование физических процессов",
     },
   });
 
   const teacherKulyashova = await prisma.teacher.upsert({
     where: { id: "teacher-kulyashova" },
-    update: {},
+    update: { notes: "Образовательный форсайт (инициалы не указаны в источнике)" },
     create: {
       id: "teacher-kulyashova",
       fullName: "Куляшова",
-      notes: "Образовательный форсайт, мобильность",
+      notes: "Образовательный форсайт (инициалы не указаны в источнике)",
     },
   });
 
-  // 7. Course Definitions & Offerings
+  const teacherSidnev = await prisma.teacher.upsert({
+    where: { id: "teacher-sidnev" },
+    update: { notes: "Системный анализ и принятие решений (инициалы не указаны в источнике)" },
+    create: {
+      id: "teacher-sidnev",
+      fullName: "Сиднев",
+      notes: "Системный анализ и принятие решений (инициалы не указаны в источнике)",
+    },
+  });
+
+  // 7. Course Offerings
   const coursesData = [
     {
       code: "OTU",
       title: "Основы теории управления",
       shortTitle: "ОТУ",
       software: "MATLAB / Simulink",
-      format: "Очный",
+      format: "Очный (лекции, лабораторные работы)",
       teachers: [{ teacher: teacherNesterov, role: "Лектор / Лабораторные", status: TeacherCourseStatus.CONFIRMED }],
     },
     {
@@ -327,31 +390,31 @@ async function main() {
       title: "Формальные грамматики и теория компиляторов",
       shortTitle: "Компиляторы",
       software: "Linux, Flex/Lex, Bison/Yacc, GCC",
-      format: "Очный (электронные отчеты)",
+      format: "Очный (электронные отчеты на почту tsygan1412@yandex.ru)",
       teachers: [{ teacher: teacherTsygan, role: "Лектор / Лабораторные", status: TeacherCourseStatus.CONFIRMED }],
     },
     {
       code: "FPGA",
       title: "Синтез и моделирование аппаратных средств вычислительных систем",
       shortTitle: "Синтез ВС",
-      software: "Quartus Prime 18.1, Terasic DE10-Lite",
-      format: "Очный (демонстрация на плате)",
+      software: "Quartus Prime 18.1, Terasic DE10-Lite FPGA",
+      format: "Очный (демонстрация проекта на плате)",
       teachers: [],
     },
     {
       code: "ARCH",
       title: "Архитектура процессоров",
       shortTitle: "Арх. процессоров",
-      software: "TVBuilder, 1533ИЕ7",
-      format: "Очный",
+      software: "TVBuilder, счетчик 1533ИЕ7",
+      format: "Очный (лекции и практические занятия)",
       teachers: [{ teacher: teacherTarasov, role: "Преподаватель", status: TeacherCourseStatus.CONFIRMED }],
     },
     {
       code: "SOVD",
       title: "Статистическая обработка больших данных",
       shortTitle: "СОВД",
-      software: "MATLAB / Языки программирования",
-      format: "Очный / 2 расчетные работы",
+      software: "MATLAB / Python / R",
+      format: "Очный / 2 расчетные работы (РЗ-1, РЗ-2)",
       teachers: [
         { teacher: teacherSemenov, role: "Преподаватель курса", status: TeacherCourseStatus.DISPUTED },
         { teacher: teacherKadrgulov, role: "Преподаватель курса", status: TeacherCourseStatus.DISPUTED },
@@ -361,16 +424,16 @@ async function main() {
       code: "GRAPHICS",
       title: "Инженерная и компьютерная графика / VR",
       shortTitle: "ИКГ / VR",
-      software: null,
-      format: "Очный / Дистанционный по выбору",
+      software: "Blender (углубленно) / JavaScript OpenPolytech (дистанционно)",
+      format: "Две траектории: Стандартная (дистанционно) или Углубленная (очно Blender)",
       teachers: [{ teacher: teacherBolsunovskaya, role: "Преподаватель", status: TeacherCourseStatus.CONFIRMED }],
     },
     {
       code: "MMPP",
       title: "Математическое моделирование физических процессов",
       shortTitle: "ММФП",
-      software: null,
-      format: "Лекции и лабораторные",
+      software: "Математические пакеты",
+      format: "Лекции и лабораторные (моделирование физических процессов сенсоров и датчиков)",
       teachers: [{ teacher: teacherSushnikov, role: "Преподаватель", status: TeacherCourseStatus.CONFIRMED }],
     },
     {
@@ -385,9 +448,9 @@ async function main() {
       code: "SYS_ANALYSIS",
       title: "Системный анализ и принятие решений",
       shortTitle: "Системный анализ",
-      software: null,
-      format: "Задачи с вектором X и матрицей A",
-      teachers: [],
+      software: "MATLAB (Optgr.m)",
+      format: "Задания по нелинейной безусловной и условной оптимизации",
+      teachers: [{ teacher: teacherSidnev, role: "Лектор и практик", status: TeacherCourseStatus.CONFIRMED }],
     },
     {
       code: "CAD",
@@ -400,6 +463,9 @@ async function main() {
   ];
 
   let otuOfferingId = "";
+  let sovdOfferingId = "";
+  let cadOfferingId = "";
+  let graphicsOfferingId = "";
 
   for (const c of coursesData) {
     const courseDef = await prisma.courseDefinition.upsert({
@@ -423,9 +489,10 @@ async function main() {
       },
     });
 
-    if (c.code === "OTU") {
-      otuOfferingId = offering.id;
-    }
+    if (c.code === "OTU") otuOfferingId = offering.id;
+    if (c.code === "SOVD") sovdOfferingId = offering.id;
+    if (c.code === "CAD") cadOfferingId = offering.id;
+    if (c.code === "GRAPHICS") graphicsOfferingId = offering.id;
 
     await prisma.courseOfferingGroup.upsert({
       where: {
@@ -451,13 +518,15 @@ async function main() {
           teacherId: t.teacher.id,
           role: t.role,
           status: t.status,
-          notes: t.status === TeacherCourseStatus.DISPUTED ? "Конфликт в источниках: Семенов К.К. vs Кадргулов Р.Р." : null,
+          notes: t.status === TeacherCourseStatus.DISPUTED
+            ? "Конфликт в университетских источниках: Семенов К.К. vs Кадргулов Р.Р."
+            : null,
         },
       });
     }
   }
 
-  // 8. Sources for OTU
+  // 8. Sources & Provenance
   const sourceManual = await prisma.source.upsert({
     where: { id: "src-otu-manual-2026" },
     update: {},
@@ -465,7 +534,7 @@ async function main() {
       id: "src-otu-manual-2026",
       groupId: group.id,
       type: SourceType.OFFICIAL_DOCUMENT,
-      title: "С.А. Нестеров, «Основы теории управления», издание 2026",
+      title: "С.А. Нестеров, «Основы теории управления», 2026",
       documentMetadata: { pages: "1-320", year: 2026 },
       teacherId: teacherNesterov.id,
     },
@@ -478,20 +547,32 @@ async function main() {
       id: "src-otu-labs-guide",
       groupId: group.id,
       type: SourceType.OFFICIAL_DOCUMENT,
-      title: "Методические указания к лабораторным работам 1-9 по дисциплине «Основы теории управления»",
+      title: "Методические указания к лабораторным работам 1-9 по ОТУ",
       teacherId: teacherNesterov.id,
     },
   });
 
-  const sourceLectureWords = await prisma.source.upsert({
-    where: { id: "src-otu-lecture-1410" },
+  const sourceCadDoc = await prisma.source.upsert({
+    where: { id: "src-cad-schedule-doc" },
     update: {},
     create: {
-      id: "src-otu-lecture-1410",
+      id: "src-cad-schedule-doc",
       groupId: group.id,
-      type: SourceType.TEACHER_STATEMENT,
-      title: "Указания Нестерова С.А. на лекции 14.10.2026",
-      teacherId: teacherNesterov.id,
+      type: SourceType.OFFICIAL_DOCUMENT,
+      title: "Ведомость САПР упр. 5130901/40102 (пн 12:00-14:00, 3-402)",
+      documentMetadata: { room: "3-402", dayOfWeek: "Monday", time: "12:00-14:00" },
+    },
+  });
+
+  const sourceVrTranscript = await prisma.source.upsert({
+    where: { id: "src-vr-intro-transcript" },
+    update: {},
+    create: {
+      id: "src-vr-intro-transcript",
+      groupId: group.id,
+      type: SourceType.TRANSCRIPT_SEGMENT,
+      title: "07-09 Графика VR Вводное занятие Болсуновская М.В.",
+      teacherId: teacherBolsunovskaya.id,
     },
   });
 
@@ -510,21 +591,22 @@ async function main() {
     },
   });
 
-  const refLab4 = await prisma.sourceReference.upsert({
-    where: { id: "ref-otu-lab4" },
+  const refSovd1 = await prisma.sourceReference.upsert({
+    where: { id: "ref-sovd-calc1" },
     update: {},
     create: {
-      id: "ref-otu-lab4",
-      sourceId: sourceLectureWords.id,
+      id: "ref-sovd-calc1",
+      sourceId: sourceManual.id,
       entityType: "TASK",
-      entityId: "task-otu-lab4",
-      quoteText: "По состоянию на 14 октября 2026 преподаватель еще не требовал начинать ЛР4.",
+      entityId: "task-sovd-calc1",
+      quoteText: "Расчетное задание 1: Первичная обработка и оценивание числовых характеристик выборки.",
       confidence: ConfidenceLevel.CONFIRMED,
       createdById: devOwner.id,
     },
   });
 
-  // 9. Tasks for OTU (Focus for Vertical Slice)
+  // 9. Real Tasks and Verified Deadlines
+  // OTU Lab 1
   const taskLab1 = await prisma.task.upsert({
     where: { id: "task-otu-lab1" },
     update: {},
@@ -542,7 +624,6 @@ async function main() {
     },
   });
 
-  // Audience
   await prisma.taskAudience.upsert({
     where: { id: "aud-otu-lab1" },
     update: {},
@@ -554,8 +635,8 @@ async function main() {
     },
   });
 
-  // Variants for Lab 1
-  const var4 = await prisma.taskVariant.upsert({
+  // Variant 4 for OTU Lab 1
+  const var4Otu = await prisma.taskVariant.upsert({
     where: { taskId_variantNumber: { taskId: taskLab1.id, variantNumber: "Вар. 4" } },
     update: {},
     create: {
@@ -574,201 +655,443 @@ async function main() {
   await prisma.variantAssignment.upsert({
     where: {
       taskVariantId_enrollmentId: {
-        taskVariantId: var4.id,
-        enrollmentId: ownerEnrollment.id,
+        taskVariantId: var4Otu.id,
+        enrollmentId: ownerEnrollmentId,
       },
     },
     update: {},
     create: {
-      taskVariantId: var4.id,
-      enrollmentId: ownerEnrollment.id,
+      taskVariantId: var4Otu.id,
+      enrollmentId: ownerEnrollmentId,
       assignedBy: "HEADMAN",
     },
   });
 
-  // Deadline for Lab 1
+  // Active deadline for OTU Lab 1: End of October 2026
   await prisma.deadline.upsert({
     where: { id: "dl-otu-lab1" },
-    update: {},
+    update: {
+      date: new Date("2026-10-25T23:59:00+03:00"),
+      provenance: DeadlineProvenance.TEACHER,
+    },
     create: {
       id: "dl-otu-lab1",
       taskId: taskLab1.id,
       courseOfferingId: otuOfferingId,
       title: "Срок сдачи ЛР1",
       type: DeadlineType.HARD,
-      date: new Date("2026-09-20T23:59:00+03:00"),
+      provenance: DeadlineProvenance.TEACHER,
+      date: new Date("2026-10-25T23:59:00+03:00"),
       isTimeStrict: false,
       status: DeadlineStatus.ACTIVE,
       createdById: devOwner.id,
     },
   });
 
-  // Progress for Rasul (Verified Accepted)
+  // Progress for Rasul: Real actual state (Not started, unverified)
   await prisma.studentTaskProgress.upsert({
     where: { taskId_userId: { taskId: taskLab1.id, userId: devOwner.id } },
-    update: {},
+    update: {
+      status: StudentTaskProgressStatus.NOT_STARTED,
+      isVerified: false,
+      verificationSource: null,
+      studentNotes: null,
+      submittedAt: null,
+      acceptedAt: null,
+    },
     create: {
       taskId: taskLab1.id,
       userId: devOwner.id,
-      taskVariantId: var4.id,
-      status: StudentTaskProgressStatus.ACCEPTED,
-      isVerified: true,
-      verifiedById: devOwner.id,
-      verifiedAt: new Date("2026-09-26T14:30:00+03:00"),
-      verificationSource: "Зачтено Нестеровым С.А. на занятии",
-      studentNotes: "Модель в Simulink построена, отчет подписан",
+      taskVariantId: var4Otu.id,
+      status: StudentTaskProgressStatus.NOT_STARTED,
+      isVerified: false,
     },
   });
 
-  // Progress for Demo Student (Not started)
+  // Progress for Demo Student (In Progress for UI verification)
   await prisma.studentTaskProgress.upsert({
     where: { taskId_userId: { taskId: taskLab1.id, userId: devStudent.id } },
     update: {},
     create: {
       taskId: taskLab1.id,
       userId: devStudent.id,
-      taskVariantId: var4.id,
-      status: StudentTaskProgressStatus.NOT_STARTED,
+      taskVariantId: var4Otu.id,
+      status: StudentTaskProgressStatus.IN_PROGRESS,
       isVerified: false,
     },
   });
 
-  // Task Lab 4: Not yet assigned by teacher
-  const taskLab4 = await prisma.task.upsert({
-    where: { id: "task-otu-lab4" },
+  // SOVD Calculation Task 1
+  const taskSovd1 = await prisma.task.upsert({
+    where: { id: "task-sovd-calc1" },
     update: {},
     create: {
-      id: "task-otu-lab4",
-      courseOfferingId: otuOfferingId,
-      title: "ЛР4: Частотный синтез системы управления по заданным требованиям",
-      description: "Синтез регулятора по логарифмическим частотным характеристикам (ЛАЧХ и ЛФЧХ). ВНИМАНИЕ: По состоянию на 14.10.2026 преподаватель еще не выдавал требование приступать к работе.",
-      type: TaskType.LABORATORY,
-      number: 4,
+      id: "task-sovd-calc1",
+      courseOfferingId: sovdOfferingId,
+      title: "РЗ №1: Первичная обработка и оценивание параметров распределения",
+      description: "Построение вариационного ряда, эмпирической функции распределения, гистограммы частот, вычисление выборочного среднего, дисперсии и доверительных интервалов.",
+      type: TaskType.CALCULATION_WORK,
+      number: 1,
       status: TaskStatus.PUBLISHED,
-      sourceReferenceId: refLab4.id,
+      sourceReferenceId: refSovd1.id,
       createdById: devOwner.id,
       updatedById: devOwner.id,
     },
   });
 
   await prisma.taskAudience.upsert({
-    where: { id: "aud-otu-lab4" },
+    where: { id: "aud-sovd-calc1" },
     update: {},
     create: {
-      id: "aud-otu-lab4",
-      taskId: taskLab4.id,
+      id: "aud-sovd-calc1",
+      taskId: taskSovd1.id,
       targetType: TaskAudienceType.GROUP,
       groupId: group.id,
     },
   });
 
-  // Lab 4 has NO deadline (TBD / unknown)
-  await prisma.studentTaskProgress.upsert({
-    where: { taskId_userId: { taskId: taskLab4.id, userId: devOwner.id } },
+  // Variant 5 for SOVD (from variant_05.txt)
+  const var5Sovd = await prisma.taskVariant.upsert({
+    where: { taskId_variantNumber: { taskId: taskSovd1.id, variantNumber: "Вар. 5" } },
     update: {},
     create: {
-      taskId: taskLab4.id,
-      userId: devOwner.id,
-      status: StudentTaskProgressStatus.NOT_STARTED,
-      isVerified: false,
+      taskId: taskSovd1.id,
+      variantNumber: "Вар. 5",
+      title: "Вариант 5 (соответствует номеру в списке группы)",
+      spec: {
+        studentNumber: 5,
+        datasetFile: "variant_05.txt",
+        sampleSize: 100,
+      },
     },
   });
 
-  await prisma.studentTaskProgress.upsert({
-    where: { taskId_userId: { taskId: taskLab4.id, userId: devStudent.id } },
+  await prisma.variantAssignment.upsert({
+    where: {
+      taskVariantId_enrollmentId: {
+        taskVariantId: var5Sovd.id,
+        enrollmentId: ownerEnrollmentId,
+      },
+    },
     update: {},
     create: {
-      taskId: taskLab4.id,
-      userId: devStudent.id,
-      status: StudentTaskProgressStatus.NOT_STARTED,
-      isVerified: false,
+      taskVariantId: var5Sovd.id,
+      enrollmentId: ownerEnrollmentId,
+      assignedBy: "OFFICIAL_ROSTER",
     },
   });
 
-  // Task: Homework 2 for OTU
-  const taskHw2 = await prisma.task.upsert({
-    where: { id: "task-otu-hw2" },
-    update: {},
-    create: {
-      id: "task-otu-hw2",
-      courseOfferingId: otuOfferingId,
-      title: "Задание после лекции №2: Расчет передаточной функции замкнутой системы",
-      description: "Выполнить аналитический расчет эквивалентной передаточной функции для структурной схемы из конспекта лекции №2.",
-      type: TaskType.HOMEWORK,
-      number: 2,
-      status: TaskStatus.PUBLISHED,
-      createdById: devOwner.id,
-      updatedById: devOwner.id,
-    },
-  });
-
-  await prisma.taskAudience.upsert({
-    where: { id: "aud-otu-hw2" },
-    update: {},
-    create: {
-      id: "aud-otu-hw2",
-      taskId: taskHw2.id,
-      targetType: TaskAudienceType.GROUP,
-      groupId: group.id,
-    },
-  });
-
-  // Soft deadline for HW2: 2026-10-22
   await prisma.deadline.upsert({
-    where: { id: "dl-otu-hw2" },
-    update: {},
+    where: { id: "dl-sovd-calc1" },
+    update: {
+      date: new Date("2026-11-05T23:59:00+03:00"),
+      provenance: DeadlineProvenance.HEADMAN_CONFIRMED,
+    },
     create: {
-      id: "dl-otu-hw2",
-      taskId: taskHw2.id,
-      courseOfferingId: otuOfferingId,
-      title: "Рекомендуемый срок выполнения ДЗ2",
+      id: "dl-sovd-calc1",
+      taskId: taskSovd1.id,
+      courseOfferingId: sovdOfferingId,
+      title: "Рекомендуемый срок сдачи РЗ-1",
       type: DeadlineType.SOFT,
-      date: new Date("2026-10-22T23:59:00+03:00"),
+      provenance: DeadlineProvenance.HEADMAN_CONFIRMED,
+      date: new Date("2026-11-05T23:59:00+03:00"),
       isTimeStrict: false,
       status: DeadlineStatus.ACTIVE,
       createdById: devOwner.id,
     },
   });
 
+  // Rasul: Real actual state (Not started, unverified)
   await prisma.studentTaskProgress.upsert({
-    where: { taskId_userId: { taskId: taskHw2.id, userId: devOwner.id } },
-    update: {},
-    create: {
-      taskId: taskHw2.id,
-      userId: devOwner.id,
-      status: StudentTaskProgressStatus.IN_PROGRESS,
+    where: { taskId_userId: { taskId: taskSovd1.id, userId: devOwner.id } },
+    update: {
+      status: StudentTaskProgressStatus.NOT_STARTED,
       isVerified: false,
+      verificationSource: null,
+      studentNotes: null,
+      submittedAt: null,
+      acceptedAt: null,
     },
-  });
-
-  await prisma.studentTaskProgress.upsert({
-    where: { taskId_userId: { taskId: taskHw2.id, userId: devStudent.id } },
-    update: {},
     create: {
-      taskId: taskHw2.id,
-      userId: devStudent.id,
+      taskId: taskSovd1.id,
+      userId: devOwner.id,
+      taskVariantId: var5Sovd.id,
       status: StudentTaskProgressStatus.NOT_STARTED,
       isVerified: false,
     },
   });
 
-  // 10. Announcements
-  await prisma.announcement.upsert({
-    where: { id: "ann-otu-lab4-info" },
+  // VR Track Choice Task
+  const taskVrTrack = await prisma.task.upsert({
+    where: { id: "task-vr-track-choice" },
     update: {},
     create: {
-      id: "ann-otu-lab4-info",
+      id: "task-vr-track-choice",
+      courseOfferingId: graphicsOfferingId,
+      title: "Выбор траектории обучения: Дистанционная (Open Education) или Очная (Blender)",
+      description: "Определиться с траекторией освоения курса: 1) Стандартная (дистанционный курс Открытого Политеха, моделирование на JS, консультации) или 2) Углубленная (очные занятия в лаборатории, 3D-моделирование в Blender).",
+      type: TaskType.PRACTICAL,
+      number: 1,
+      status: TaskStatus.PUBLISHED,
+      createdById: devOwner.id,
+      updatedById: devOwner.id,
+    },
+  });
+
+  await prisma.deadline.upsert({
+    where: { id: "dl-vr-choice" },
+    update: {
+      date: new Date("2026-10-31T23:59:00+03:00"),
+      provenance: DeadlineProvenance.TEACHER,
+    },
+    create: {
+      id: "dl-vr-choice",
+      taskId: taskVrTrack.id,
+      courseOfferingId: graphicsOfferingId,
+      title: "Срок выбора траектории в СДО",
+      type: DeadlineType.SOFT,
+      provenance: DeadlineProvenance.TEACHER,
+      date: new Date("2026-10-31T23:59:00+03:00"),
+      isTimeStrict: false,
+      status: DeadlineStatus.ACTIVE,
+      createdById: devOwner.id,
+    },
+  });
+
+  // 10. Announcements
+  await prisma.announcement.upsert({
+    where: { id: "ann-cad-schedule-verified" },
+    update: {},
+    create: {
+      id: "ann-cad-schedule-verified",
       groupId: group.id,
-      courseOfferingId: otuOfferingId,
-      title: "ОТУ: Информация по началу ЛР4",
-      content: "Нестеров С.А. сообщил на занятии, что приступать к ЛР4 пока не требуется. Методичка к ЛР1-ЛР3 остается актуальной. Не ориентируйтесь на старые графики сдачи.",
+      courseOfferingId: cadOfferingId,
+      title: "САПР: Аудитория 3-402 и время занятий",
+      content: "Согласно официальной ведомости упражнений, занятия по САПР проходят каждый понедельник с 12:00 до 14:00 в аудитории 3-402.",
       isPinned: true,
+      priority: "HIGH",
+      authorId: devOwner.id,
+    },
+  });
+
+  await prisma.announcement.upsert({
+    where: { id: "ann-sovd-variants" },
+    update: {},
+    create: {
+      id: "ann-sovd-variants",
+      groupId: group.id,
+      courseOfferingId: sovdOfferingId,
+      title: "СОВД: Распределение вариантов к расчетным заданиям",
+      content: "Номер варианта к Расчетному заданию №1 строго соответствует порядковому номеру студента в официальном списке группы 5130901/40102.",
+      isPinned: false,
       priority: "NORMAL",
       authorId: devOwner.id,
     },
   });
 
-  console.log("✅ Seed completed successfully!");
+  // 11. Gamification Rules & Achievements
+  const xpRules = [
+    { code: "TASK_SUBMISSION", name: "Отправка задания на проверку", points: 50, description: "Начисляется при переходе статуса в SUBMITTED" },
+    { code: "TASK_ACCEPTED", name: "Подтвержденный зачет", points: 100, description: "Начисляется при подтверждении сдачи (ACCEPTED)" },
+    { code: "FIRST_LAB_ACCEPTED", name: "Первая сданная лабораторная", points: 150, description: "Бонус за первую принятую работу в семестре" },
+    { code: "ON_TIME_COMPLETION", name: "Сдача точно в срок", points: 50, description: "Бонус за сдачу до наступления hard-дедлайна" },
+  ];
+
+  for (const r of xpRules) {
+    await prisma.xpRule.upsert({
+      where: { code: r.code },
+      update: { name: r.name, points: r.points, description: r.description },
+      create: r,
+    });
+  }
+
+  const achievements = [
+    { code: "FIRST_STEP", title: "Первый шаг", description: "Отправьте первое задание на проверку", badgeIcon: "footprints", points: 50, category: "COMPLETION" },
+    { code: "ACCEPTED_MASTER", title: "Зачет в кармане", description: "Получите подтвержденную преподавателем работу", badgeIcon: "check-circle", points: 100, category: "ACADEMIC" },
+    { code: "DEADLINE_HERO", title: "Владыка дедлайнов", description: "Сдайте работу до наступления контрольного срока", badgeIcon: "clock", points: 75, category: "COMPLETION" },
+    { code: "POLYTECH_COMRADE", title: "Политехник 5130901", description: "Активируйте профиль в Student Value 1.984", badgeIcon: "shield", points: 50, category: "GENERAL" },
+  ];
+
+  for (const a of achievements) {
+    await prisma.achievementDefinition.upsert({
+      where: { code: a.code },
+      update: { title: a.title, description: a.description, badgeIcon: a.badgeIcon, points: a.points },
+      create: a,
+    });
+  }
+
+  // Gamification profiles: Real actual initial state for Rasul (0 XP, no fake streaks)
+  await prisma.userGamificationProfile.upsert({
+    where: { userId: devOwner.id },
+    update: { totalXp: 0, level: 1, currentStreak: 0, longestStreak: 0, lastActivityDate: null },
+    create: {
+      userId: devOwner.id,
+      totalXp: 0,
+      level: 1,
+      currentStreak: 0,
+      longestStreak: 0,
+      isLeaderboardOptIn: true,
+      lastActivityDate: null,
+    },
+  });
+
+  // Remove any legacy fake XP events or achievements for Rasul
+  await prisma.xpEvent.deleteMany({
+    where: { userId: devOwner.id },
+  });
+  await prisma.userAchievement.deleteMany({
+    where: { userId: devOwner.id },
+  });
+
+  // Demo Student: clearly marked for testing UI gamification features without polluting real academic data
+  await prisma.userGamificationProfile.upsert({
+    where: { userId: devStudent.id },
+    update: { totalXp: 50, level: 1, currentStreak: 1, longestStreak: 1 },
+    create: {
+      userId: devStudent.id,
+      totalXp: 50,
+      level: 1,
+      currentStreak: 1,
+      longestStreak: 1,
+      isLeaderboardOptIn: true,
+      lastActivityDate: new Date(),
+    },
+  });
+
+  await prisma.xpEvent.upsert({
+    where: {
+      userId_taskId_ruleCode: {
+        userId: devStudent.id,
+        taskId: taskLab1.id,
+        ruleCode: "TASK_SUBMISSION",
+      },
+    },
+    update: {},
+    create: {
+      userId: devStudent.id,
+      taskId: taskLab1.id,
+      ruleCode: "TASK_SUBMISSION",
+      points: 50,
+      reason: "[DEMO] Отправка первого отчета на проверку",
+    },
+  });
+
+  await prisma.userAchievement.upsert({
+    where: {
+      userId_achievementCode: {
+        userId: devStudent.id,
+        achievementCode: "FIRST_STEP",
+      },
+    },
+    update: {},
+    create: {
+      userId: devStudent.id,
+      achievementCode: "FIRST_STEP",
+    },
+  });
+
+  // 12. In-App Notifications
+  await prisma.notification.upsert({
+    where: { id: "notif-welcome-owner" },
+    update: {},
+    create: {
+      id: "notif-welcome-owner",
+      userId: devOwner.id,
+      title: "Добро пожаловать в Student Value 1.984",
+      message: "Платформа академической организации группы 5130901/40102 готова к работе.",
+      type: "COURSE_UPDATE",
+      link: "/",
+      isRead: false,
+    },
+  });
+
+  await prisma.notification.upsert({
+    where: { id: "notif-cad-schedule" },
+    update: {},
+    create: {
+      id: "notif-cad-schedule",
+      userId: devOwner.id,
+      title: "Подтверждена аудитория САПР",
+      message: "Аудитория 3-402, понедельник 12:00-14:00 (упражнения).",
+      type: "ANNOUNCEMENT",
+      link: "/courses/offering-cad",
+      isRead: false,
+    },
+  });
+
+  // 13. AI Suggestion Review Queue
+  await prisma.aiSuggestion.upsert({
+    where: { id: "sug-vr-track" },
+    update: {},
+    create: {
+      id: "sug-vr-track",
+      sourceId: sourceVrTranscript.id,
+      entityType: "TASK",
+      title: "Выбор между стандартной (JS) и углубленной (Blender) траекторией ИКГ",
+      confidence: 0.96,
+      suggestedData: {
+        course: "ИКГ / VR",
+        teacher: "Болсуновская М.В.",
+        type: "PRACTICAL",
+        notes: "Преподаватель указала пройти голосование в СДО до следующей лекции",
+      },
+      status: "PENDING",
+      reviewNotes: null,
+      reviewedById: null,
+      reviewedAt: null,
+    },
+  });
+
+  await prisma.aiSuggestion.upsert({
+    where: { id: "sug-sovd-variant" },
+    update: {
+      status: "PENDING",
+      reviewNotes: null,
+      reviewedById: null,
+      reviewedAt: null,
+    },
+    create: {
+      id: "sug-sovd-variant",
+      sourceId: null,
+      entityType: "TASK",
+      title: "Привязка вариантов РЗ-1 по СОВД к номеру в списке",
+      confidence: 0.98,
+      suggestedData: {
+        course: "СОВД",
+        rule: "variant_number == student_roster_index",
+        sourceFile: "variant_05.txt",
+      },
+      status: "PENDING",
+      reviewNotes: null,
+      reviewedById: null,
+      reviewedAt: null,
+    },
+  });
+
+  await prisma.aiSuggestion.upsert({
+    where: { id: "sug-cad-room" },
+    update: {
+      status: "APPROVED",
+    },
+    create: {
+      id: "sug-cad-room",
+      sourceId: sourceCadDoc.id,
+      entityType: "ANNOUNCEMENT",
+      title: "Расписание САПР упр.: пн 12:00-14:00, ауд. 3-402",
+      confidence: 0.99,
+      suggestedData: {
+        course: "САПР",
+        room: "3-402",
+        schedule: "Понедельник 12:00-14:00",
+      },
+      status: "APPROVED",
+      reviewNotes: "Подтверждено документом САПР_упр_5130901.40102_full.docx",
+      reviewedById: devOwner.id,
+      reviewedAt: new Date(),
+    },
+  });
+
+  console.log("✅ Student Value 1.984 seed completed successfully with verified 30-student roster!");
 }
 
 main()

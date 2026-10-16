@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useTransition } from "react";
-import { StudentTaskProgressStatus } from "@prisma/client";
+import { StudentTaskProgressStatus, VerificationSource } from "@prisma/client";
 import { updateStudentProgressAction, verifyTaskProgressAction } from "@/server/actions/task-actions";
 import { Badge } from "@/components/ui/Badge";
 import { CheckCircle2, Clock, AlertCircle, FileCheck, ShieldCheck, Loader2 } from "lucide-react";
@@ -102,7 +102,7 @@ export function StatusSelect({
           taskId,
           targetUserId,
           accept,
-          "Подтверждено старостой / преподавателем на занятии"
+          VerificationSource.HEADMAN_CONFIRMED
         );
       } catch (err: unknown) {
         if (err instanceof Error) {

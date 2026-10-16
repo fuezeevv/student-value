@@ -17,10 +17,16 @@ const DEV_COOKIE_NAME = "study_dev_user_id";
 export async function getCurrentUser(): Promise<SessionUser | null> {
   const cookieStore = await cookies();
 
-  let targetUserId = "user-dev-owner"; // Default fallback in development
+  const isDevAuth =
+    process.env.NODE_ENV === "development" || process.env.ALLOW_DEV_AUTH === "true";
 
-  if (process.env.NODE_ENV === "development") {
+  let targetUserId = "user-dev-owner"; // Default fallback in development/demo
+
+  if (isDevAuth) {
     const devCookie = cookieStore.get(DEV_COOKIE_NAME)?.value;
+    if (devCookie === "guest") {
+      return null;
+    }
     if (devCookie) {
       targetUserId = devCookie;
     }
@@ -90,7 +96,9 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
 }
 
 export async function setDevUserCookie(userId: string) {
-  if (process.env.NODE_ENV !== "development") {
+  const isDevAuth =
+    process.env.NODE_ENV === "development" || process.env.ALLOW_DEV_AUTH === "true";
+  if (!isDevAuth) {
     throw new Error("Dev user switching is strictly forbidden in production!");
   }
   const cookieStore = await cookies();
