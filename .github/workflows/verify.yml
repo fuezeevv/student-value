@@ -1,0 +1,60 @@
+name: Verify
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: verify-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: studentvalue_ci
+          POSTGRES_PASSWORD: ci_only_password
+          POSTGRES_DB: studentvalue_test_ci_guard
+        ports: [5432:5432]
+        options: >-
+          --health-cmd "pg_isready -U studentvalue_ci -d studentvalue_test_ci_guard"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      # Disposable CI database only. Production credentials are never provided to this job.
+      DATABASE_URL: postgresql://studentvalue_ci:ci_only_password@localhost:5432/studentvalue_test_ci_guard?schema=public
+      APP_ORIGIN: https://studentvalue1984.eu.cc
+      ALLOW_DEV_AUTH: "false"
+      NEXT_TELEMETRY_DISABLED: "1"
+      PUPPETEER_CACHE_DIR: ${{ runner.temp }}/puppeteer
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version-file: .node-version
+          cache: npm
+      - run: npm ci
+      - name: Install Chromium system dependencies
+        run: sudo env "PATH=$PATH" "PUPPETEER_CACHE_DIR=$PUPPETEER_CACHE_DIR" npx --no-install puppeteer browsers install chrome --install-deps
+      - name: Generate an ephemeral build key (never a production secret)
+        run: node -e 'require("node:fs").appendFileSync(process.env.GITHUB_ENV, "NEXT_SERVER_ACTIONS_ENCRYPTION_KEY=" + require("node:crypto").randomBytes(32).toString("base64") + "\n")'
+      - name: Prepare empty CI guard database
+        run: npx --no-install prisma migrate deploy
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm audit --omit=dev --audit-level=high
+      - run: npm run format:check
+      - run: npm test
+      - run: npm run test:e2e
+      - run: npm run test:migrations -- --fresh
+      - name: Build production (without connecting to the guard database)
+        run: npm run build:production
+        env:
+          NEXT_DIST_DIR: .next-production-check
+      - run: npm run test:production-auth
+      - run: npm run test:production-health
+      - run: npm run test:production-artifact

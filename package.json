@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
+    "start": "node scripts/production-start.mjs",
     "lint": "eslint src tests prisma scripts",
     "test": "node scripts/run-tests.mjs",
     "test:watch": "node scripts/run-tests.mjs --watch",
@@ -19,7 +19,12 @@
     "db:repair-academic": "tsx scripts/repair-academic-data.ts",
     "test:migrations": "node scripts/check-migrations.mjs",
     "test:production-auth": "node scripts/check-production-auth.mjs",
-    "format:check": "prettier --check src/server/domain src/components/task/TaskVerificationForm.tsx src/components/text tests/core.integration.test.ts"
+    "format:check": "prettier --check src/server/domain src/components/task/TaskVerificationForm.tsx src/components/text tests/core.integration.test.ts",
+    "build:production": "node scripts/production-build.mjs",
+    "start:production": "node scripts/production-start.mjs",
+    "db:migrate:production": "node scripts/production-migrate.mjs",
+    "test:production-health": "node scripts/check-production-health.mjs",
+    "test:production-artifact": "node scripts/check-production-artifact.mjs"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -34,7 +39,9 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "tailwind-merge": "^2.6.0",
-    "zod": "^3.24.1"
+    "zod": "^3.24.1",
+    "prisma": "^6.2.1",
+    "typescript": "^5.7.3"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.7",
@@ -44,13 +51,18 @@
     "autoprefixer": "^10.4.20",
     "eslint": "^9.39.5",
     "eslint-config-next": "^15.5.28",
-    "postcss": "^8.5.1",
+    "postcss": "8.5.30",
     "prettier": "^3.9.10",
-    "prisma": "^6.2.1",
     "puppeteer": "^25.14.0",
     "tailwindcss": "^3.4.17",
     "tsx": "^4.19.2",
-    "typescript": "^5.7.3",
     "vitest": "^5.0.5"
+  },
+  "engines": {
+    "node": ">=24.22.0 <25"
+  },
+  "overrides": {
+    "postcss": "$postcss",
+    "deepmerge-ts": "8.0.2"
   }
 }

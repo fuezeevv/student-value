@@ -37,3 +37,12 @@ next-env.d.ts
 # Isolated test builds and reports
 .next-*/
 .test-work/
+
+# Production secrets and database backups
+.env.*
+!.env.example
+!.env.production.example
+*.dump
+*.backup
+/backups/
+/secrets/

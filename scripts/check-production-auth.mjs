@@ -40,6 +40,20 @@ try {
       throw new Error("Production server unavailable");
     await new Promise((r) => setTimeout(r, 200));
   }
+  const live = await fetch(base + "/api/health/live");
+  assert.equal(live.status, 200);
+  assert.deepEqual(await live.json(), { status: "ok" });
+  const ready = await fetch(base + "/api/health");
+  assert.equal(ready.status, 200);
+  assert.deepEqual(await ready.json(), { status: "ok" });
+  assert.equal(ready.headers.get("cache-control"), "no-store");
+  assert.equal(ready.headers.get("x-content-type-options"), "nosniff");
+  assert.equal(ready.headers.get("x-frame-options"), "DENY");
+  assert.equal(
+    ready.headers.get("strict-transport-security"),
+    "max-age=31536000",
+  );
+  assert.equal(ready.headers.get("x-powered-by"), null);
   for (const cookie of [
     "",
     "study_dev_user_id=user-dev-owner",
@@ -76,6 +90,9 @@ try {
   const text = await (await fetch(base + "/login")).text();
   assert(!text.includes("Локальный вход"));
   assert(!text.includes("<form"), "No local login forms in production");
+  console.log(
+    "PASS production liveness, database readiness, cache policy and security headers.",
+  );
   console.log(
     "PASS production runtime rejects absent/forged sessions and dev cookies with ALLOW_DEV_AUTH=true (56 requests).",
   );
