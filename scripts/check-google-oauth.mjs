@@ -14,6 +14,9 @@ const env = {
   APP_ORIGIN: "https://studentvalue1984.eu.cc",
   NEXT_DIST_DIR: ".next-production-check",
   NEXT_SERVER_ACTIONS_ENCRYPTION_KEY: randomBytes(32).toString("base64"),
+  GOOGLE_CALENDAR_ENABLED: "true",
+  CALENDAR_TOKEN_KEY: randomBytes(32).toString("base64"),
+  CRON_SECRET: randomBytes(32).toString("base64url"),
   GOOGLE_CLIENT_ID: "12345-test.apps.googleusercontent.com",
   GOOGLE_CLIENT_SECRET: "isolated-test-client-secret",
 };
@@ -131,6 +134,88 @@ try {
       redirect: "manual",
     });
   assert.equal((await request()).status, 200);
+  const calendarHtml = await (
+    await fetch(base + "/calendar", {
+      headers: { cookie: "__Host-session=" + token },
+    })
+  ).text();
+  assert(calendarHtml.includes("Подключить Google Calendar"));
+  assert(!calendarHtml.includes(env.CALENDAR_TOKEN_KEY));
+  assert(!calendarHtml.includes(env.GOOGLE_CLIENT_SECRET));
+  assert.equal(
+    (
+      await fetch(base + "/api/calendar/connect", {
+        method: "POST",
+        headers: { origin: env.APP_ORIGIN },
+        redirect: "manual",
+      })
+    ).status,
+    401,
+  );
+  assert.equal(
+    (
+      await fetch(base + "/api/calendar/connect", {
+        method: "POST",
+        headers: {
+          origin: "https://evil.invalid",
+          cookie: "__Host-session=" + token,
+        },
+        redirect: "manual",
+      })
+    ).status,
+    403,
+  );
+  assert.equal((await fetch(base + "/api/calendar/cron")).status, 401);
+  assert.equal(
+    (
+      await fetch(base + "/api/calendar/cron", {
+        headers: { authorization: "Bearer wrong" },
+      })
+    ).status,
+    401,
+  );
+  const calendarStart = await fetch(base + "/api/calendar/connect", {
+    method: "POST",
+    headers: { origin: env.APP_ORIGIN, cookie: "__Host-session=" + token },
+    redirect: "manual",
+  });
+  assert.equal(calendarStart.status, 303);
+  const calendarUrl = new URL(calendarStart.headers.get("location"));
+  assert.equal(
+    calendarUrl.searchParams.get("scope"),
+    "openid email profile https://www.googleapis.com/auth/calendar.app.created",
+  );
+  assert.equal(calendarUrl.searchParams.get("access_type"), "offline");
+  assert.equal(
+    calendarUrl.searchParams.get("redirect_uri"),
+    env.APP_ORIGIN + "/api/auth/google/callback",
+  );
+  assert.equal(calendarUrl.searchParams.get("code_challenge_method"), "S256");
+  const calendarCookie = calendarStart.headers.get("set-cookie");
+  assert(calendarCookie.includes("__Host-calendar-flow="));
+  assert(calendarCookie.includes("Secure"));
+  assert(calendarCookie.includes("HttpOnly"));
+  assert(!calendarCookie.includes("__Host-session="));
+  // Consent denial has correct state but never exchanges a code or changes the sign-in session.
+  const deniedCalendar = await fetch(
+    base +
+      "/api/auth/google/callback?error=access_denied&state=" +
+      calendarUrl.searchParams.get("state"),
+    {
+      headers: {
+        cookie: "__Host-session=" + token + "; " + calendarCookie.split(";")[0],
+      },
+      redirect: "manual",
+    },
+  );
+  assert.equal(deniedCalendar.status, 303);
+  assert.equal(
+    deniedCalendar.headers.get("location"),
+    env.APP_ORIGIN + "/calendar?error=connect",
+  );
+  assert(!deniedCalendar.headers.get("set-cookie").includes("__Host-session="));
+  assert.equal((await request()).status, 200);
+
   const second = await p.studyGroup.create({
     data: {
       code: "TEST-MULTI-" + randomUUID(),
@@ -185,7 +270,7 @@ try {
   });
   assert.equal((await request()).status, 307);
   console.log(
-    "PASS production OAuth POST/state/cookie/callback guards; hashed sessions select only active enrolled groups, reject unowned/archived group cookies and expire. All data isolated; no Google calls.",
+    "PASS production OAuth POST/state/cookie/callback guards; hashed sessions select only active enrolled groups, reject unowned/archived group cookies and expire. Calendar consent/denial/CSRF/cron guards preserve login. All data isolated; no Google calls.",
   );
 } finally {
   server.kill("SIGTERM");

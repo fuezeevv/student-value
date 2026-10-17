@@ -277,9 +277,15 @@ export default async function LessonPage({
                 before?: {
                   summary?: string;
                   sessionDate?: string;
+                  isTimeKnown?: boolean;
                   status?: string;
                 };
-                after?: { summary?: string; sessionDate?: string };
+                after?: {
+                  summary?: string;
+                  sessionDate?: string;
+                  isTimeKnown?: boolean;
+                  sourceNote?: string;
+                };
               };
               return (
                 <article
@@ -307,14 +313,18 @@ export default async function LessonPage({
                         {formatInTimeZone(
                           new Date(data.before.sessionDate),
                           "Europe/Moscow",
-                          "dd.MM.yyyy HH:mm",
+                          data.before.isTimeKnown
+                            ? "dd.MM.yyyy HH:mm"
+                            : "dd.MM.yyyy",
                         )}{" "}
                         →{" "}
                         {data.after?.sessionDate &&
                           formatInTimeZone(
                             new Date(data.after.sessionDate),
                             "Europe/Moscow",
-                            "dd.MM.yyyy HH:mm",
+                            data.after?.isTimeKnown
+                              ? "dd.MM.yyyy HH:mm"
+                              : "dd.MM.yyyy",
                           )}
                       </p>
                     )}

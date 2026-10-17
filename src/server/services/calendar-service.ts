@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db/prisma";
 
+/** Legacy group-wide calendar only. Personal consent/sync lives in server/calendar. */
 export interface CalendarIntegrationStatus {
   isConfigured: boolean;
   groupCalendarId: string | null;
@@ -10,7 +11,7 @@ export interface CalendarIntegrationStatus {
 }
 
 export async function getCalendarIntegrationStatus(
-  groupId: string
+  groupId: string,
 ): Promise<CalendarIntegrationStatus> {
   const group = await prisma.studyGroup.findUnique({
     where: { id: groupId },
@@ -18,7 +19,10 @@ export async function getCalendarIntegrationStatus(
   });
 
   const totalSyncedEvents = await prisma.externalCalendarEvent.count({
-    where: { syncStatus: "SYNCED", deadline: { courseOffering: { groups: { some: { groupId } } } } },
+    where: {
+      syncStatus: "SYNCED",
+      deadline: { courseOffering: { groups: { some: { groupId } } } },
+    },
   });
 
   const lastEvent = await prisma.externalCalendarEvent.findFirst({
@@ -28,13 +32,18 @@ export async function getCalendarIntegrationStatus(
   });
 
   const syncErrorsCount = await prisma.externalCalendarEvent.count({
-    where: { syncStatus: "FAILED", deadline: { courseOffering: { groups: { some: { groupId } } } } },
+    where: {
+      syncStatus: "FAILED",
+      deadline: { courseOffering: { groups: { some: { groupId } } } },
+    },
   });
 
   const missingCredentials: string[] = [];
-  if (!process.env.GOOGLE_CLIENT_ID) missingCredentials.push("GOOGLE_CLIENT_ID");
-  if (!process.env.GOOGLE_CLIENT_SECRET) missingCredentials.push("GOOGLE_CLIENT_SECRET");
-  if (!process.env.GOOGLE_SERVICE_ACCOUNT_KEY) missingCredentials.push("GOOGLE_SERVICE_ACCOUNT_KEY (или OAuth Refresh Token)");
+  if (!process.env.GOOGLE_CLIENT_ID)
+    missingCredentials.push("GOOGLE_CLIENT_ID");
+  if (!process.env.GOOGLE_CLIENT_SECRET)
+    missingCredentials.push("GOOGLE_CLIENT_SECRET");
+  // A service account is deliberately not used for personal calendars.
 
   return {
     isConfigured: false,
@@ -52,9 +61,15 @@ export async function getCalendarIntegrationStatus(
  */
 export async function syncDeadlineToExternalCalendar(
   deadlineId: string,
-  calendarId: string
+  calendarId: string,
 ) {
   // API transport and worker are not implemented. Never report a simulated sync.
-  void deadlineId; void calendarId;
-  return {success:false,reason:"NOT_IMPLEMENTED",message:"Прямая синхронизация Google Calendar пока не реализована. Доступен экспорт .ics."};
+  void deadlineId;
+  void calendarId;
+  return {
+    success: false,
+    reason: "NOT_IMPLEMENTED",
+    message:
+      "Общий календарь группы не используется. Личный Google Calendar подключается отдельно на странице календаря.",
+  };
 }

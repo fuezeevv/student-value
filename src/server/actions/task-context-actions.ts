@@ -1,4 +1,5 @@
 "use server";
+import { kickCalendarUpdates } from "@/server/calendar/background";
 import { revalidatePath } from "next/cache";
 import { requireCurrentUser } from "@/lib/auth/session";
 import { editTask } from "@/server/domain/task-editing";
@@ -11,6 +12,7 @@ export async function editTaskContentAction(form: FormData) {
       field(form, "taskId"),
       Object.fromEntries(form),
     );
+    kickCalendarUpdates();
     revalidatePath("/", "layout");
     return {
       message:
@@ -27,6 +29,7 @@ export async function moveTaskDeadlineAction(form: FormData) {
       undefined,
       field(form, "sourceNote"),
     );
+    kickCalendarUpdates();
     revalidatePath("/", "layout");
     return { message: "Срок обновлён. История и уведомления сохранены." };
   });

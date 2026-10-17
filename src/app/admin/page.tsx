@@ -1,3 +1,4 @@
+import { redactGroupAudit } from "@/server/domain/audit-privacy";
 import React from "react";
 import { prisma } from "@/lib/db/prisma";
 import { requireCurrentUser } from "@/lib/auth/session";
@@ -157,7 +158,7 @@ export default async function AdminPage() {
       action: l.action,
       entityType: l.entityType,
       entityId: l.entityId,
-      details: l.details,
+      details: redactGroupAudit(l.details),
       createdAt: l.createdAt.toISOString(),
       userNickname: l.user?.nickname ?? null,
     })),

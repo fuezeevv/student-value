@@ -1,3 +1,4 @@
+import { enqueueGroupCalendars } from "@/server/calendar/queue";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/db/prisma";
@@ -123,6 +124,7 @@ export async function rescheduleDeadline(
           link: `/tasks/${existing.taskId}`,
         })),
       });
+    await enqueueGroupCalendars(tx, user.groupId);
     if (onApplied) await onApplied(tx, deadline);
     return deadline;
   });

@@ -1,3 +1,4 @@
+import { enqueueGroupCalendars } from "@/server/calendar/queue";
 import { z } from "zod";
 import { prisma } from "@/lib/db/prisma";
 import type { SessionUser } from "@/lib/auth/session";
@@ -86,6 +87,7 @@ export async function editTask(user: SessionUser, id: string, raw: unknown) {
         },
       },
     });
+    await enqueueGroupCalendars(tx, user.groupId);
     if (recipients.length)
       await tx.notification.createMany({
         data: recipients.map((userId) => ({

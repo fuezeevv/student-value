@@ -1,3 +1,4 @@
+import { enqueuePersonalCalendar } from "@/server/calendar/queue";
 import { z } from "zod";
 import { VerificationSource } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
@@ -39,6 +40,7 @@ export async function updateOwnProgress(
       verificationSourceReferenceId: null,
       acceptedAt: null,
     };
+    await enqueuePersonalCalendar(tx, user.id);
     if (existing) {
       const updated = await tx.studentTaskProgress.updateMany({
         where: {
@@ -153,6 +155,19 @@ export async function verifyProgress(
   return prisma.$transaction(async (tx) => {
     const before = await tx.studentTaskProgress.findUnique({
       where: { taskId_userId: { taskId, userId: targetUserId } },
+      select: {
+        id: true,
+        taskId: true,
+        userId: true,
+        status: true,
+        isVerified: true,
+        verifiedById: true,
+        verifiedAt: true,
+        verificationSource: true,
+        verificationSourceReferenceId: true,
+        acceptedAt: true,
+        submittedAt: true,
+      },
     });
     let evidenceId = referenceId;
     if (accept && proof) {
@@ -215,6 +230,7 @@ export async function verifyProgress(
         link: `/tasks/${taskId}`,
       },
     });
+    await enqueuePersonalCalendar(tx, targetUserId);
     return progress;
   });
 }

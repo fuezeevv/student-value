@@ -448,6 +448,21 @@ describe("Lesson context and structured review", () => {
       editTask(owner, "test-individual-task", input),
     ).rejects.toThrow();
   });
+  it("notifies eligible local reviewers without broadcasting an unconfirmed proposal to other students", async () => {
+    const p = await proposal();
+    const notices = await prisma.notification.findMany({
+      where: {
+        link: "/proposals",
+        message: p.title,
+        title: "Нужно проверить уточнение",
+      },
+    });
+    expect(
+      notices.some((n) => n.userId === owner.id && n.groupId === owner.groupId),
+    ).toBe(true);
+    expect(notices.some((n) => n.userId === student.id)).toBe(false);
+    expect(notices.every((n) => n.groupId === owner.groupId)).toBe(true);
+  });
   it("commits at most one publication for concurrent approvals", async () => {
     const t = await task();
     const p = await proposal({ kind: "TASK_REQUIREMENT", taskId: t.id });

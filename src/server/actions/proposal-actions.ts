@@ -1,4 +1,5 @@
 "use server";
+import { kickCalendarUpdates } from "@/server/calendar/background";
 import { revalidatePath } from "next/cache";
 import { requireCurrentUser } from "@/lib/auth/session";
 import {
@@ -37,6 +38,7 @@ export async function reviewProposalAction(form: FormData) {
       taskId: field(form, "taskId") || undefined,
       proposedDay: field(form, "proposedDay") || undefined,
     });
+    kickCalendarUpdates();
     revalidatePath("/", "layout");
     return { message: "Решение сохранено. Принятые изменения опубликованы." };
   });

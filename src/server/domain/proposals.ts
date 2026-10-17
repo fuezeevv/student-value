@@ -1,3 +1,4 @@
+import { enqueueGroupCalendars } from "@/server/calendar/queue";
 import { randomUUID } from "node:crypto";
 import { Prisma, ProposalKind } from "@prisma/client";
 import { z } from "zod";
@@ -8,6 +9,7 @@ import {
   requireCoursePermission,
   requireTaskAudience,
   audienceMemberIds,
+  taskVisibilityWhere,
 } from "./access";
 import { externalUrl, canEditCourse } from "./lessons";
 import { parseDateOnly } from "./deadline-date";
@@ -44,6 +46,71 @@ async function ownCourse(user: SessionUser, id: string) {
   });
   if (!course) throw new ForbiddenError("Предмет недоступен в вашей группе");
   return course;
+}
+async function notifyProposalReviewers(
+  tx: Prisma.TransactionClient,
+  user: SessionUser,
+  courseId: string,
+  kind: ProposalKind,
+  title: string,
+  taskId?: string,
+) {
+  const enrolled = await tx.enrollment.findMany({
+    where: {
+      groupId: user.groupId,
+      userId: { not: null },
+      status: { in: ["CLAIMED", "VERIFIED"] },
+    },
+    select: { userId: true },
+  });
+  const members = await tx.groupMember.findMany({
+    where: {
+      groupId: user.groupId,
+      userId: {
+        in: enrolled.map((e) => e.userId!).filter((id) => id !== user.id),
+      },
+    },
+    include: {
+      user: { select: { nickname: true } },
+      userRoles: { include: { role: { include: { permissions: true } } } },
+    },
+  });
+  const reviewers: string[] = [];
+  for (const member of members) {
+    const viewer: SessionUser = {
+      id: member.userId,
+      nickname: member.user.nickname,
+      avatarUrl: null,
+      bio: null,
+      isSystemAdmin: false,
+      isOwner: member.isOwner,
+      groupId: user.groupId,
+      permissions: member.userRoles
+        .filter((r) => r.role.groupId === user.groupId)
+        .flatMap((r) => r.role.permissions.map((p) => p.permission)),
+    };
+    if (!canEditCourse(viewer, courseId, permissionForProposalKind(kind)))
+      continue;
+    if (
+      taskId &&
+      !(await tx.task.count({
+        where: { AND: [await taskVisibilityWhere(viewer, tx), { id: taskId }] },
+      }))
+    )
+      continue;
+    reviewers.push(member.userId);
+  }
+  if (reviewers.length)
+    await tx.notification.createMany({
+      data: reviewers.map((userId) => ({
+        userId,
+        groupId: user.groupId,
+        type: "COURSE_UPDATE",
+        title: "Нужно проверить уточнение",
+        message: title,
+        link: "/proposals",
+      })),
+    });
 }
 export async function proposeChange(user: SessionUser, raw: unknown) {
   const input = ProposalInput.parse(raw);
@@ -109,24 +176,35 @@ export async function proposeChange(user: SessionUser, raw: unknown) {
           orderBy: { date: "asc" },
         })
       : null;
-  return prisma.changeProposal.create({
-    data: {
-      ...input,
-      groupId: user.groupId,
-      authorId: user.id,
-      deadlineId: deadline?.id,
-      lessonVersion: lesson?.version,
-      sourceUrl: input.transcriptId ? lesson?.recordingUrl : input.sourceUrl,
-      ...(shared
-        ? {
-            kind: "NOTE",
-            title: shared.title,
-            content: shared.content,
-            sourceNote: shared.sourceNote,
-            sourceUrl: shared.sourceUrl,
-          }
-        : {}),
-    },
+  return prisma.$transaction(async (tx) => {
+    const proposal = await tx.changeProposal.create({
+      data: {
+        ...input,
+        groupId: user.groupId,
+        authorId: user.id,
+        deadlineId: deadline?.id,
+        lessonVersion: lesson?.version,
+        sourceUrl: input.transcriptId ? lesson?.recordingUrl : input.sourceUrl,
+        ...(shared
+          ? {
+              kind: "NOTE",
+              title: shared.title,
+              content: shared.content,
+              sourceNote: shared.sourceNote,
+              sourceUrl: shared.sourceUrl,
+            }
+          : {}),
+      },
+    });
+    await notifyProposalReviewers(
+      tx,
+      user,
+      input.courseOfferingId,
+      proposal.kind,
+      proposal.title,
+      input.taskId,
+    );
+    return proposal;
   });
 }
 
@@ -438,6 +516,7 @@ export async function reviewProposal(
             sourceReferenceId: ref.id,
           },
         });
+      if (kind === "DEADLINE") await enqueueGroupCalendars(tx, user.groupId);
       await finish(
         tx,
         kind === "LESSON_SUMMARY" ? proposal.sessionId! : entityId,
@@ -540,28 +619,38 @@ export async function suggestTranscriptNotes(
         ),
     )
     .slice(0, 8);
-  const result = await prisma.changeProposal.createMany({
-    skipDuplicates: true,
-    data: cues.map((m) => {
-      const quote = m[0].slice(0, 1500);
-      return {
-        groupId: user.groupId,
-        courseOfferingId: session.courseOfferingId,
-        authorId: user.id,
-        kind: "NOTE" as const,
-        title: `Проверить фразу: ${quote.slice(0, 120)}`,
-        content: quote,
-        sourceNote: quote,
-        sourceUrl: session.recordingUrl,
-        sessionId: session.id,
-        lessonVersion: session.version,
-        transcriptId: transcript.id,
-        quoteStart: m.index!,
-        quoteEnd: m.index! + quote.length,
-      };
-    }),
+  return prisma.$transaction(async (tx) => {
+    const result = await tx.changeProposal.createMany({
+      skipDuplicates: true,
+      data: cues.map((m) => {
+        const quote = Array.from(m[0]).slice(0, 1500).join("");
+        return {
+          groupId: user.groupId,
+          courseOfferingId: session.courseOfferingId,
+          authorId: user.id,
+          kind: "NOTE" as const,
+          title: `Проверить фразу: ${Array.from(quote).slice(0, 120).join("")}`,
+          content: quote,
+          sourceNote: quote,
+          sourceUrl: session.recordingUrl,
+          sessionId: session.id,
+          lessonVersion: session.version,
+          transcriptId: transcript.id,
+          quoteStart: m.index!,
+          quoteEnd: m.index! + quote.length,
+        };
+      }),
+    });
+    if (result.count)
+      await notifyProposalReviewers(
+        tx,
+        user,
+        session.courseOfferingId,
+        "NOTE",
+        `Новых фраз для проверки: ${result.count}. ${session.topic ?? "Текст занятия"}`,
+      );
+    return result.count;
   });
-  return result.count;
 }
 
 export async function archiveSharedBrief(user: SessionUser, id: string) {

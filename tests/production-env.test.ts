@@ -63,6 +63,31 @@ describe("production deployment safety", () => {
         }),
       ).toThrow("ENCRYPTION_KEY");
   });
+  it("requires separate credential encryption and a cron secret only when personal Calendar is enabled", () => {
+    const calendar = {
+      ...valid,
+      GOOGLE_CALENDAR_ENABLED: "true",
+      GOOGLE_CLIENT_ID: "test.apps.googleusercontent.com",
+      GOOGLE_CLIENT_SECRET: "test-client-secret",
+      CALENDAR_TOKEN_KEY: Buffer.alloc(32, 8).toString("base64"),
+      CRON_SECRET: "isolated-cron-secret-at-least-32-characters",
+    };
+    expect(assertProductionEnvironment(calendar).GOOGLE_CALENDAR_ENABLED).toBe(
+      "true",
+    );
+    for (const patch of [
+      { CALENDAR_TOKEN_KEY: "" },
+      { CALENDAR_TOKEN_KEY: valid.NEXT_SERVER_ACTIONS_ENCRYPTION_KEY },
+      { CRON_SECRET: "" },
+      { GOOGLE_CLIENT_SECRET: "" },
+    ])
+      expect(() =>
+        assertProductionEnvironment({ ...calendar, ...patch }),
+      ).toThrow();
+    expect(assertProductionEnvironment(valid).APP_ORIGIN).toBe(
+      valid.APP_ORIGIN,
+    );
+  });
   it("enforces encrypted, bounded database connections without changing credentials", () => {
     const result = assertProductionEnvironment({
       ...valid,

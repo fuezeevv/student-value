@@ -1,4 +1,5 @@
 "use server";
+import { kickCalendarUpdates } from "@/server/calendar/background";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { prisma } from "@/lib/db/prisma";
@@ -214,6 +215,7 @@ export async function updateDeadlineAction(
     newType,
     sourceNote,
   );
+  kickCalendarUpdates();
   revalidatePath("/", "layout");
   return { success: true, deadline };
 }

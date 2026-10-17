@@ -1,4 +1,6 @@
 "use server";
+import { kickCalendarUpdates } from "@/server/calendar/background";
+import { enqueueGroupCalendars } from "@/server/calendar/queue";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db/prisma";
 import { requireCurrentUser, setDevUserCookie } from "@/lib/auth/session";
@@ -17,7 +19,8 @@ import {
 } from "@/server/services/gamification-service";
 import { redirect } from "next/navigation";
 
-function refreshTask(taskId: string) {
+function refreshTask(taskId: string, preferredUserId?: string) {
+  kickCalendarUpdates(preferredUserId);
   for (const path of [
     "/",
     "/deadlines",
@@ -43,7 +46,7 @@ export async function updateStudentProgressAction(
     });
     await checkAndUnlockAchievement(user.id, "FIRST_STEP");
   }
-  refreshTask(taskId);
+  refreshTask(taskId, user.id);
   return { success: true };
 }
 export async function saveStudentNotesAction(taskId: string, notes: string) {
@@ -78,7 +81,7 @@ export async function verifyTaskProgressAction(
     if (verificationSource === "TEACHER_CONFIRMED")
       await checkAndUnlockAchievement(targetUserId, "ACCEPTED_MASTER");
   }
-  refreshTask(taskId);
+  refreshTask(taskId, targetUserId);
   return { success: true };
 }
 export async function createTaskAction(rawInput: CreateTaskInput) {
@@ -162,6 +165,7 @@ export async function createTaskAction(rawInput: CreateTaskInput) {
         data: { sourceReferenceId: dr.id },
       });
     }
+    if (input.deadlineDate) await enqueueGroupCalendars(tx, user.groupId);
     const members = await tx.groupMember.findMany({
       where: { groupId: user.groupId },
       select: { userId: true },
@@ -221,6 +225,6 @@ export async function recordTaskVerificationAction(
     ruleCode: "TASK_ACCEPTED",
     reason: "Староста зафиксировал подтверждение преподавателя с источником",
   });
-  refreshTask(taskId);
+  refreshTask(taskId, targetUserId);
   return { success: true };
 }

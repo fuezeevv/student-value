@@ -33,3 +33,8 @@ isPlatformOwner — отдельная полномочность подключ
 ## Проверки перед первым выпуском
 
 123 unit/integration tests, 16 изолированных browser E2E (360/390/768/1440), production reader с несколькими активными/архивными группами, no-bypass OAuth guards, fresh migrations/catalog, typecheck/lint/format, npm audit production (0 vulnerabilities), native production artifact и Vercel build/runtime/trace guards прошли. 34 function traces / 157 traced files: secrets/fixtures/browser tools не попадают в runtime. Рабочие локальные данные E2E не изменил. Actual desktop/mobile просмотр новых страниц выполнен на отдельном локальном стенде с явно маркированными fixtures. Данные этого стенда не импортируются в production.
+
+
+## Первый блок выпущен
+
+Коммиты 4e83eb0 + 2948680, Vercel dpl_5y9WQVsgPizr75tQV3e61hZjEJ5g, основной HTTPS-домен переключён на него. Добавочная миграция применена к Neon после свежего authenticated encrypted snapshot. Сопоставлены все прежние scalar/JSON/date поля пользователей, Google identity/session, Enrollment, заданий, дедлайнов, прогресса и источников — сохранены. Runtime grants новых таблиц проверены. Владелец платформы назначен отдельным audited действием только настоящему существующему владельцу с VERIFIED Enrollment и Google identity. Его production-сессия открыла новую страницу группы с нужными полномочиями; фиктивные группы и занятия не добавлялись.

@@ -1,3 +1,4 @@
+import { PersonalCalendar } from "@/components/workspace/PersonalCalendar";
 import Link from "next/link";
 import { ArrowLeft, Download } from "lucide-react";
 import { requireCurrentUser } from "@/lib/auth/session";
@@ -7,7 +8,12 @@ import {
 } from "@/server/queries/study-workspace";
 import { StudyTaskRow } from "@/components/study/StudyTaskRow";
 
-export default async function CalendarPage() {
+export default async function CalendarPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string; connected?: string }>;
+}) {
+  const params = await searchParams;
   const user = await requireCurrentUser();
   const { tasks } = await loadStudyWorkspace(user);
   const dated = tasks.filter((t) => t.deadline).sort(byDeadline);
@@ -24,11 +30,15 @@ export default async function CalendarPage() {
           <p className="eyebrow">Учёба в вашем календаре</p>
           <h1 className="page-title">Календарь сроков</h1>
           <p className="page-intro">
-            Скачайте подтверждённые даты и импортируйте файл в свой календарь.
-            Все даты — по Москве.
+            Ваши учебные сроки и личные напоминания. Все даты — по Москве.
           </p>
         </div>
       </div>
+      <PersonalCalendar
+        userId={user.id}
+        error={params.error}
+        connected={params.connected}
+      />
       <div className="workspace-grid">
         <section>
           <div className="section-heading">

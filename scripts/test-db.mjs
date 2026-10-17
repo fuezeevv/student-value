@@ -28,6 +28,9 @@ export function testEnvironment() {
     SV_TEST_ISOLATED: "1",
     TZ: "UTC",
     // Tests must not inherit provider credentials or placeholders from local development.
+    GOOGLE_CALENDAR_ENABLED: "false",
+    CALENDAR_TOKEN_KEY: "",
+    CRON_SECRET: "",
     GOOGLE_CLIENT_ID: "",
     GOOGLE_CLIENT_SECRET: "",
   };

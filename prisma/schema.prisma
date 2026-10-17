@@ -163,22 +163,23 @@ model User {
   memberships         GroupMember[]
   enrollments         Enrollment[]
   progress            StudentTaskProgress[]
-  createdTasks        Task[]                   @relation("TaskCreatedBy")
-  updatedTasks        Task[]                   @relation("TaskUpdatedBy")
-  deadlines           Deadline[]               @relation("DeadlineCreatedBy")
-  announcements       Announcement[]           @relation("AnnouncementAuthor")
+  createdTasks        Task[]                      @relation("TaskCreatedBy")
+  updatedTasks        Task[]                      @relation("TaskUpdatedBy")
+  deadlines           Deadline[]                  @relation("DeadlineCreatedBy")
+  announcements       Announcement[]              @relation("AnnouncementAuthor")
   auditLogs           AuditLog[]
   securityLogs        SecurityAccessLog[]
   sourceRefs          SourceReference[]
-  verifiedProgress    StudentTaskProgress[]    @relation("ProgressVerifiedBy")
-  verifiedEnrollments Enrollment[]             @relation("EnrollmentVerifiedBy")
+  verifiedProgress    StudentTaskProgress[]       @relation("ProgressVerifiedBy")
+  verifiedEnrollments Enrollment[]                @relation("EnrollmentVerifiedBy")
   notifications       Notification[]
   xpEvents            XpEvent[]
   gamificationProfile UserGamificationProfile?
   achievements        UserAchievement[]
   reviewedSuggestions AiSuggestion[]
-  proposals           ChangeProposal[]         @relation("ProposalAuthor")
-  reviews             ChangeProposal[]         @relation("ProposalReviewer")
+  calendarConnection  PersonalCalendarConnection?
+  proposals           ChangeProposal[]            @relation("ProposalAuthor")
+  reviews             ChangeProposal[]            @relation("ProposalReviewer")
 }
 
 model AuthIdentity {
@@ -927,4 +928,45 @@ model AiSuggestion {
   reviewedBy User?   @relation(fields: [reviewedById], references: [id], onDelete: SetNull)
 
   @@index([status])
+}
+
+// Personal mirror only. No credential grants academic authority or access to primary calendars.
+model PersonalCalendarConnection {
+  userId                String                  @id
+  googleSubject         String
+  refreshTokenEncrypted String?
+  calendarId            String?
+  provisioning          String                  @default("PENDING")
+  state                 String                  @default("ACTIVE")
+  reminderMinutes       Int[]                   @default([4320, 1440, 0])
+  requestedVersion      Int                     @default(1)
+  syncedVersion         Int                     @default(0)
+  retryAt               DateTime                @default(now())
+  attempts              Int                     @default(0)
+  lastErrorCode         String?
+  lastSyncedAt          DateTime?
+  leaseToken            String?
+  leaseUntil            DateTime?
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
+  user                  User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  events                PersonalCalendarEvent[]
+
+  @@index([state, retryAt])
+}
+
+model PersonalCalendarEvent {
+  id           String                     @id @default(uuid())
+  userId       String
+  taskId       String
+  groupId      String
+  calendarId   String
+  eventId      String
+  desiredHash  String?
+  removed      Boolean                    @default(false)
+  lastSyncedAt DateTime?
+  connection   PersonalCalendarConnection @relation(fields: [userId], references: [userId], onDelete: Cascade)
+
+  @@unique([userId, taskId])
+  @@unique([calendarId, eventId])
 }

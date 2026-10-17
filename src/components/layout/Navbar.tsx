@@ -27,7 +27,7 @@ const secondary = [
   { href: "/lessons", label: "Занятия и записи" },
   { href: "/proposals", label: "Предложения и уточнения" },
   { href: "/group", label: "Моя группа и приглашения" },
-  { href: "/calendar", label: "Календарь и экспорт" },
+  { href: "/calendar", label: "Личный календарь" },
   { href: "/analytics", label: "Мой прогресс" },
   { href: "/leaderboard", label: "Рейтинг и достижения" },
   { href: "/settings", label: "Профиль и настройки" },

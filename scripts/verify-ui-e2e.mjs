@@ -310,6 +310,7 @@ try {
           "/tasks/task-otu-lab1",
           "/deadlines",
           "/analytics",
+          "/calendar",
           "/search?q=TEST",
           "/notifications",
           "/settings",
@@ -397,6 +398,28 @@ try {
         (await body()).includes("Результат преподавателя записан старостой"),
       );
       await setUser("user-dev-owner");
+    },
+  );
+  await scenario(
+    "headman audit payload cannot expose a student's private notes from a legacy snapshot",
+    async () => {
+      const canary = "PRIVATE_AUDIT_CANARY_" + randomUUID();
+      await test.auditLog.create({
+        data: {
+          userId: "user-dev-owner",
+          action: "VERIFY_PROGRESS",
+          entityType: "TASK_PROGRESS",
+          entityId: "[TEST] legacy-" + randomUUID(),
+          details: {
+            groupId: "test-group",
+            before: { status: "READY", studentNotes: canary },
+            after: { status: "ACCEPTED" },
+          },
+        },
+      });
+      await setUser("user-dev-owner");
+      await go("/admin");
+      assert(!(await page.content()).includes(canary));
     },
   );
   await scenario(

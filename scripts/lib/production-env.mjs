@@ -39,6 +39,27 @@ export function assertProductionEnvironment(env, { database = true } = {}) {
     fail(
       "NEXT_SERVER_ACTIONS_ENCRYPTION_KEY must be a persistent 32-byte base64 key",
     );
+  if (
+    env.GOOGLE_CALENDAR_ENABLED &&
+    !["true", "false"].includes(env.GOOGLE_CALENDAR_ENABLED)
+  )
+    fail("GOOGLE_CALENDAR_ENABLED must be true or false");
+  if (env.GOOGLE_CALENDAR_ENABLED === "true") {
+    const calendarKey = env.CALENDAR_TOKEN_KEY ?? "";
+    if (
+      Buffer.from(calendarKey, "base64").length !== 32 ||
+      Buffer.from(calendarKey, "base64").toString("base64") !== calendarKey
+    )
+      fail(
+        "CALENDAR_TOKEN_KEY must be a separate persistent 32-byte base64 key",
+      );
+    if (calendarKey === key)
+      fail("Calendar credential encryption must use a separate key");
+    if ((env.CRON_SECRET ?? "").length < 32)
+      fail("CRON_SECRET must be at least 32 characters");
+    if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET)
+      fail("Google Calendar requires Google OAuth credentials");
+  }
   const result = {
     ...env,
     APP_ORIGIN: origin.origin,

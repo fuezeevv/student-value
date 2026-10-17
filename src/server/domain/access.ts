@@ -9,8 +9,9 @@ import {
 
 export async function taskVisibilityWhere(
   user: SessionUser,
+  db: Prisma.TransactionClient = prisma,
 ): Promise<Prisma.TaskWhereInput> {
-  const enrollment = await prisma.enrollment.findUnique({
+  const enrollment = await db.enrollment.findUnique({
     where: { groupId_userId: { groupId: user.groupId, userId: user.id } },
   });
   const subgroup = enrollment?.subgroup;

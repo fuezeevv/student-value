@@ -1,3 +1,5 @@
+import { kickCalendarUpdates } from "@/server/calendar/background";
+import { calendarConsentCallback } from "@/server/calendar/callback";
 import { NextRequest, NextResponse } from "next/server";
 import {
   GOOGLE_FLOW_COOKIE,
@@ -14,6 +16,8 @@ import {
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export async function GET(request: NextRequest) {
+  const calendarResponse = await calendarConsentCallback(request);
+  if (calendarResponse) return calendarResponse;
   const response = NextResponse.redirect(
     new URL("/login?error=signin", process.env.APP_ORIGIN),
     303,
@@ -41,6 +45,7 @@ export async function GET(request: NextRequest) {
     const identity = await exchangeGoogleCode(code, flow, config);
     const groupId = await resolveGoogleLoginGroup(identity, flow.invite);
     const session = await completeGoogleLogin(identity, groupId, flow.invite);
+    kickCalendarUpdates(session.userId);
     response.cookies.set("__Host-sv-group", groupId, {
       ...secureCookie,
       maxAge: 14 * 86400,
