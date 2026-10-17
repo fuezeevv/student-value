@@ -4,6 +4,7 @@ import "./globals.css";
 import { getCurrentUser } from "@/lib/auth/session";
 import { Navbar } from "@/components/layout/Navbar";
 import { prisma } from "@/lib/db/prisma";
+import { LegalLinks } from "@/components/layout/LegalLinks";
 
 export const metadata: Metadata = {
   title: "Student Value 1.984",
@@ -38,11 +39,12 @@ export default async function RootLayout({
         <main id="main" className="app-main">
           {children}
         </main>
-        <footer className="site-footer">
+        <footer className="site-footer flex-wrap gap-x-6 gap-y-4">
           <span>
             Student Value <span className="text-blue-300">1.984</span>
           </span>
           <span>Учёба в своём ритме.</span>
+          <LegalLinks />
         </footer>
       </body>
     </html>

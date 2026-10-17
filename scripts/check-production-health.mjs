@@ -74,6 +74,16 @@ try {
   const live = await fetch("http://127.0.0.1:3303/api/health/live");
   assert.equal(live.status, 200);
   assert.deepEqual(await live.json(), { status: "ok" });
+  for (const path of ["/privacy", "/terms"]) {
+    const publicPage = await fetch("http://127.0.0.1:3303" + path, {
+      redirect: "manual",
+    });
+    assert.equal(
+      publicPage.status,
+      200,
+      "Legal pages must be readable without sign-in or a database connection",
+    );
+  }
   console.log(
     "PASS unsafe production startup rejected; readiness 503 is sanitized and liveness remains 200 when isolated database is unavailable.",
   );

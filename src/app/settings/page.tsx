@@ -2,6 +2,8 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
 import { requireCurrentUser } from "@/lib/auth/session";
 import { SettingsClient } from "./SettingsClient";
+import { LegalLinks } from "@/components/layout/LegalLinks";
+import Link from "next/link";
 
 export default async function SettingsPage() {
   const user = await requireCurrentUser();
@@ -32,6 +34,21 @@ export default async function SettingsPage() {
           profile.gamificationProfile?.isLeaderboardOptIn ?? true
         }
       />
+      <section className="border-t border-slate-700 mt-9 pt-7 text-sm text-slate-400 space-y-4">
+        <h2 className="text-lg text-slate-100">Данные и доступ</h2>
+        <p>
+          Подключение и отключение Google Calendar — на{" "}
+          <Link href="/calendar" className="text-link">
+            странице календаря
+          </Link>
+          . Для запроса удаления данных напишите владельцу:{" "}
+          <a className="text-link" href="mailto:fuezeev@gmail.com">
+            fuezeev@gmail.com
+          </a>
+          .
+        </p>
+        <LegalLinks />
+      </section>
     </div>
   );
 }

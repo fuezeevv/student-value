@@ -50,7 +50,24 @@ try {
   assert(html.includes("Войти через Google"));
   assert(!html.includes("Локальный вход"));
   assert(!html.includes(env.GOOGLE_CLIENT_SECRET));
-  assert.equal((await fetch(base + "/privacy")).status, 200);
+  for (const [path, heading] of [
+    ["/privacy", "Конфиденциальность"],
+    ["/terms", "Условия использования"],
+  ]) {
+    const response = await fetch(base + path, { redirect: "manual" });
+    assert.equal(response.status, 200, `${path} must be public`);
+    const content = await response.text();
+    assert(content.includes(heading));
+    assert(content.includes(`https://studentvalue1984.eu.cc${path}`));
+    assert(
+      content.includes('href="/privacy"') && content.includes('href="/terms"'),
+    );
+    assert(!content.includes(env.GOOGLE_CLIENT_SECRET));
+    assert(
+      html.includes(`href="${path}"`),
+      "Legal links must be available at sign-in",
+    );
+  }
   for (const origin of ["https://evil.invalid", ""]) {
     const denied = await fetch(base + "/api/auth/google", {
       method: "POST",

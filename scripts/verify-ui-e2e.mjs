@@ -229,6 +229,33 @@ try {
     await go("/");
     assert(page.url().endsWith("/login"));
   });
+  await scenario(
+    "guest can read legal pages and follow legal links on desktop and mobile",
+    async () => {
+      for (const width of [360, 1440]) {
+        await page.setViewport({ width, height: 900 });
+        for (const route of ["/privacy", "/terms"]) {
+          const response = await go(route);
+          assert.equal(response.status(), 200);
+          assert.equal(new URL(page.url()).pathname, route);
+          assert(await page.$("h1"));
+          assert(await page.$('footer a[href="/privacy"]'));
+          assert(await page.$('footer a[href="/terms"]'));
+          assert(
+            await page.evaluate(
+              () => document.documentElement.scrollWidth <= innerWidth,
+            ),
+            `${route} overflows at ${width}px`,
+          );
+          await page.screenshot({
+            path: `.test-work/legal-${route.slice(1)}-${width}.png`,
+            fullPage: true,
+          });
+        }
+      }
+      await page.setViewport({ width: 1280, height: 900 });
+    },
+  );
   await setUser("user-dev-student");
   await scenario("student cannot access admin or private roster", async () => {
     await go("/admin");

@@ -6,6 +6,7 @@ import { prisma } from "@/lib/db/prisma";
 import { switchDevUserAction } from "@/server/actions/task-actions";
 import { BrandMark } from "@/components/ui/Logo";
 import { googleConfiguration } from "@/lib/auth/google";
+import { LegalLinks } from "@/components/layout/LegalLinks";
 
 export default async function LoginPage({
   searchParams,
@@ -110,10 +111,7 @@ export default async function LoginPage({
           </form>
           <p className="text-xs text-slate-400 leading-relaxed mt-5">
             Нужны только имя и email. Доступ к Google Drive и Календарю не
-            запрашивается.{" "}
-            <a href="/privacy" className="underline">
-              О данных и доступе
-            </a>
+            запрашивается. Календарь можно подключить отдельно после входа.
           </p>
         </section>
       ) : (
@@ -125,6 +123,9 @@ export default async function LoginPage({
           </p>
         </section>
       )}
+      <div className="mt-7 text-xs text-slate-400 leading-relaxed">
+        <LegalLinks />
+      </div>
     </div>
   );
 }
