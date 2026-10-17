@@ -169,6 +169,7 @@ export async function createTaskAction(rawInput: CreateTaskInput) {
     await tx.notification.createMany({
       data: members.map((m) => ({
         userId: m.userId,
+        groupId: user.groupId,
         type: "TASK_NEW",
         title: "Новое задание",
         message: task.title,

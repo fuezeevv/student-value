@@ -80,6 +80,7 @@ export async function createAnnouncementAction(
     await tx.notification.createMany({
       data: members.map((m) => ({
         userId: m.userId,
+        groupId: user.groupId,
         title: input.title,
         message: input.content.slice(0, 100),
         type: "ANNOUNCEMENT",

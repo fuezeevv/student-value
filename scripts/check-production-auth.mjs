@@ -74,6 +74,11 @@ try {
       "/settings",
       "/notifications",
       "/leaderboard",
+      "/group",
+      "/lessons",
+      "/lessons/new",
+      "/proposals",
+      "/exchange",
     ]) {
       const r = await fetch(base + route, {
         headers: { cookie },
@@ -94,7 +99,7 @@ try {
     "PASS production liveness, database readiness, cache policy and security headers.",
   );
   console.log(
-    "PASS production runtime rejects absent/forged sessions and dev cookies with ALLOW_DEV_AUTH=true (56 requests).",
+    "PASS production runtime rejects absent/forged sessions and dev cookies with ALLOW_DEV_AUTH=true (including group/lesson/proposal routes).",
   );
 } finally {
   server.kill("SIGTERM");

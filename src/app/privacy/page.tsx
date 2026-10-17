@@ -4,7 +4,7 @@ export default function PrivacyPage() {
       <p className="eyebrow">Student Value 1.984</p>
       <h1 className="page-title">Данные и доступ</h1>
       <p className="page-intro">
-        Учебное пространство группы 5130901/40102. Доступ к записям группы
+        Учебные пространства студенческих групп. Доступ к записям группы
         получают её участники по персональному приглашению.
       </p>
       <section>

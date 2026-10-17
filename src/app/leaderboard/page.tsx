@@ -21,7 +21,10 @@ export default async function LeaderboardPage() {
 
   // Load all gamification profiles sorted by totalXp descending
   const profiles = await prisma.userGamificationProfile.findMany({
-    where: { user: { memberships: { some: { groupId: user.groupId } } }, OR: [{ isLeaderboardOptIn: true }, { userId: user.id }] },
+    where: {
+      user: { memberships: { some: { groupId: user.groupId } } },
+      OR: [{ isLeaderboardOptIn: true }, { userId: user.id }],
+    },
     orderBy: { totalXp: "desc" },
     include: {
       user: {
@@ -49,7 +52,9 @@ export default async function LeaderboardPage() {
       })
     : [];
 
-  const unlockedCodes = new Set(userAchievements.map((ua) => ua.achievementCode));
+  const unlockedCodes = new Set(
+    userAchievements.map((ua) => ua.achievementCode),
+  );
 
   // User XP Events (Immutable ledger)
   const xpEvents = user
@@ -70,7 +75,7 @@ export default async function LeaderboardPage() {
           Рейтинг и достижения (Student Value)
         </h1>
         <p className="text-xs sm:text-sm text-slate-400 mt-0.5">
-          Академический рейтинг и система поощрения учебной активности группы 5130901/40102
+          Рейтинг и дополнительное поощрение учебной активности вашей группы
         </p>
       </div>
 
@@ -84,13 +89,20 @@ export default async function LeaderboardPage() {
               </div>
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
-                  <span className="font-bold text-base text-white">{user?.nickname}</span>
+                  <span className="font-bold text-base text-white">
+                    {user?.nickname}
+                  </span>
                   <Badge variant="default" className="text-[10px]">
                     Уровень {userProfile.level}
                   </Badge>
                 </div>
                 <div className="text-xs text-slate-400 flex items-center gap-3">
-                  <span>Общий опыт: <strong className="text-cyan-300 font-mono">{userProfile.totalXp} XP</strong></span>
+                  <span>
+                    Общий опыт:{" "}
+                    <strong className="text-cyan-300 font-mono">
+                      {userProfile.totalXp} XP
+                    </strong>
+                  </span>
                   <span>·</span>
                   <span className="flex items-center gap-1 text-rose-400 font-medium">
                     <Flame className="w-3.5 h-3.5 animate-pulse" />
@@ -106,7 +118,9 @@ export default async function LeaderboardPage() {
                   variant={userProfile.isLeaderboardOptIn ? "success" : "muted"}
                   className="cursor-pointer text-xs"
                 >
-                  {userProfile.isLeaderboardOptIn ? "✓ Участие в рейтинге активно" : "Приватный режим"}
+                  {userProfile.isLeaderboardOptIn
+                    ? "✓ Участие в рейтинге активно"
+                    : "Приватный режим"}
                 </Badge>
               </Link>
             </div>
@@ -129,74 +143,79 @@ export default async function LeaderboardPage() {
           </div>
 
           <div className="space-y-2">
-            {profiles.filter(profile => profile.isLeaderboardOptIn).map((profile, idx) => {
-              const isCurrentUser = user && profile.userId === user.id;
-              const isOptedIn = profile.isLeaderboardOptIn;
-              const displayName = isOptedIn
-                ? profile.user.nickname
-                : `Студент #${idx + 1} (приватный)`;
+            {profiles
+              .filter((profile) => profile.isLeaderboardOptIn)
+              .map((profile, idx) => {
+                const isCurrentUser = user && profile.userId === user.id;
+                const isOptedIn = profile.isLeaderboardOptIn;
+                const displayName = isOptedIn
+                  ? profile.user.nickname
+                  : `Студент #${idx + 1} (приватный)`;
 
-              return (
-                <div
-                  key={profile.id}
-                  className={`p-3.5 rounded-xl border transition-all flex items-center justify-between gap-3 ${
-                    isCurrentUser
-                      ? "bg-cyan-950/20 border-cyan-500/40 shadow-xs"
-                      : "bg-slate-900/60 border-slate-800"
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <div
-                      className={`w-7 h-7 rounded-lg flex items-center justify-center font-mono font-bold text-xs ${
-                        idx === 0
-                          ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
-                          : idx === 1
-                          ? "bg-slate-400/20 text-slate-300 border border-slate-500/30"
-                          : idx === 2
-                          ? "bg-amber-700/20 text-amber-600 border border-amber-700/30"
-                          : "bg-slate-800 text-slate-400"
-                      }`}
-                    >
-                      {idx + 1}
-                    </div>
+                return (
+                  <div
+                    key={profile.id}
+                    className={`p-3.5 rounded-xl border transition-all flex items-center justify-between gap-3 ${
+                      isCurrentUser
+                        ? "bg-cyan-950/20 border-cyan-500/40 shadow-xs"
+                        : "bg-slate-900/60 border-slate-800"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div
+                        className={`w-7 h-7 rounded-lg flex items-center justify-center font-mono font-bold text-xs ${
+                          idx === 0
+                            ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
+                            : idx === 1
+                              ? "bg-slate-400/20 text-slate-300 border border-slate-500/30"
+                              : idx === 2
+                                ? "bg-amber-700/20 text-amber-600 border border-amber-700/30"
+                                : "bg-slate-800 text-slate-400"
+                        }`}
+                      >
+                        {idx + 1}
+                      </div>
 
-                    <div className="flex items-center gap-2.5">
-                      <img
-                        src={
-                          isOptedIn && profile.user.avatarUrl
-                            ? profile.user.avatarUrl
-                            : "https://api.dicebear.com/7.x/bottts/svg?seed=masked"
-                        }
-                        alt="Avatar"
-                        className="w-8 h-8 rounded-full bg-slate-800 border border-slate-700"
-                      />
-                      <div>
-                        <div className="font-semibold text-xs text-white flex items-center gap-1.5">
-                          <span>{displayName}</span>
-                          {isCurrentUser && (
-                            <Badge variant="default" className="text-[9px] px-1 py-0">
-                              Вы
-                            </Badge>
-                          )}
-                        </div>
-                        <div className="text-[11px] text-slate-400 flex items-center gap-2">
-                          <span>Уровень {profile.level}</span>
-                          <span>·</span>
-                          <span className="flex items-center gap-1 text-rose-400/90">
-                            <Flame className="w-3 h-3" />
-                            {profile.currentStreak} дн.
-                          </span>
+                      <div className="flex items-center gap-2.5">
+                        <img
+                          src={
+                            isOptedIn && profile.user.avatarUrl
+                              ? profile.user.avatarUrl
+                              : "https://api.dicebear.com/7.x/bottts/svg?seed=masked"
+                          }
+                          alt="Avatar"
+                          className="w-8 h-8 rounded-full bg-slate-800 border border-slate-700"
+                        />
+                        <div>
+                          <div className="font-semibold text-xs text-white flex items-center gap-1.5">
+                            <span>{displayName}</span>
+                            {isCurrentUser && (
+                              <Badge
+                                variant="default"
+                                className="text-[9px] px-1 py-0"
+                              >
+                                Вы
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="text-[11px] text-slate-400 flex items-center gap-2">
+                            <span>Уровень {profile.level}</span>
+                            <span>·</span>
+                            <span className="flex items-center gap-1 text-rose-400/90">
+                              <Flame className="w-3 h-3" />
+                              {profile.currentStreak} дн.
+                            </span>
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
 
-                  <div className="font-mono font-bold text-sm text-cyan-400">
-                    {profile.totalXp} XP
+                    <div className="font-mono font-bold text-sm text-cyan-400">
+                      {profile.totalXp} XP
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
           </div>
         </div>
 
@@ -226,17 +245,25 @@ export default async function LeaderboardPage() {
                         : "bg-slate-800 text-slate-500"
                     }`}
                   >
-                    {isUnlocked ? <Sparkles className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
+                    {isUnlocked ? (
+                      <Sparkles className="w-4 h-4" />
+                    ) : (
+                      <Lock className="w-4 h-4" />
+                    )}
                   </div>
 
                   <div className="space-y-1 min-w-0">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="font-bold text-xs text-slate-100">{ach.title}</span>
+                      <span className="font-bold text-xs text-slate-100">
+                        {ach.title}
+                      </span>
                       <span className="text-[10px] font-mono text-cyan-400 font-semibold">
                         +{ach.points} XP
                       </span>
                     </div>
-                    <p className="text-[11px] text-slate-300 leading-snug">{ach.description}</p>
+                    <p className="text-[11px] text-slate-300 leading-snug">
+                      {ach.description}
+                    </p>
                   </div>
                 </div>
               );
@@ -257,12 +284,16 @@ export default async function LeaderboardPage() {
                     className="p-2.5 rounded-lg border border-slate-800/80 bg-slate-900/40 flex items-center justify-between text-[11px]"
                   >
                     <div className="space-y-0.5">
-                      <span className="font-medium text-slate-200 block">{evt.reason}</span>
+                      <span className="font-medium text-slate-200 block">
+                        {evt.reason}
+                      </span>
                       <span className="text-slate-500 text-[10px]">
                         {new Date(evt.createdAt).toLocaleString("ru-RU")}
                       </span>
                     </div>
-                    <span className="font-mono font-bold text-cyan-400">+{evt.points} XP</span>
+                    <span className="font-mono font-bold text-cyan-400">
+                      +{evt.points} XP
+                    </span>
                   </div>
                 ))}
               </div>

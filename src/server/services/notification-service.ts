@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db/prisma";
 
 export interface CreateNotificationParams {
   userId: string;
+  groupId?: string;
   title: string;
   message: string;
   type:
@@ -20,6 +21,7 @@ export async function createNotification(params: CreateNotificationParams) {
   return await prisma.notification.create({
     data: {
       userId: params.userId,
+      groupId: params.groupId,
       title: params.title,
       message: params.message,
       type: params.type,
@@ -31,7 +33,7 @@ export async function createNotification(params: CreateNotificationParams) {
 
 export async function broadcastGroupNotification(
   groupId: string,
-  params: Omit<CreateNotificationParams, "userId">
+  params: Omit<CreateNotificationParams, "userId">,
 ) {
   const members = await prisma.groupMember.findMany({
     where: { groupId },
@@ -40,6 +42,7 @@ export async function broadcastGroupNotification(
 
   const notifications = members.map((m) => ({
     userId: m.userId,
+    groupId,
     title: params.title,
     message: params.message,
     type: params.type,
@@ -54,16 +57,31 @@ export async function broadcastGroupNotification(
   }
 }
 
-export async function markNotificationRead(notificationId: string, userId: string) {
+export async function markNotificationRead(
+  notificationId: string,
+  userId: string,
+  groupId?: string,
+) {
   return await prisma.notification.updateMany({
-    where: { id: notificationId, userId },
+    where: {
+      id: notificationId,
+      userId,
+      ...(groupId ? { OR: [{ groupId }, { groupId: null }] } : {}),
+    },
     data: { isRead: true },
   });
 }
 
-export async function markAllNotificationsRead(userId: string) {
+export async function markAllNotificationsRead(
+  userId: string,
+  groupId?: string,
+) {
   return await prisma.notification.updateMany({
-    where: { userId, isRead: false },
+    where: {
+      userId,
+      isRead: false,
+      ...(groupId ? { OR: [{ groupId }, { groupId: null }] } : {}),
+    },
     data: { isRead: true },
   });
 }

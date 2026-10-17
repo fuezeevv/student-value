@@ -3,7 +3,6 @@ import { redirect } from "next/navigation";
 import { isDevAuthEnabled } from "./dev-policy";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/db/prisma";
-import { APP_GROUP_CODE } from "./google";
 
 export interface SessionUser {
   id: string;
@@ -14,6 +13,13 @@ export interface SessionUser {
   isOwner: boolean;
   groupId: string;
   permissions: string[];
+  isPlatformOwner?: boolean;
+  groupName?: string;
+  groups?: { id: string; name: string; code: string }[];
+}
+
+export function activeGroupCookie() {
+  return isDevAuthEnabled() ? "sv_group" : "__Host-sv-group";
 }
 
 const DEV_COOKIE_NAME = "study_dev_user_id";
@@ -63,7 +69,6 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
           : {
               where: {
                 group: {
-                  code: APP_GROUP_CODE,
                   enrollments: {
                     some: {
                       userId: targetUserId,
@@ -92,8 +97,9 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
 
   if (!user) return null;
 
-  // For this group (5130901/40102)
-  const defaultMembership = user.memberships[0];
+  const selected = cookieStore.get(activeGroupCookie())?.value;
+  const defaultMembership =
+    user.memberships.find((m) => m.groupId === selected) ?? user.memberships[0];
   if (!isDevAuth && !defaultMembership) return null;
   const isOwner = defaultMembership?.isOwner ?? false;
   const groupId = defaultMembership?.groupId ?? "";
@@ -117,6 +123,13 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
     isOwner,
     groupId,
     permissions: Array.from(permissionsSet),
+    isPlatformOwner: user.isPlatformOwner,
+    groupName: defaultMembership?.group.name,
+    groups: user.memberships.map((m) => ({
+      id: m.groupId,
+      name: m.group.name,
+      code: m.group.code,
+    })),
   };
 }
 

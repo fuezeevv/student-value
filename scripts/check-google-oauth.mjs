@@ -131,6 +131,45 @@ try {
       redirect: "manual",
     });
   assert.equal((await request()).status, 200);
+  const second = await p.studyGroup.create({
+    data: {
+      code: "TEST-MULTI-" + randomUUID(),
+      name: "[TEST] Second independent group",
+    },
+  });
+  await p.groupMember.create({
+    data: { groupId: second.id, userId: user.id, isOwner: false },
+  });
+  const secondEnrollment = await p.enrollment.create({
+    data: {
+      groupId: second.id,
+      userId: user.id,
+      status: "CLAIMED",
+      fullName: "[TEST] Secret second roster name",
+    },
+  });
+  const selectGroup = async (id) =>
+    fetch(base + "/group", {
+      headers: {
+        cookie: "__Host-session=" + token + "; __Host-sv-group=" + id,
+      },
+      redirect: "manual",
+    });
+  const selected = await selectGroup(second.id);
+  assert.equal(selected.status, 200);
+  const secondHtml = await selected.text();
+  assert(secondHtml.includes(second.name));
+  assert(!secondHtml.includes(secondEnrollment.fullName));
+  const forged = await selectGroup(randomUUID());
+  assert.equal(forged.status, 200);
+  assert((await forged.text()).includes(group.name));
+  await p.enrollment.update({
+    where: { id: secondEnrollment.id },
+    data: { status: "ARCHIVED" },
+  });
+  const archived = await selectGroup(second.id);
+  assert.equal(archived.status, 200);
+  assert((await archived.text()).includes(group.name));
   await p.enrollment.update({
     where: { id: enrollment.id },
     data: { status: "ARCHIVED" },
@@ -146,7 +185,7 @@ try {
   });
   assert.equal((await request()).status, 307);
   console.log(
-    "PASS production OAuth POST/state/cookie/callback guards; hashed sessions work only for active enrollments and expire. All data isolated; no Google calls.",
+    "PASS production OAuth POST/state/cookie/callback guards; hashed sessions select only active enrolled groups, reject unowned/archived group cookies and expire. All data isolated; no Google calls.",
   );
 } finally {
   server.kill("SIGTERM");

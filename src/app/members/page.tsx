@@ -8,9 +8,10 @@ import { Users, Shield, User, CheckCircle2, Clock, Lock } from "lucide-react";
 
 export default async function MembersPage() {
   const user = await requireCurrentUser();
-  const canViewPrivateIdentity = user ? hasPermission(user, "view_private_member_identity") : false;
+  const canViewPrivateIdentity = user
+    ? hasPermission(user, "view_private_member_identity")
+    : false;
 
-  // Group 5130901/40102
   const group = await prisma.studyGroup.findFirst({
     where: { id: user.groupId },
     include: {
@@ -21,17 +22,29 @@ export default async function MembersPage() {
               gamificationProfile: true,
             },
           },
-          userRoles: { include: { role: true } },
+          userRoles: { include: { role: { include: { permissions: true } } } },
         },
       },
       _count: { select: { enrollments: true } },
     },
   });
 
-  const enrollments = canViewPrivateIdentity ? await prisma.enrollment.findMany({where:{groupId:user.groupId},orderBy:{fullName:"asc"},include:{user:{select:{nickname:true}}}}) : [];
+  const courses = await prisma.courseOffering.findMany({
+    where: { groups: { some: { groupId: user.groupId } } },
+    include: { courseDefinition: true },
+  });
+  const enrollments = canViewPrivateIdentity
+    ? await prisma.enrollment.findMany({
+        where: { groupId: user.groupId },
+        orderBy: { fullName: "asc" },
+        include: { user: { select: { nickname: true } } },
+      })
+    : [];
 
   if (!group) {
-    return <div className="p-6 text-center text-slate-400">Группа не найдена.</div>;
+    return (
+      <div className="p-6 text-center text-slate-400">Группа не найдена.</div>
+    );
   }
 
   return (
@@ -66,10 +79,10 @@ export default async function MembersPage() {
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-bold uppercase tracking-wider text-slate-200 flex items-center gap-2">
               <Shield className="w-4 h-4 text-cyan-400" />
-              Официальный список группы (Административный доступ старосты)
+              Список группы · доступ старосты
             </h2>
             <span className="text-xs text-cyan-400 font-mono">
-              Конфиденциальные данные СПбПУ
+              Личные данные участников
             </span>
           </div>
 
@@ -87,9 +100,16 @@ export default async function MembersPage() {
               </thead>
               <tbody className="divide-y divide-slate-800/60">
                 {enrollments.map((enr, idx) => (
-                  <tr key={enr.id} className="hover:bg-slate-800/30 transition-colors">
-                    <td className="py-3 px-4 font-mono text-slate-500">{idx + 1}</td>
-                    <td className="py-3 px-4 font-medium text-white">{enr.fullName}</td>
+                  <tr
+                    key={enr.id}
+                    className="hover:bg-slate-800/30 transition-colors"
+                  >
+                    <td className="py-3 px-4 font-mono text-slate-500">
+                      {idx + 1}
+                    </td>
+                    <td className="py-3 px-4 font-medium text-white">
+                      {enr.fullName}
+                    </td>
                     <td className="py-3 px-4">
                       <span className="px-2 py-0.5 rounded bg-slate-800 text-[11px]">
                         Подгруппа {enr.subgroup ?? "—"}
@@ -112,8 +132,8 @@ export default async function MembersPage() {
                     <td className="py-3 px-4 font-mono text-slate-300">
                       {enr.user ? (
                         <span className="text-cyan-400 flex items-center gap-1.5">
-                          <CheckCircle2 className="w-3.5 h-3.5" />
-                          @{enr.user.nickname}
+                          <CheckCircle2 className="w-3.5 h-3.5" />@
+                          {enr.user.nickname}
                         </span>
                       ) : (
                         <span className="text-slate-500">—</span>
@@ -129,8 +149,8 @@ export default async function MembersPage() {
         <div className="p-4 rounded-xl border border-slate-800 bg-slate-900/40 flex items-center gap-3 text-xs text-slate-400">
           <Lock className="w-4 h-4 text-slate-500 shrink-0" />
           <span>
-            Официальный поименный список студентов (Enrollment) защищен политикой приватности и
-            доступен только старосте и администраторам группы.
+            Поименный список студентов защищен политикой приватности и доступен
+            только старосте и администраторам группы.
           </span>
         </div>
       )}
@@ -144,7 +164,23 @@ export default async function MembersPage() {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {group.members.map((member) => {
-            const roleNames = member.userRoles.map((ur) => ur.role.name).join(", ");
+            const roleNames = member.userRoles
+              .map((ur) => {
+                const scoped = ur.role.permissions.find((p) =>
+                  p.permission.startsWith("manage_course:"),
+                );
+                if (scoped)
+                  return `Редактор: ${courses.find((c) => `manage_course:${c.id}` === scoped.permission)?.courseDefinition.shortTitle ?? "предмет"}`;
+                return (
+                  (
+                    { Owner: "Староста", Student: "Студент" } as Record<
+                      string,
+                      string
+                    >
+                  )[ur.role.name] ?? ur.role.name
+                );
+              })
+              .join(", ");
             const isOwner = member.isOwner;
 
             return (
@@ -153,7 +189,10 @@ export default async function MembersPage() {
                 className="p-4 rounded-xl border border-slate-800 bg-slate-900/60 hover:border-cyan-500/30 transition-all flex items-start gap-3.5"
               >
                 <img
-                  src={member.user.avatarUrl || "https://api.dicebear.com/7.x/bottts/svg?seed=user"}
+                  src={
+                    member.user.avatarUrl ||
+                    "https://api.dicebear.com/7.x/bottts/svg?seed=user"
+                  }
                   alt={member.user.nickname}
                   className="w-10 h-10 rounded-full bg-slate-800 border border-slate-700 shrink-0"
                 />
@@ -164,16 +203,19 @@ export default async function MembersPage() {
                       {member.user.nickname}
                     </span>
                     {isOwner && (
-                      <Badge variant="default" className="text-[9px] px-1.5 py-0 font-bold">
+                      <Badge
+                        variant="default"
+                        className="text-[9px] px-1.5 py-0 font-bold"
+                      >
                         Староста
                       </Badge>
                     )}
                   </div>
                   <div className="text-xs text-slate-400">
-                    {member.user.bio || "Студент группы 5130901/40102"}
+                    {member.user.bio || "Участник группы"}
                   </div>
                   <div className="text-[11px] text-cyan-400/90 font-mono pt-1">
-                    Роли: {roleNames || (isOwner ? "Owner" : "Student")}
+                    Роли: {roleNames || (isOwner ? "Староста" : "Студент")}
                   </div>
                 </div>
               </div>

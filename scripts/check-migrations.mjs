@@ -24,6 +24,12 @@ run(
   env,
 );
 const fresh = new PrismaClient({ datasourceUrl: env.DATABASE_URL });
+// Compare a fresh install with an independently upgraded isolated DB. The working DB is never migrated by tests.
+const upgradeUrl = new URL(workingUrl);
+upgradeUrl.pathname = "/studentvalue_test_core";
+process.env.TEST_DATABASE_URL = upgradeUrl.href;
+const upgradeEnv = prepareTestDatabase();
+const upgraded = new PrismaClient({ datasourceUrl: upgradeEnv.DATABASE_URL });
 const working = new PrismaClient({ datasourceUrl: workingUrl });
 async function signature(p) {
   const columns = await p.$queryRawUnsafe(
@@ -38,15 +44,22 @@ async function signature(p) {
   return { columns, constraints, enums };
 }
 try {
+  const workingBefore = JSON.stringify(await signature(working));
   assert.equal(
     JSON.stringify(await signature(fresh)),
+    JSON.stringify(await signature(upgraded)),
+    "Isolated PostgreSQL catalogs differ (logical columns, constraints, enum values)",
+  );
+  assert.equal(
     JSON.stringify(await signature(working)),
-    "PostgreSQL catalog differs (logical columns, constraints, enum values)",
+    workingBefore,
+    "Working DB schema changed",
   );
   console.log(
-    "PASS fresh migrations, Prisma schema, and working PostgreSQL catalog (including CHECK validation) match.",
+    "PASS fresh migrations, Prisma schema, and isolated upgraded catalog (including CHECK validation) match; working DB schema unchanged.",
   );
 } finally {
   await fresh.$disconnect();
   await working.$disconnect();
+  await upgraded.$disconnect();
 }

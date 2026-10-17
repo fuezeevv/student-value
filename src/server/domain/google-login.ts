@@ -7,6 +7,7 @@ export function createEnrollmentGrant(
   email: string,
   userId: string | null,
   now = Date.now(),
+  intent?: { groupId: string; owner: boolean },
 ) {
   const normalized = email.trim().toLowerCase();
   if (
@@ -19,7 +20,8 @@ export function createEnrollmentGrant(
   return {
     code: enrollmentId + "." + token,
     stored: JSON.stringify({
-      v: 1,
+      v: intent ? 2 : 1,
+      ...(intent ?? {}),
       enrollmentId,
       hash: hashToken(token),
       recipient: hashToken(normalized),
@@ -34,13 +36,17 @@ export function checkEnrollmentGrant(
   email: string,
   userId: string | null,
   now = Date.now(),
+  intent?: { groupId: string; owner: boolean },
 ) {
   try {
     if (!/^[a-zA-Z0-9_-]{1,80}\.[a-zA-Z0-9_-]{43}$/.test(code) || !stored)
       return false;
     const grant = JSON.parse(stored);
     return (
-      grant.v === 1 &&
+      (grant.v === 1 || grant.v === 2) &&
+      (grant.v === 1
+        ? !intent?.owner
+        : grant.groupId === intent?.groupId && grant.owner === intent?.owner) &&
       grant.enrollmentId === code.split(".")[0] &&
       grant.userId === userId &&
       typeof grant.expires === "number" &&
@@ -77,8 +83,7 @@ export async function completeGoogleLogin(
         },
       });
       let target = existing?.userId;
-      if (existing) {
-        if (invite) denied();
+      if (existing && !invite) {
         const enrollment = await tx.enrollment.findFirst({
           where: {
             groupId,
@@ -105,17 +110,27 @@ export async function completeGoogleLogin(
             enrollment.claimToken,
             identity.email,
             enrollment.userId,
+            Date.now(),
+            { groupId, owner: enrollment.initialOwner },
           )
         )
           return denied();
         if (
           enrollment.userId &&
+          enrollment.userId !== existing?.userId &&
           (await tx.authIdentity.findFirst({
             where: { userId: enrollment.userId, provider: "GOOGLE" },
           }))
         )
           denied();
+        if (
+          existing &&
+          enrollment.userId &&
+          enrollment.userId !== existing.userId
+        )
+          denied();
         target =
+          existing?.userId ??
           enrollment.userId ??
           (
             await tx.user.create({
@@ -138,6 +153,7 @@ export async function completeGoogleLogin(
           data: {
             userId: target,
             claimToken: null,
+            initialOwner: false,
             status:
               enrollment.userId && enrollment.status === "VERIFIED"
                 ? "VERIFIED"
@@ -148,18 +164,19 @@ export async function completeGoogleLogin(
           },
         });
         if (consumed.count !== 1) denied();
-        await tx.authIdentity.create({
-          data: {
-            userId: target,
-            provider: "GOOGLE",
-            providerUserId: identity.sub,
-            email: identity.email,
-          },
-        });
+        if (!existing)
+          await tx.authIdentity.create({
+            data: {
+              userId: target,
+              provider: "GOOGLE",
+              providerUserId: identity.sub,
+              email: identity.email,
+            },
+          });
         await tx.groupMember.upsert({
           where: { groupId_userId: { groupId, userId: target } },
           update: {},
-          create: { groupId, userId: target, isOwner: false },
+          create: { groupId, userId: target, isOwner: enrollment.initialOwner },
         });
         await tx.auditLog.create({
           data: {
@@ -179,4 +196,43 @@ export async function completeGoogleLogin(
     { isolationLevel: "Serializable" },
   );
   return { userId, token, expiresAt };
+}
+
+/** Callback input is untrusted; resolve the group from a real invitation or active membership. */
+export async function resolveGoogleLoginGroup(
+  identity: GoogleIdentity,
+  invite: string,
+) {
+  if (invite) {
+    if (!/^[a-zA-Z0-9_-]{1,80}\.[a-zA-Z0-9_-]{43}$/.test(invite))
+      throw Error("Invalid invitation");
+    const enrollment = await prisma.enrollment.findUniqueOrThrow({
+      where: { id: invite.split(".")[0] },
+    });
+    return enrollment.groupId;
+  }
+  const linked = await prisma.authIdentity.findUniqueOrThrow({
+    where: {
+      provider_providerUserId: {
+        provider: "GOOGLE",
+        providerUserId: identity.sub,
+      },
+    },
+  });
+  const member = await prisma.groupMember.findFirst({
+    where: {
+      userId: linked.userId,
+      group: {
+        enrollments: {
+          some: {
+            userId: linked.userId,
+            status: { in: ["CLAIMED", "VERIFIED"] },
+          },
+        },
+      },
+    },
+    orderBy: { joinedAt: "asc" },
+  });
+  if (!member) throw Error("No active enrollment");
+  return member.groupId;
 }

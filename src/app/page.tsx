@@ -13,10 +13,26 @@ import {
 import { StudyTaskRow } from "@/components/study/StudyTaskRow";
 import { FluidRibbon } from "@/components/study/FluidRibbon";
 import { CreateTaskModal } from "@/components/task/CreateTaskModal";
+import { formatInTimeZone } from "date-fns-tz";
 
 export default async function TodayPage() {
   const user = await requireCurrentUser();
   const { offerings, tasks, now } = await loadStudyWorkspace(user);
+  const day = formatInTimeZone(now, "Europe/Moscow", "yyyy-MM-dd");
+  const dayStart = new Date(`${day}T00:00:00+03:00`);
+  const todayLessons = await prisma.classSession.findMany({
+    where: {
+      status: { in: ["PUBLISHED", "CANCELLED"] },
+      sessionDate: {
+        gte: dayStart,
+        lt: new Date(dayStart.getTime() + 86400000),
+      },
+      courseOffering: { groups: { some: { groupId: user.groupId } } },
+    },
+    include: { courseOffering: { include: { courseDefinition: true } } },
+    orderBy: { sessionDate: "asc" },
+    take: 10,
+  });
   const [announcements, changes] = await Promise.all([
     prisma.announcement.findMany({
       where: { groupId: user.groupId, status: "PUBLISHED" },
@@ -25,7 +41,11 @@ export default async function TodayPage() {
       include: { sourceReference: { include: { source: true } } },
     }),
     prisma.notification.findMany({
-      where: { userId: user.id, isRead: false },
+      where: {
+        userId: user.id,
+        isRead: false,
+        OR: [{ groupId: user.groupId }, { groupId: null }],
+      },
       orderBy: { createdAt: "desc" },
       take: 3,
     }),
@@ -68,10 +88,11 @@ export default async function TodayPage() {
           <p className="eyebrow">{date}</p>
           <h1 className="page-title">Сегодня</h1>
           <p className="page-intro">
-            Ваши работы, ближайшие сроки и новости группы.
+            {user.groupName ?? "Ваша группа"} · работы, ближайшие сроки и
+            новости.
           </p>
         </div>
-        {hasPermission(user, "manage_tasks") && (
+        {hasPermission(user, "manage_tasks") && offerings.length > 0 && (
           <div className="heading-action">
             <CreateTaskModal
               courses={offerings.map((o) => ({
@@ -83,6 +104,57 @@ export default async function TodayPage() {
           </div>
         )}
       </div>
+      <section className="mb-8 border-b border-slate-700 pb-6">
+        <div className="section-heading">
+          <h2>Сегодня на занятиях</h2>
+          <Link className="text-link" href="/lessons">
+            Занятия и записи ↗
+          </Link>
+        </div>
+        {todayLessons.length ? (
+          <div className="divide-y divide-slate-800">
+            {todayLessons.map((lesson) => (
+              <Link
+                key={lesson.id}
+                className="flex gap-4 py-3 items-baseline text-sm"
+                href={`/lessons/${lesson.id}`}
+              >
+                <span className="font-mono text-blue-200 shrink-0">
+                  {lesson.status === "CANCELLED"
+                    ? "Отменено"
+                    : lesson.isTimeKnown
+                      ? formatInTimeZone(
+                          lesson.sessionDate,
+                          "Europe/Moscow",
+                          "HH:mm",
+                        )
+                      : "Время уточняется"}
+                </span>
+                <span className="min-w-0">
+                  <strong className="font-medium text-slate-200">
+                    {lesson.courseOffering.courseDefinition.shortTitle}
+                  </strong>
+                  <span className="block text-slate-400 mt-1">
+                    {lesson.topic ?? "Занятие"}
+                    {lesson.room ? ` · ${lesson.room}` : ""}
+                  </span>
+                </span>
+                <span className="ml-auto">↗</span>
+              </Link>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-slate-400">
+            Расписание на сегодня ещё не добавлено. Это не означает, что занятий
+            нет.
+          </p>
+        )}
+        {hasPermission(user, "manage_courses") && offerings.length === 0 && (
+          <Link className="action-primary mt-5" href="/group">
+            Добавить первый предмет
+          </Link>
+        )}
+      </section>
       <div className="daily-grid">
         <section className="daily-focus" aria-label="На чём сосредоточиться">
           <div className="focus-sheet">

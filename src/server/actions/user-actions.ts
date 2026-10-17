@@ -15,7 +15,7 @@ export async function markNotificationReadAction(notificationId: string) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
 
-  await markNotificationRead(notificationId, user.id);
+  await markNotificationRead(notificationId, user.id, user.groupId);
   revalidatePath("/notifications");
   revalidatePath("/");
   return { success: true };
@@ -25,7 +25,7 @@ export async function markAllNotificationsReadAction() {
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
 
-  await markAllNotificationsRead(user.id);
+  await markAllNotificationsRead(user.id, user.groupId);
   revalidatePath("/notifications");
   revalidatePath("/");
   return { success: true };
@@ -93,6 +93,13 @@ export async function logoutUserAction() {
       where: { tokenHash: createHash("sha256").update(token).digest("hex") },
     });
   cookieStore.delete("study_dev_user_id");
+  cookieStore.set("__Host-sv-group", "", {
+    path: "/",
+    secure: true,
+    httpOnly: true,
+    sameSite: "lax",
+    maxAge: 0,
+  });
   cookieStore.set("__Host-session", "", {
     path: "/",
     secure: true,

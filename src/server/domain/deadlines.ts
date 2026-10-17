@@ -2,8 +2,13 @@ import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/db/prisma";
 import type { SessionUser } from "@/lib/auth/session";
-import { requireCoursePermission, audienceMemberIds } from "./access";
+import {
+  requireCoursePermission,
+  requireTaskAudience,
+  audienceMemberIds,
+} from "./access";
 import { moveDeadlineDate, effectiveDeadline } from "./deadline-date";
+import type { Prisma, Deadline } from "@prisma/client";
 
 export async function rescheduleDeadline(
   user: SessionUser,
@@ -11,6 +16,10 @@ export async function rescheduleDeadline(
   newDay: string,
   newType?: "HARD" | "SOFT",
   sourceNote?: string,
+  onApplied?: (
+    tx: Prisma.TransactionClient,
+    deadline: Deadline,
+  ) => Promise<void>,
 ) {
   const existing = await prisma.deadline.findUniqueOrThrow({
     where: { id: deadlineId },
@@ -21,6 +30,7 @@ export async function rescheduleDeadline(
     existing.courseOfferingId,
     "manage_deadlines",
   );
+  await requireTaskAudience(user, existing.taskId);
   if (existing.status !== "ACTIVE")
     throw new Error("Срок уже изменён. Обновите страницу");
   const date = moveDeadlineDate(existing, newDay);
@@ -30,7 +40,12 @@ export async function rescheduleDeadline(
       effectiveDeadline(existing.date, existing.isTimeStrict).getTime() &&
     type === existing.type
   )
-    return existing;
+    return onApplied
+      ? prisma.$transaction(async (tx) => {
+          await onApplied(tx, existing);
+          return existing;
+        })
+      : existing;
   const note = z
     .string()
     .trim()
@@ -101,12 +116,14 @@ export async function rescheduleDeadline(
       await tx.notification.createMany({
         data: recipients.map((userId) => ({
           userId,
+          groupId: user.groupId,
           type: "DEADLINE_CHANGE",
           title: "Изменился срок сдачи",
           message: existing.task.title,
           link: `/tasks/${existing.taskId}`,
         })),
       });
+    if (onApplied) await onApplied(tx, deadline);
     return deadline;
   });
 }

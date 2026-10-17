@@ -13,6 +13,7 @@ export default async function TranscriptsPage({
   const items = await prisma.transcript.findMany({
     where: {
       session: {
+        status: { in: ["PUBLISHED", "CANCELLED"] },
         courseOffering: {
           groups: { some: { groupId: user.groupId } },
           ...(course ? { courseDefinition: { code: course } } : {}),

@@ -133,14 +133,30 @@ enum SessionType {
   OTHER
 }
 
+enum ProposalKind {
+  NOTE
+  MATERIAL
+  TASK_REQUIREMENT
+  DEADLINE
+  LESSON_SUMMARY
+}
+
+enum ProposalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  NEEDS_CLARIFICATION
+}
+
 model User {
-  id            String   @id @default(uuid())
-  nickname      String   @unique
-  avatarUrl     String?
-  bio           String?
-  isSystemAdmin Boolean  @default(false)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id              String   @id @default(uuid())
+  nickname        String   @unique
+  avatarUrl       String?
+  bio             String?
+  isSystemAdmin   Boolean  @default(false)
+  isPlatformOwner Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   identities          AuthIdentity[]
   sessions            Session[]
@@ -161,6 +177,8 @@ model User {
   gamificationProfile UserGamificationProfile?
   achievements        UserAchievement[]
   reviewedSuggestions AiSuggestion[]
+  proposals           ChangeProposal[]         @relation("ProposalAuthor")
+  reviews             ChangeProposal[]         @relation("ProposalReviewer")
 }
 
 model AuthIdentity {
@@ -208,6 +226,9 @@ model StudyGroup {
   sources       Source[]
   audiences     TaskAudience[]
   roles         Role[]
+  proposals     ChangeProposal[]
+  sharedBriefs  SharedBrief[]
+  notifications Notification[]
 }
 
 model Enrollment {
@@ -221,6 +242,7 @@ model Enrollment {
   claimToken      String?          @unique
   verifiedById    String?
   verifiedAt      DateTime?
+  initialOwner    Boolean          @default(false)
   createdAt       DateTime         @default(now())
 
   group      StudyGroup          @relation(fields: [groupId], references: [id], onDelete: Cascade)
@@ -290,12 +312,12 @@ model UserGroupRole {
 }
 
 model Semester {
-  id        String   @id @default(uuid())
+  id        String    @id @default(uuid())
   name      String
-  number    Int
-  startDate DateTime
-  endDate   DateTime
-  isCurrent Boolean  @default(true)
+  number    Int?
+  startDate DateTime?
+  endDate   DateTime?
+  isCurrent Boolean   @default(true)
 
   offerings CourseOffering[]
 }
@@ -342,6 +364,7 @@ model CourseOffering {
   materials        CourseMaterial[]
   sessions         ClassSession[]
   announcements    Announcement[]
+  proposals        ChangeProposal[]
 
   @@index([courseDefinitionId])
   @@index([semesterId])
@@ -349,7 +372,7 @@ model CourseOffering {
 
 model CourseOfferingGroup {
   id               String @id @default(uuid())
-  courseOfferingId String
+  courseOfferingId String @unique
   groupId          String
 
   courseOffering CourseOffering @relation(fields: [courseOfferingId], references: [id], onDelete: Cascade)
@@ -419,6 +442,7 @@ model SourceReference {
   announcements      Announcement[]
   verifiedProgress   StudentTaskProgress[] @relation("ProgressEvidence")
   variantAssignments VariantAssignment[]
+  requirements       TaskRequirement[]
 
   @@index([sourceId])
   @@index([entityType, entityId])
@@ -453,6 +477,8 @@ model Task {
   dependencies TaskDependency[]      @relation("TaskRequires")
   dependentOn  TaskDependency[]      @relation("TaskIsRequiredBy")
   xpEvents     XpEvent[]
+  sessions     SessionTask[]
+  requirements TaskRequirement[]
 
   @@index([courseOfferingId])
   @@index([status])
@@ -597,11 +623,13 @@ model CourseMaterial {
   type             MaterialType
   url              String
   description      String?
+  sourceNote       String?
   fileSize         BigInt?
   createdAt        DateTime     @default(now())
 
-  courseOffering CourseOffering @relation(fields: [courseOfferingId], references: [id], onDelete: Cascade)
+  courseOffering CourseOffering    @relation(fields: [courseOfferingId], references: [id], onDelete: Cascade)
   tasks          TaskMaterial[]
+  sessions       SessionMaterial[]
 
   @@index([courseOfferingId])
 }
@@ -626,11 +654,22 @@ model ClassSession {
   room             String?
   notes            String?
   teacherId        String?
+  endsAt           DateTime?
+  isTimeKnown      Boolean     @default(false)
+  summary          String?
+  taughtBy         String?
+  recordingUrl     String?
+  sourceNote       String?
+  status           TaskStatus  @default(DRAFT)
+  version          Int         @default(0)
+  updatedAt        DateTime    @default(now()) @updatedAt
 
-  courseOffering CourseOffering @relation(fields: [courseOfferingId], references: [id], onDelete: Cascade)
-  teacher        Teacher?       @relation(fields: [teacherId], references: [id], onDelete: SetNull)
+  courseOffering CourseOffering    @relation(fields: [courseOfferingId], references: [id], onDelete: Cascade)
+  teacher        Teacher?          @relation(fields: [teacherId], references: [id], onDelete: SetNull)
   transcripts    Transcript[]
   sources        Source[]
+  tasks          SessionTask[]
+  materials      SessionMaterial[]
 
   @@index([courseOfferingId])
 }
@@ -643,8 +682,9 @@ model Transcript {
   recordingPart  Int      @default(1)
   createdAt      DateTime @default(now())
 
-  session ClassSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  sources Source[]
+  session   ClassSession     @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  sources   Source[]
+  proposals ChangeProposal[]
 
   @@index([sessionId])
 }
@@ -706,6 +746,7 @@ model SecurityAccessLog {
 model Notification {
   id        String   @id @default(uuid())
   userId    String
+  groupId   String?
   title     String
   message   String
   type      String
@@ -713,10 +754,97 @@ model Notification {
   isRead    Boolean  @default(false)
   createdAt DateTime @default(now())
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user  User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  group StudyGroup? @relation(fields: [groupId], references: [id], onDelete: Cascade)
 
   @@index([userId, isRead])
   @@index([userId, createdAt])
+}
+
+model SessionTask {
+  id        String       @id @default(uuid())
+  sessionId String
+  taskId    String
+  session   ClassSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  task      Task         @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, taskId])
+}
+
+model SessionMaterial {
+  id         String         @id @default(uuid())
+  sessionId  String
+  materialId String
+  session    ClassSession   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  material   CourseMaterial @relation(fields: [materialId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, materialId])
+}
+
+model TaskRequirement {
+  id                String          @id @default(uuid())
+  taskId            String
+  content           String
+  sourceReferenceId String
+  createdAt         DateTime        @default(now())
+  task              Task            @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  sourceReference   SourceReference @relation(fields: [sourceReferenceId], references: [id])
+
+  @@index([taskId])
+}
+
+model ChangeProposal {
+  id               String         @id @default(uuid())
+  groupId          String
+  courseOfferingId String
+  authorId         String
+  kind             ProposalKind
+  status           ProposalStatus @default(PENDING)
+  title            String
+  content          String
+  sourceNote       String
+  sourceUrl        String?
+  taskId           String?
+  sessionId        String?
+  deadlineId       String?
+  proposedDay      String?
+  sharedBriefId    String?
+  reviewedById     String?
+  reviewNote       String?
+  reviewedAt       DateTime?
+  appliedEntityId  String?
+  appliedKind      ProposalKind?
+  transcriptId     String?
+  quoteStart       Int?
+  quoteEnd         Int?
+  lessonVersion    Int?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  group            StudyGroup     @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  courseOffering   CourseOffering @relation(fields: [courseOfferingId], references: [id], onDelete: Cascade)
+  author           User           @relation("ProposalAuthor", fields: [authorId], references: [id])
+  reviewer         User?          @relation("ProposalReviewer", fields: [reviewedById], references: [id])
+  transcript       Transcript?    @relation(fields: [transcriptId], references: [id])
+  sharedBrief      SharedBrief?   @relation(fields: [sharedBriefId], references: [id])
+
+  @@unique([authorId, transcriptId, quoteStart, quoteEnd])
+  @@index([groupId, status, createdAt])
+}
+
+model SharedBrief {
+  id         String           @id @default(uuid())
+  groupId    String
+  subject    String
+  title      String
+  content    String
+  sourceNote String
+  sourceUrl  String?
+  createdAt  DateTime         @default(now())
+  archivedAt DateTime?
+  group      StudyGroup       @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  proposals  ChangeProposal[]
+
+  @@index([createdAt])
 }
 
 model XpRule {

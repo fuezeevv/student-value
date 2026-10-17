@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db/prisma";
 import { requireCurrentUser } from "@/lib/auth/session";
 import { hasPermission } from "@/lib/permissions/checker";
 import { AdminClient, AdminData } from "./AdminClient";
+import { taskVisibilityWhere } from "@/server/domain/access";
 import { Shield } from "lucide-react";
 
 export default async function AdminPage() {
@@ -85,10 +86,7 @@ export default async function AdminPage() {
       ? prisma.deadline.findMany({
           where: {
             status: "ACTIVE",
-            task: {
-              status: "PUBLISHED",
-              courseOffering: { groups: { some: { groupId: user.groupId } } },
-            },
+            task: await taskVisibilityWhere(user),
           },
           include: {
             task: {

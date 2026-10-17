@@ -8,7 +8,10 @@ export default async function NotificationsPage() {
 
   const dbNotifs = user
     ? await prisma.notification.findMany({
-        where: { userId: user.id },
+        where: {
+          userId: user.id,
+          OR: [{ groupId: user.groupId }, { groupId: null }],
+        },
         orderBy: { createdAt: "desc" },
         take: 30,
       })

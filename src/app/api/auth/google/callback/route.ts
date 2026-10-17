@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
-  APP_GROUP_CODE,
   GOOGLE_FLOW_COOKIE,
   SESSION_COOKIE,
   exchangeGoogleCode,
@@ -8,8 +7,10 @@ import {
   readGoogleFlow,
   secureCookie,
 } from "@/lib/auth/google";
-import { completeGoogleLogin } from "@/server/domain/google-login";
-import { prisma } from "@/lib/db/prisma";
+import {
+  completeGoogleLogin,
+  resolveGoogleLoginGroup,
+} from "@/server/domain/google-login";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export async function GET(request: NextRequest) {
@@ -38,12 +39,12 @@ export async function GET(request: NextRequest) {
       process.env.NEXT_SERVER_ACTIONS_ENCRYPTION_KEY ?? "",
     );
     const identity = await exchangeGoogleCode(code, flow, config);
-    const group = await prisma.studyGroup.findUnique({
-      where: { code: APP_GROUP_CODE },
-      select: { id: true },
+    const groupId = await resolveGoogleLoginGroup(identity, flow.invite);
+    const session = await completeGoogleLogin(identity, groupId, flow.invite);
+    response.cookies.set("__Host-sv-group", groupId, {
+      ...secureCookie,
+      maxAge: 14 * 86400,
     });
-    if (!group) throw Error("Enrollment unavailable");
-    const session = await completeGoogleLogin(identity, group.id, flow.invite);
     response.headers.set("Location", new URL("/", process.env.APP_ORIGIN).href);
     response.cookies.set(SESSION_COOKIE, session.token, {
       ...secureCookie,

@@ -19,7 +19,11 @@ export default async function RootLayout({
   const user = await getCurrentUser();
   const unreadCount = user
     ? await prisma.notification.count({
-        where: { userId: user.id, isRead: false },
+        where: {
+          userId: user.id,
+          isRead: false,
+          OR: [{ groupId: user.groupId }, { groupId: null }],
+        },
       })
     : 0;
 

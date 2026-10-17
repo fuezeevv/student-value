@@ -23,7 +23,6 @@ export function hasPermission(
   groupId = user?.groupId,
 ): boolean {
   if (!user) return false;
-  if (user.isSystemAdmin) return true;
   if (!groupId || user.groupId !== groupId) return false;
   if (user.isOwner) return true;
   return user.permissions.includes(permission);

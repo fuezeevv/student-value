@@ -14,6 +14,9 @@ import { assignedVariants } from "@/server/domain/variants";
 import { calculateDeadlineStatus } from "@/server/services/deadline-service";
 import { CreateTaskModal } from "@/components/task/CreateTaskModal";
 import { formatTaskStatus } from "@/lib/utils/formatters";
+import { formatInTimeZone } from "date-fns-tz";
+import { canEditCourse } from "@/server/domain/lessons";
+import { MaterialForm } from "@/components/workspace/LessonForm";
 
 export default async function CoursePage({
   params,
@@ -29,6 +32,11 @@ export default async function CoursePage({
       semester: true,
       teachers: { include: { teacher: true } },
       materials: true,
+      sessions: {
+        where: { status: { in: ["PUBLISHED", "CANCELLED"] } },
+        orderBy: { sessionDate: "desc" },
+        take: 8,
+      },
       tasks: {
         where: await taskVisibilityWhere(user),
         orderBy: [{ number: "asc" }, { createdAt: "asc" }],
@@ -104,6 +112,7 @@ export default async function CoursePage({
           <span className="text-slate-400 ml-1">{offering.tasks.length}</span>
         </a>
         <a href="#materials">Материалы</a>
+        <a href="#lessons">Занятия и записи</a>
         <a href="#about">О предмете</a>
       </nav>
       <div className="workspace-grid">
@@ -193,6 +202,58 @@ export default async function CoursePage({
               />
             </div>
           )}
+          <section id="lessons" className="mt-10">
+            <div className="section-heading">
+              <h2>Занятия и записи</h2>
+              <Link className="text-link" href={`/lessons?course=${id}`}>
+                Все занятия ↗
+              </Link>
+            </div>
+            {offering.sessions.length ? (
+              offering.sessions.map((lesson) => (
+                <Link
+                  className="study-row"
+                  href={`/lessons/${lesson.id}`}
+                  key={lesson.id}
+                >
+                  <div className="study-row-main">
+                    <p className="study-row-title">
+                      {lesson.topic ?? "Занятие"}
+                    </p>
+                    <p className="study-row-meta">
+                      {formatInTimeZone(
+                        lesson.sessionDate,
+                        "Europe/Moscow",
+                        "dd.MM.yyyy",
+                      )}
+                      {lesson.recordingUrl ? " · Есть запись" : ""}
+                      {lesson.status === "CANCELLED" ? " · Отменено" : ""}
+                    </p>
+                  </div>
+                  <span>↗</span>
+                </Link>
+              ))
+            ) : (
+              <p className="quiet-empty">
+                Занятия ещё не добавлены. Здесь появятся темы, записи, материалы
+                и текст, связанные с конкретной датой.
+              </p>
+            )}
+            {canEditCourse(user, id) && (
+              <Link
+                className="text-link mt-5"
+                href={`/lessons/new?course=${id}`}
+              >
+                Добавить занятие ↗
+              </Link>
+            )}
+            <Link
+              className="text-link mt-5 block"
+              href={`/proposals/new?course=${id}`}
+            >
+              Предложить уточнение по предмету ↗
+            </Link>
+          </section>
         </section>
         <aside className="workspace-aside">
           <section>
@@ -243,6 +304,16 @@ export default async function CoursePage({
               Стенограммы занятий
               <ArrowUpRight size={15} />
             </Link>
+            {canEditCourse(user, id, "manage_materials") && (
+              <details className="mt-5">
+                <summary className="text-link cursor-pointer min-h-11">
+                  Добавить материал
+                </summary>
+                <div className="mt-4">
+                  <MaterialForm courseId={id} />
+                </div>
+              </details>
+            )}
           </section>
           <section id="about">
             <h2>О предмете</h2>

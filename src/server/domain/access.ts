@@ -74,12 +74,18 @@ export async function requireCoursePermission(
     (g) => g.groupId === user!.groupId,
   )?.groupId;
   if (!groupId) throw new ForbiddenError("Курс недоступен в выбранной группе");
+  if (course!.groups.length !== 1)
+    throw new ForbiddenError(
+      "Общий курс требует отдельного учебного пространства группы",
+    );
   if (!hasPermission(user, permission, groupId)) {
     const contentPermission = [
       "manage_tasks",
       "manage_deadlines",
       "manage_materials",
       "manage_courses",
+      "manage_sessions",
+      "review_proposals",
     ].includes(permission);
     if (!(
       contentPermission &&

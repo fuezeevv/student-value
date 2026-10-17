@@ -25,7 +25,12 @@ async function fingerprint() {
       "userAchievement",
       "user",
       "enrollment",
-    ].map((name) => working[name].findMany({ orderBy: { id: "asc" } })),
+    ].map((name) => {
+      const table = name[0].toUpperCase() + name.slice(1);
+      return working.$queryRawUnsafe(
+        `SELECT to_jsonb(t) AS row FROM "${table}" t ORDER BY id`,
+      );
+    }),
   );
   return createHash("sha256").update(JSON.stringify(rows)).digest("hex");
 }
@@ -115,6 +120,7 @@ try {
       courseOfferingId: "test-course",
       sessionDate: new Date("2026-10-16T10:00:00+03:00"),
       type: "LECTURE",
+      status: "PUBLISHED",
       topic: "[TEST] Безопасность транскрипции",
     },
   });
@@ -275,6 +281,7 @@ try {
     "transcript HTML and regex characters are rendered as text",
     async () => {
       await go("/transcripts");
+      await clickText("[TEST] Безопасность транскрипции");
       await page.type("input", "img");
       assert.equal(
         await page.evaluate(() => window.__transcriptExecuted),
@@ -491,6 +498,264 @@ try {
       await setUser("user-dev-student");
       await go(`/tasks/${task.id}`);
       assert((await body()).includes(title));
+    },
+  );
+  const learningTitle = `[TEST] Контекст занятия ${randomUUID()}`;
+  let lessonId;
+  await scenario(
+    "headman adds a sourced lesson, recording and transcript through the phone form",
+    async () => {
+      await setUser("user-dev-owner");
+      await page.setViewport({ width: 390, height: 844 });
+      await go("/lessons/new?course=test-course");
+      await setInput('input[name="topic"]', learningTitle);
+      await setInput('input[name="day"]', "2026-10-17");
+      await setInput(
+        'textarea[name="summary"]',
+        "[TEST] Учебный контекст и источник записи",
+      );
+      await setInput(
+        'textarea[name="notes"]',
+        "[TEST] Публичное пояснение для группы",
+      );
+      await page.click('details:has(input[name="recordingUrl"]) summary');
+      await setInput(
+        'input[name="recordingUrl"]',
+        "https://drive.google.com/file/d/isolated-test/view",
+      );
+      await setInput(
+        'textarea[name="transcriptText"]',
+        "[TEST] В отчёте обязательно привести расчёт и пояснение.\nТочный срок пока не назван.",
+      );
+      await setInput(
+        'input[name="sourceNote"]',
+        "[TEST] Точная запись изолированного занятия",
+      );
+      await clickText("Сохранить занятие");
+      await page.waitForFunction(() =>
+        document.body.innerText.includes("Занятие сохранено"),
+      );
+      const lesson = await test.classSession.findFirstOrThrow({
+        where: { topic: learningTitle },
+      });
+      lessonId = lesson.id;
+      assert.equal(lesson.isTimeKnown, false);
+      await go(`/lessons/${lessonId}`);
+      assert(
+        (await body()).toLocaleLowerCase("ru").includes("время не указано"),
+      );
+      assert.equal(
+        await page.$eval(
+          'a[href*="drive.google.com/file/d/isolated-test"]',
+          (el) => el.rel,
+        ),
+        "noopener noreferrer",
+      );
+      await page.screenshot({
+        path: ".test-work/lesson-mobile.png",
+        fullPage: true,
+      });
+    },
+  );
+  const proposalTitle = `[TEST] Требование ${randomUUID()}`;
+  let proposalId;
+  await scenario(
+    "student proposes a requirement without publishing it and headman applies the reviewed result",
+    async () => {
+      await setUser("user-dev-student");
+      await go("/proposals/new?course=test-course&task=task-otu-lab1");
+      await setInput('input[name="title"]', proposalTitle);
+      await setInput(
+        'textarea[name="content"]',
+        `[TEST] В отчёте обязательно привести пояснение к расчёту. ${proposalTitle}`,
+      );
+      await setInput(
+        'textarea[name="sourceNote"]',
+        "[TEST] Уточнение преподавателя на изолированном занятии.",
+      );
+      await clickText("Отправить на проверку");
+      await page.waitForFunction(() =>
+        document.body.innerText.includes("Отправлено на проверку"),
+      );
+      const proposal = await test.changeProposal.findFirstOrThrow({
+        where: { title: proposalTitle },
+      });
+      proposalId = proposal.id;
+      assert.equal(proposal.status, "PENDING");
+      assert.equal(
+        await test.taskRequirement.count({
+          where: { taskId: "task-otu-lab1", content: proposal.content },
+        }),
+        0,
+      );
+      await go("/proposals");
+      assert(!(await body()).includes("Рассмотреть предложение"));
+      await setUser("user-dev-owner");
+      await go("/proposals");
+      const article = await page.$(`article:has(input[value="${proposalId}"])`);
+      assert(article);
+      await article.$eval("details:has(form) > summary", (el) => el.click());
+      await setInput(
+        `article:has(input[value="${proposalId}"]) textarea[name="reviewNote"]`,
+        "[TEST] Проверено по точной записи преподавателя.",
+      );
+      await article.$eval("form button", (el) => el.click());
+      await page.waitForFunction(() =>
+        document.body.innerText.includes("Решение сохранено"),
+      );
+      assert.equal(
+        (
+          await test.changeProposal.findUniqueOrThrow({
+            where: { id: proposalId },
+          })
+        ).status,
+        "APPROVED",
+      );
+      await setUser("user-dev-student");
+      await go("/tasks/task-otu-lab1");
+      assert((await body()).includes(proposal.content));
+    },
+  );
+  await scenario(
+    "lesson, search and proposal context stay readable on desktop and phone",
+    async () => {
+      for (const width of [360, 390, 1440]) {
+        await page.setViewport({ width, height: 900 });
+        for (const route of [
+          "/group",
+          "/lessons",
+          `/lessons/${lessonId}`,
+          "/proposals",
+          "/proposals/new?course=test-course",
+          "/exchange",
+          "/search?q=пояснение",
+        ]) {
+          await go(route);
+          assert(
+            await page.evaluate(
+              () => document.documentElement.scrollWidth <= innerWidth,
+            ),
+            `${route} overflows ${width}`,
+          );
+          assert.equal(
+            await page.$$eval("main h1", (nodes) => nodes.length),
+            1,
+          );
+        }
+      }
+      await go("/search?q=пояснение");
+      assert((await body()).includes(learningTitle));
+      await page.setViewport({ width: 1440, height: 1000 });
+      await go(`/lessons/${lessonId}`);
+      await page.screenshot({
+        path: ".test-work/lesson-desktop.png",
+        fullPage: true,
+      });
+    },
+  );
+  await scenario(
+    "platform owner can prepare a real group invitation without entering its academic space",
+    async () => {
+      await test.user.update({
+        where: { id: "user-dev-owner" },
+        data: { isPlatformOwner: true },
+      });
+      await setUser("user-dev-owner");
+      await go("/group");
+      const form = 'form:has(input[name="headmanName"])';
+      await setInput(`${form} input[name="code"]`, "TEST-UI-" + randomUUID());
+      await setInput(
+        `${form} input[name="name"]`,
+        "[TEST] Новая группа через интерфейс",
+      );
+      await setInput(
+        `${form} input[name="headmanName"]`,
+        "[TEST] Другой староста",
+      );
+      await setInput(
+        `${form} input[name="headmanEmail"]`,
+        "headman-ui@example.invalid",
+      );
+      await page.$eval(`${form} button`, (el) => el.click());
+      await page.waitForSelector(
+        'textarea[aria-label="Персональный код приглашения"]',
+      );
+      const code = await page.$eval(
+        'textarea[aria-label="Персональный код приглашения"]',
+        (el) => el.value,
+      );
+      const enrollment = await test.enrollment.findUniqueOrThrow({
+        where: { id: code.split(".")[0] },
+      });
+      assert.equal(enrollment.initialOwner, true);
+      assert.equal(enrollment.userId, null);
+      assert.equal(
+        await test.courseOfferingGroup.count({
+          where: { groupId: enrollment.groupId },
+        }),
+        0,
+      );
+      assert.equal(
+        await test.groupMember.count({
+          where: { groupId: enrollment.groupId },
+        }),
+        0,
+      );
+      await page.setViewport({ width: 390, height: 844 });
+      await page.screenshot({
+        path: ".test-work/group-mobile.png",
+        fullPage: true,
+      });
+    },
+  );
+  await scenario(
+    "group switch changes scope and does not carry ownership to another group",
+    async () => {
+      await test.groupMember.upsert({
+        where: {
+          groupId_userId: {
+            groupId: "test-other-group",
+            userId: "user-dev-owner",
+          },
+        },
+        update: { isOwner: false },
+        create: { groupId: "test-other-group", userId: "user-dev-owner" },
+      });
+      await test.enrollment.upsert({
+        where: {
+          groupId_userId: {
+            groupId: "test-other-group",
+            userId: "user-dev-owner",
+          },
+        },
+        update: { status: "CLAIMED" },
+        create: {
+          groupId: "test-other-group",
+          userId: "user-dev-owner",
+          fullName: "[TEST] Existing identity second group",
+          status: "CLAIMED",
+        },
+      });
+      await go("/");
+      await page.click('button[aria-label="Открыть меню"]');
+      await page.select(
+        'select[aria-label="Текущая группа"]',
+        "test-other-group",
+      );
+      await page.waitForFunction(() =>
+        document
+          .querySelector("main")
+          ?.innerText.includes("Другая тестовая группа"),
+      );
+      assert.equal((await go(`/lessons/${lessonId}`)).status(), 404);
+      await go("/group");
+      assert(!(await body()).includes("Пригласить студента"));
+      assert(!(await body()).includes("Делегировать предмет"));
+      await page.setCookie({
+        name: "sv_group",
+        value: "test-group",
+        url: base,
+      });
     },
   );
   assert.deepEqual(errors, []);

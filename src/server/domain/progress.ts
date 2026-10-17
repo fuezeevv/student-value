@@ -203,6 +203,7 @@ export async function verifyProgress(
       data: {
         userId: targetUserId,
         type: "PROGRESS_VERIFIED",
+        groupId: user.groupId,
         title: accept
           ? "Подтверждение результата"
           : "Работа требует исправлений",
