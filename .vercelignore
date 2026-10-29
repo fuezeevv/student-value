@@ -25,3 +25,9 @@ scripts/visual-*
 scripts/take-screenshots.mjs
 scripts/cloud-cli.mjs
 scripts/production-migrate.mjs
+Batukaev*
+*.docx
+*.py
+fig*.png
+variant_*.txt
+assets/
