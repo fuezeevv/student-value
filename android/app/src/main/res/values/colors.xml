@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="navy_background">#0b1222</color>
+    <color name="navy_surface">#101c30</color>
+    <color name="navy_card">#142038</color>
+    <color name="blue_primary">#326cff</color>
+    <color name="blue_accent">#81b5ff</color>
+    <color name="text_primary">#edf2fb</color>
+    <color name="text_secondary">#9bacc5</color>
+    <color name="border_subtle">#26334a</color>
+</resources>

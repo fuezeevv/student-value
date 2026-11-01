@@ -168,6 +168,17 @@ export function Navbar({
                   <ArrowUpRight size={15} />
                 </Link>
               ))}
+              <a
+                href="/studentvalue1984.apk"
+                download
+                onClick={() => setOpen(false)}
+                className="flex justify-between items-center text-xs text-blue-300 py-2.5 mt-1 border-t border-white/10 hover:text-white transition-colors"
+              >
+                <span>Приложение для Android</span>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-blue-500/15 border border-blue-400/20">
+                  .apk
+                </span>
+              </a>
               {isAdmin && (
                 <Link
                   href="/admin"

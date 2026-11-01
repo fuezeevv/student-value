@@ -126,9 +126,11 @@ export default async function DeadlinesPage({
                   отправлена, отметьте это в её статусе.
                 </p>
               )}
-              {section.items.map((task) => (
-                <StudyTaskRow key={task.id} task={task} />
-              ))}
+              <div className="space-y-2.5 mt-3">
+                {section.items.map((task) => (
+                  <StudyTaskRow key={task.id} task={task} />
+                ))}
+              </div>
             </section>
           ),
       )}

@@ -112,14 +112,20 @@ export default async function TodayPage() {
           </Link>
         </div>
         {todayLessons.length ? (
-          <div className="divide-y divide-slate-800">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
             {todayLessons.map((lesson) => (
               <Link
                 key={lesson.id}
-                className="flex gap-4 py-3 items-baseline text-sm"
+                className="group p-4 rounded-2xl bg-[#111c30]/55 hover:bg-[#15243e]/85 border border-white/[0.08] hover:border-blue-400/30 transition-all flex items-center gap-3.5 shadow-sm hover:shadow-md hover:-translate-y-0.5"
                 href={`/lessons/${lesson.id}`}
               >
-                <span className="font-mono text-blue-200 shrink-0">
+                <span
+                  className={`px-2.5 py-1.5 rounded-xl font-mono text-xs font-semibold tracking-wider shrink-0 border ${
+                    lesson.status === "CANCELLED"
+                      ? "bg-rose-500/15 border-rose-500/30 text-rose-300"
+                      : "bg-blue-500/10 border-blue-400/25 text-blue-300"
+                  }`}
+                >
                   {lesson.status === "CANCELLED"
                     ? "Отменено"
                     : lesson.isTimeKnown
@@ -128,23 +134,26 @@ export default async function TodayPage() {
                           "Europe/Moscow",
                           "HH:mm",
                         )
-                      : "Время уточняется"}
+                      : "Время ?"}
                 </span>
-                <span className="min-w-0">
-                  <strong className="font-medium text-slate-200">
+                <span className="min-w-0 flex-1">
+                  <strong className="font-semibold text-slate-100 text-sm block group-hover:text-blue-200 transition-colors truncate">
                     {lesson.courseOffering.courseDefinition.shortTitle}
                   </strong>
-                  <span className="block text-slate-400 mt-1">
+                  <span className="block text-xs text-slate-400 mt-0.5 truncate">
                     {lesson.topic ?? "Занятие"}
-                    {lesson.room ? ` · ${lesson.room}` : ""}
+                    {lesson.room ? ` · ауд. ${lesson.room}` : ""}
                   </span>
                 </span>
-                <span className="ml-auto">↗</span>
+                <ArrowUpRight
+                  size={16}
+                  className="shrink-0 text-slate-500 group-hover:text-blue-300 transition-colors ml-auto"
+                />
               </Link>
             ))}
           </div>
         ) : (
-          <p className="text-sm text-slate-400">
+          <p className="text-sm text-slate-400 py-3">
             Расписание на сегодня ещё не добавлено. Это не означает, что занятий
             нет.
           </p>
@@ -259,7 +268,7 @@ export default async function TodayPage() {
             </Link>
           </div>
           {otherActive.length > 0 && (
-            <div className="mt-6">
+            <div className="space-y-2.5 mt-6">
               {otherActive.slice(0, 2).map((task) => (
                 <StudyTaskRow key={task.id} task={task} showDate={false} />
               ))}
@@ -277,7 +286,7 @@ export default async function TodayPage() {
             </Link>
           </div>
           {upcoming.length ? (
-            <>
+            <div className="space-y-2.5 mt-3">
               {upcoming.slice(0, 3).map((task) => (
                 <StudyTaskRow key={task.id} task={task} />
               ))}
@@ -288,7 +297,7 @@ export default async function TodayPage() {
                   На ближайшие 7 дней подтверждённых сроков нет.
                 </p>
               )}
-            </>
+            </div>
           ) : (
             <p className="quiet-empty">
               Предстоящие сроки пока не указаны. Задания без даты доступны в

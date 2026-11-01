@@ -138,22 +138,30 @@
 }
 .desktop-nav {
   display: flex;
-  align-self: stretch;
-  gap: 32px;
+  align-items: center;
+  gap: 8px;
 }
 .desktop-nav a {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  border-bottom: 2px solid transparent;
-  font-size: 14px;
-  color: #aab8ce;
-}
-.desktop-nav a[aria-current] {
-  color: #fff;
-  border-color: #80b5ff;
+  padding: 8px 16px;
+  border-radius: 9999px;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: #94a3b8;
+  border: 1px solid transparent;
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .desktop-nav a:hover {
-  color: #fff;
+  color: #f1f5f9;
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+.desktop-nav a[aria-current] {
+  color: #ffffff;
+  background: rgba(49, 108, 255, 0.15);
+  border-color: rgba(129, 181, 255, 0.35);
+  box-shadow: 0 0 16px rgba(49, 108, 255, 0.25);
 }
 .nav-actions {
   display: flex;
@@ -396,34 +404,35 @@
   grid-area: changes;
 }
 .focus-sheet {
-  background: linear-gradient(150deg, #ecf3fc 0%, #dae6f8 100%);
-  color: #132441;
-  border-radius: 20px;
-  padding: 30px;
+  background: linear-gradient(145deg, #f0f6ff 0%, #e2eaf6 100%);
+  color: #0c1a30;
+  border-radius: 24px;
+  padding: 32px;
   position: relative;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.85);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18), 0 1px 2px rgba(0, 0, 0, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.95);
+  box-shadow: 0 20px 48px -12px rgba(0, 0, 0, 0.35), 0 1px 2px rgba(0, 0, 0, 0.08);
   transition: box-shadow 0.25s ease, transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .focus-sheet .eyebrow {
-  color: #43628d;
+  color: #3b5f94;
   position: relative;
 }
 .focus-sheet h2 {
-  font-size: clamp(24px, 3vw, 34px);
-  font-weight: 600;
-  letter-spacing: -1px;
-  line-height: 1.2;
+  font-size: clamp(24px, 3.2vw, 36px);
+  font-weight: 650;
+  letter-spacing: -1.2px;
+  line-height: 1.15;
   max-width: 85%;
-  margin: 23px 0 12px;
+  margin: 20px 0 12px;
   position: relative;
+  color: #09152a;
 }
 .focus-sheet p {
   position: relative;
   font-size: 14px;
   line-height: 1.7;
-  color: #496181;
+  color: #3e5675;
 }
 .focus-meta {
   display: flex;
@@ -432,7 +441,7 @@
   gap: 12px;
   margin-top: 24px;
   font-size: 13px;
-  color: #496181;
+  color: #3e5675;
   position: relative;
 }
 .focus-actions {
@@ -504,24 +513,55 @@
 }
 .progress-summary {
   display: flex;
-  gap: 24px;
-  margin-top: 22px;
-  align-items: center;
+  gap: 12px;
+  margin-top: 24px;
+  align-items: stretch;
+  flex-wrap: wrap;
+}
+.progress-summary > div {
+  flex: 1;
+  min-width: 100px;
+  background: rgba(17, 28, 48, 0.65);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 14px 16px;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+.progress-summary > div:hover {
+  background: rgba(23, 38, 64, 0.85);
+  border-color: rgba(129, 181, 255, 0.3);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
 }
 .progress-summary strong {
-  font-size: 22px;
-  font-weight: 500;
-  letter-spacing: -0.5px;
-  color: #edf2fb;
+  display: block;
+  font-size: 24px;
+  font-weight: 650;
+  letter-spacing: -0.6px;
+  color: #f1f5f9;
+  line-height: 1.1;
 }
 .progress-summary span {
   display: block;
-  font-size: 12px;
-  color: #9bacc5;
-  margin-top: 3px;
+  font-size: 11px;
+  color: #94a3b8;
+  margin-top: 5px;
+  font-weight: 450;
 }
 .progress-summary a {
-  margin-left: auto;
+  align-self: center;
+  padding: 10px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  transition: all 0.16s ease;
+}
+.progress-summary a:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(129, 181, 255, 0.4);
 }
 .study-row {
   display: flex;
