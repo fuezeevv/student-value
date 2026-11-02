@@ -159,6 +159,27 @@ try {
   assert(calendarHtml.includes("Подключить Google Calendar"));
   assert(!calendarHtml.includes(env.CALENDAR_TOKEN_KEY));
   assert(!calendarHtml.includes(env.GOOGLE_CLIENT_SECRET));
+  await p.personalCalendarConnection.create({
+    data: {
+      userId: user.id,
+      googleSubject: "[TEST] missing grant",
+      state: "REAUTH_REQUIRED",
+      lastErrorCode: "REAUTH_REQUIRED",
+    },
+  });
+  const attention = await (await request()).text();
+  assert(attention.includes("Новые сроки не попадают в ваш Google Calendar"));
+  assert(attention.includes("Восстановить подключение"));
+  assert(!attention.includes(env.CALENDAR_TOKEN_KEY));
+  await p.personalCalendarConnection.update({
+    where: { userId: user.id },
+    data: { state: "DISCONNECTED" },
+  });
+  assert(
+    !(await (await request()).text()).includes(
+      "Новые сроки не попадают в ваш Google Calendar",
+    ),
+  );
   assert.equal(
     (
       await fetch(base + "/api/calendar/connect", {

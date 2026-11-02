@@ -46,6 +46,7 @@ export default async function AdminPage() {
       : [],
     prisma.courseOffering.findMany({
       where: {
+        status: "ACTIVE",
         groups: { some: { groupId: user.groupId } },
         semester: { isCurrent: true },
       },

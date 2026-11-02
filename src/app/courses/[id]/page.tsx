@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
+import { courseDestination } from "@/server/domain/academic-aliases";
 import { ArrowLeft, ArrowUpRight } from "lucide-react";
 import { prisma } from "@/lib/db/prisma";
 import { requireCurrentUser } from "@/lib/auth/session";
@@ -25,8 +26,15 @@ export default async function CoursePage({
 }) {
   const { id } = await params;
   const user = await requireCurrentUser();
+  const destination = await courseDestination(user, id);
+  if (destination) redirect(`/courses/${destination}`);
   const offering = await prisma.courseOffering.findFirst({
-    where: { id, groups: { some: { groupId: user.groupId } } },
+    where: {
+      id,
+      status: "ACTIVE",
+      mergedIntoId: null,
+      groups: { some: { groupId: user.groupId } },
+    },
     include: {
       courseDefinition: true,
       semester: true,

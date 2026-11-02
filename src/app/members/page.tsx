@@ -30,7 +30,11 @@ export default async function MembersPage() {
   });
 
   const courses = await prisma.courseOffering.findMany({
-    where: { groups: { some: { groupId: user.groupId } } },
+    where: {
+      status: "ACTIVE",
+      mergedIntoId: null,
+      groups: { some: { groupId: user.groupId } },
+    },
     include: { courseDefinition: true },
   });
   const enrollments = canViewPrivateIdentity

@@ -13,6 +13,8 @@ export async function loadStudyWorkspace(user: SessionUser) {
   const visibleTasks = await taskVisibilityWhere(user);
   const offerings = await prisma.courseOffering.findMany({
     where: {
+      status: "ACTIVE",
+      mergedIntoId: null,
       semester: { isCurrent: true },
       groups: { some: { groupId: user.groupId } },
     },

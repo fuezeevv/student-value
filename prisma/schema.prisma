@@ -355,6 +355,10 @@ model CourseOffering {
   softwareRequired   String?
   status             String   @default("ACTIVE")
   createdAt          DateTime @default(now())
+  mergedIntoId       String?
+
+  mergedInto CourseOffering?  @relation("CourseMerge", fields: [mergedIntoId], references: [id], onDelete: Restrict)
+  aliases    CourseOffering[] @relation("CourseMerge")
 
   courseDefinition CourseDefinition      @relation(fields: [courseDefinitionId], references: [id], onDelete: Cascade)
   semester         Semester              @relation(fields: [semesterId], references: [id], onDelete: Cascade)
@@ -464,6 +468,10 @@ model Task {
   publishedAt       DateTime   @default(now())
   createdAt         DateTime   @default(now())
   updatedAt         DateTime   @updatedAt
+  mergedIntoId      String?
+
+  mergedInto Task?  @relation("TaskMerge", fields: [mergedIntoId], references: [id], onDelete: Restrict)
+  aliases    Task[] @relation("TaskMerge")
 
   courseOffering  CourseOffering   @relation(fields: [courseOfferingId], references: [id], onDelete: Cascade)
   createdBy       User             @relation("TaskCreatedBy", fields: [createdById], references: [id], onDelete: Cascade)

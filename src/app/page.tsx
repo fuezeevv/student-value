@@ -14,6 +14,7 @@ import { StudyTaskRow } from "@/components/study/StudyTaskRow";
 import { FluidRibbon } from "@/components/study/FluidRibbon";
 import { CreateTaskModal } from "@/components/task/CreateTaskModal";
 import { formatInTimeZone } from "date-fns-tz";
+import { CalendarNotice } from "@/components/workspace/CalendarNotice";
 
 export default async function TodayPage() {
   const user = await requireCurrentUser();
@@ -104,6 +105,7 @@ export default async function TodayPage() {
           </div>
         )}
       </div>
+      <CalendarNotice userId={user.id} />
       <section className="mb-8 border-b border-slate-700 pb-6">
         <div className="section-heading">
           <h2>Сегодня на занятиях</h2>

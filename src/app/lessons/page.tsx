@@ -11,7 +11,11 @@ export default async function LessonsPage({
   const user = await requireCurrentUser();
   const { course } = await searchParams;
   const courses = await prisma.courseOffering.findMany({
-    where: { groups: { some: { groupId: user.groupId } } },
+    where: {
+      status: "ACTIVE",
+      mergedIntoId: null,
+      groups: { some: { groupId: user.groupId } },
+    },
     include: { courseDefinition: true },
   });
   const editable = courses

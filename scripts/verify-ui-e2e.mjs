@@ -257,6 +257,45 @@ try {
     },
   );
   await setUser("user-dev-student");
+  await scenario(
+    "archived academic aliases redirect to the scoped canonical course and task",
+    async () => {
+      const oldCourse = "test-course-alias";
+      await test.courseOffering.upsert({
+        where: { id: oldCourse },
+        update: { status: "ARCHIVED", mergedIntoId: "test-course" },
+        create: {
+          id: oldCourse,
+          courseDefinitionId: "test-course-def",
+          semesterId: "test-semester",
+          status: "ARCHIVED",
+          mergedIntoId: "test-course",
+          groups: { create: { groupId: "test-group" } },
+        },
+      });
+      await test.task.upsert({
+        where: { id: "test-task-alias" },
+        update: { status: "ARCHIVED", mergedIntoId: "task-otu-lab1" },
+        create: {
+          id: "test-task-alias",
+          courseOfferingId: "test-course",
+          title: "[TEST] Archived duplicate",
+          type: "LABORATORY",
+          status: "ARCHIVED",
+          mergedIntoId: "task-otu-lab1",
+          createdById: "user-dev-owner",
+          updatedById: "user-dev-owner",
+          audiences: { create: { targetType: "GROUP", groupId: "test-group" } },
+        },
+      });
+      await go(`/courses/${oldCourse}`);
+      assert.equal(new URL(page.url()).pathname, "/courses/test-course");
+      await go("/tasks/test-task-alias");
+      assert.equal(new URL(page.url()).pathname, "/tasks/task-otu-lab1");
+      await go("/courses");
+      assert(!(await page.content()).includes(`/courses/${oldCourse}`));
+    },
+  );
   await scenario("student cannot access admin or private roster", async () => {
     await go("/admin");
     assert((await body()).includes("403 Доступ ограничен"));

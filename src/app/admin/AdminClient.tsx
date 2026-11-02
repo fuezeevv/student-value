@@ -909,7 +909,13 @@ export function AdminClient({ data }: { data: AdminData }) {
                           ? "Привязка студента к аккаунту"
                           : log.action === "REVIEW_AI_SUGGESTION"
                             ? "Ревью AI предложения"
-                            : log.action;
+                            : log.action === "MERGE_EMPTY_COURSE"
+                              ? "Объединение записей одного предмета"
+                              : log.action === "ARCHIVE_UNUSED_DUPLICATE"
+                                ? "Убрана повторная запись задания"
+                                : log.action === "CONFIRM_TEACHING_ROLE"
+                                  ? "Подтверждён вид занятий преподавателя"
+                                  : log.action;
 
               return (
                 <div

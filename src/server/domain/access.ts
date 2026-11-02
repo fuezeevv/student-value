@@ -74,7 +74,8 @@ export async function requireCoursePermission(
   const groupId = course?.groups.find(
     (g) => g.groupId === user!.groupId,
   )?.groupId;
-  if (!groupId) throw new ForbiddenError("Курс недоступен в выбранной группе");
+  if (!groupId || course!.status !== "ACTIVE" || course!.mergedIntoId)
+    throw new ForbiddenError("Курс недоступен в выбранной группе");
   if (course!.groups.length !== 1)
     throw new ForbiddenError(
       "Общий курс требует отдельного учебного пространства группы",

@@ -20,7 +20,11 @@ export default async function GroupPage() {
     await Promise.all([
       prisma.studyGroup.findUniqueOrThrow({ where: { id: user.groupId } }),
       prisma.courseOffering.findMany({
-        where: { groups: { some: { groupId: user.groupId } } },
+        where: {
+          status: "ACTIVE",
+          mergedIntoId: null,
+          groups: { some: { groupId: user.groupId } },
+        },
         include: { courseDefinition: true },
       }),
       privateAccess

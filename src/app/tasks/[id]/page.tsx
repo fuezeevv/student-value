@@ -18,7 +18,8 @@ import {
 } from "@/server/domain/trust";
 import React from "react";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
+import { taskDestination } from "@/server/domain/academic-aliases";
 import { prisma } from "@/lib/db/prisma";
 import { requireCurrentUser } from "@/lib/auth/session";
 import { calculateDeadlineStatus } from "@/server/services/deadline-service";
@@ -34,6 +35,8 @@ interface TaskPageProps {
 export default async function TaskDetailPage({ params }: TaskPageProps) {
   const { id } = await params;
   const user = await requireCurrentUser();
+  const destination = await taskDestination(user, id);
+  if (destination) redirect(`/tasks/${destination}`);
 
   const task = await prisma.task.findFirst({
     where: { AND: [await taskVisibilityWhere(user), { id }] },
