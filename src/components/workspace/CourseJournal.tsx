@@ -43,11 +43,18 @@ export function CourseJournal({
           Занятия семестра <span className="count">{lessons.length}</span>
         </h2>
       </div>
-      <p className="text-sm text-slate-400 mb-5">
-        Содержание и материалы есть у {covered} из {lessons.length} занятий.
-        Расписание показывает запланированную пару; само по себе оно не
-        подтверждает, что пара состоялась.
+      <p className="text-sm text-slate-400">
+        Материалы есть у {covered} из {lessons.length} занятий.
       </p>
+      <details className="text-xs text-slate-400 mt-2">
+        <summary className="cursor-pointer">Как восстановлена история</summary>
+        <p className="mt-3 leading-relaxed">
+          Расписание показывает запланированную пару; само по себе оно не
+          подтверждает, что пара состоялась. Записи без подтверждённого
+          содержания отмечены отдельно. Обзоры и памятки составлены по указанным
+          внутри источникам.
+        </p>
+      </details>
       <nav className="lesson-filters" aria-label="Виды занятий">
         {[
           ["", "Все"],
