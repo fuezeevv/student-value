@@ -15,16 +15,22 @@ import { assignedVariants } from "@/server/domain/variants";
 import { calculateDeadlineStatus } from "@/server/services/deadline-service";
 import { CreateTaskModal } from "@/components/task/CreateTaskModal";
 import { formatTaskStatus } from "@/lib/utils/formatters";
-import { formatInTimeZone } from "date-fns-tz";
+import { CourseJournal } from "@/components/workspace/CourseJournal";
 import { canEditCourse } from "@/server/domain/lessons";
 import { MaterialForm } from "@/components/workspace/LessonForm";
 
 export default async function CoursePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ tab?: string; type?: string }>;
 }) {
   const { id } = await params;
+  const query = await searchParams;
+  const tab = ["work", "materials"].includes(query.tab ?? "")
+    ? query.tab
+    : "classes";
   const user = await requireCurrentUser();
   const destination = await courseDestination(user, id);
   if (destination) redirect(`/courses/${destination}`);
@@ -43,7 +49,13 @@ export default async function CoursePage({
       sessions: {
         where: { status: { in: ["PUBLISHED", "CANCELLED"] } },
         orderBy: { sessionDate: "desc" },
-        take: 8,
+        take: 200,
+        include: {
+          context: { select: { coverage: true, audienceNote: true } },
+          _count: {
+            select: { transcripts: true, materials: true, tasks: true },
+          },
+        },
       },
       tasks: {
         where: await taskVisibilityWhere(user),
@@ -115,153 +127,185 @@ export default async function CoursePage({
         </div>
       </header>
       <nav className="course-nav" aria-label="Разделы предмета">
-        <a href="#work">
-          Работы{" "}
-          <span className="text-slate-400 ml-1">{offering.tasks.length}</span>
-        </a>
-        <a href="#materials">Материалы</a>
-        <a href="#lessons">Занятия и записи</a>
+        <Link
+          href={`/courses/${id}`}
+          aria-current={tab === "classes" ? "page" : undefined}
+        >
+          Занятия <span className="count">{offering.sessions.length}</span>
+        </Link>
+        <Link
+          href={`/courses/${id}?tab=work`}
+          aria-current={tab === "work" ? "page" : undefined}
+        >
+          Работы <span className="count">{offering.tasks.length}</span>
+        </Link>
+        <Link
+          href={`/courses/${id}?tab=materials`}
+          aria-current={tab === "materials" ? "page" : undefined}
+        >
+          Библиотека
+        </Link>
         <a href="#about">О предмете</a>
       </nav>
       <div className="workspace-grid">
-        <section id="work">
-          <div className="section-heading">
-            <h2>Ваши работы</h2>
-            <span className="text-xs text-slate-400">
-              {done} из {offering.tasks.length} зачтено
-            </span>
-          </div>
-          {offering.tasks.length ? (
-            <div className="work-list">
-              {offering.tasks.map((task, index) => {
-                const progress = task.progress[0];
-                const accepted = isTrustedAccepted(progress);
-                const deadline = task.deadlines[0];
-                const timing = calculateDeadlineStatus(
-                  deadline?.date ?? null,
-                  new Date(),
-                  accepted,
-                  deadline?.isTimeStrict ?? true,
-                );
-                const variant = variants.get(task.id);
-                return (
-                  <Link
-                    key={task.id}
-                    href={`/tasks/${task.id}`}
-                    className="study-row"
-                  >
-                    <span className="work-number">
-                      {task.number ?? index + 1}
-                    </span>
-                    <div className="study-row-main">
-                      <p className="eyebrow !tracking-normal !normal-case !text-slate-400 mb-1">
-                        {typeNames[task.type] ?? "Задание"}
-                      </p>
-                      <h3 className="study-row-title">{task.title}</h3>
-                      <div className="study-row-meta">
-                        <span>
-                          {deadline ? timing.formattedDate : "Срок не указан"}
-                        </span>
-                        {variant && (
-                          <span>Ваш вариант: {variant.variantNumber}</span>
-                        )}
-                      </div>
-                    </div>
-                    <div
-                      className={`study-row-end ${timing.urgency === "OVERDUE" ? "overdue" : ""}`}
-                    >
-                      <strong>{timing.badgeLabel}</strong>
-                      <span>
-                        {progress?.status === "ACCEPTED" && !accepted
-                          ? "Нужна проверка"
-                          : formatTaskStatus(progress?.status)}
-                      </span>
-                    </div>
-                    <ArrowUpRight
-                      size={16}
-                      className="shrink-0 text-slate-500"
-                    />
-                  </Link>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="quiet-empty">
-              <p className="text-slate-200 text-lg mb-2">
-                Опубликованных работ пока нет
-              </p>
-              <p>
-                В приложении ещё нет доступных вам заданий по этому предмету.
-                Это не означает, что заданий не было на занятии.
-              </p>
-            </div>
-          )}
-          {canManage && (
-            <div className="sm:hidden mt-6">
-              <CreateTaskModal
-                courseOfferingId={id}
-                courses={[
-                  {
-                    id,
-                    title: offering.courseDefinition.title,
-                    shortTitle: offering.courseDefinition.shortTitle,
-                  },
-                ]}
+        <section>
+          {tab === "classes" && (
+            <>
+              <CourseJournal
+                id={id}
+                lessons={offering.sessions}
+                filter={query.type}
               />
-            </div>
-          )}
-          <section id="lessons" className="mt-10">
-            <div className="section-heading">
-              <h2>Занятия и записи</h2>
-              <Link className="text-link" href={`/lessons?course=${id}`}>
-                Все занятия ↗
-              </Link>
-            </div>
-            {offering.sessions.length ? (
-              offering.sessions.map((lesson) => (
+              {canEditCourse(user, id) && (
                 <Link
-                  className="study-row"
-                  href={`/lessons/${lesson.id}`}
-                  key={lesson.id}
+                  className="text-link mt-6 block"
+                  href={`/lessons/new?course=${id}`}
                 >
-                  <div className="study-row-main">
-                    <p className="study-row-title">
-                      {lesson.topic ?? "Занятие"}
-                    </p>
-                    <p className="study-row-meta">
-                      {formatInTimeZone(
-                        lesson.sessionDate,
-                        "Europe/Moscow",
-                        "dd.MM.yyyy",
-                      )}
-                      {lesson.recordingUrl ? " · Есть запись" : ""}
-                      {lesson.status === "CANCELLED" ? " · Отменено" : ""}
-                    </p>
-                  </div>
-                  <span>↗</span>
+                  Добавить занятие ↗
                 </Link>
-              ))
-            ) : (
-              <p className="quiet-empty">
-                Занятия ещё не добавлены. Здесь появятся темы, записи, материалы
-                и текст, связанные с конкретной датой.
-              </p>
-            )}
-            {canEditCourse(user, id) && (
+              )}
               <Link
-                className="text-link mt-5"
-                href={`/lessons/new?course=${id}`}
+                className="text-link mt-5 block"
+                href={`/proposals/new?course=${id}`}
               >
-                Добавить занятие ↗
+                Дополнить историю предмета ↗
               </Link>
-            )}
-            <Link
-              className="text-link mt-5 block"
-              href={`/proposals/new?course=${id}`}
-            >
-              Предложить уточнение по предмету ↗
-            </Link>
-          </section>
+            </>
+          )}
+          {tab === "materials" && (
+            <>
+              <section id="materials">
+                <h2>Материалы</h2>
+                {offering.materials.length ? (
+                  offering.materials.map((m) => (
+                    <a
+                      key={m.id}
+                      className="text-link !flex"
+                      href={m.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      {m.title}
+                      <ArrowUpRight size={15} />
+                    </a>
+                  ))
+                ) : (
+                  <p>
+                    Файлы и ссылки ещё не добавлены. Источники конкретных
+                    заданий — внутри работ.
+                  </p>
+                )}
+                <Link
+                  className="text-link mt-2"
+                  href={`/transcripts?course=${encodeURIComponent(offering.courseDefinition.code)}`}
+                >
+                  Стенограммы занятий
+                  <ArrowUpRight size={15} />
+                </Link>
+                {canEditCourse(user, id, "manage_materials") && (
+                  <details className="mt-5">
+                    <summary className="text-link cursor-pointer min-h-11">
+                      Добавить материал
+                    </summary>
+                    <div className="mt-4">
+                      <MaterialForm courseId={id} />
+                    </div>
+                  </details>
+                )}
+              </section>
+            </>
+          )}
+          {tab === "work" && (
+            <section id="work">
+              <div className="section-heading">
+                <h2>Ваши работы</h2>
+                <span className="text-xs text-slate-400">
+                  {done} из {offering.tasks.length} зачтено
+                </span>
+              </div>
+              {offering.tasks.length ? (
+                <div className="work-list">
+                  {offering.tasks.map((task, index) => {
+                    const progress = task.progress[0];
+                    const accepted = isTrustedAccepted(progress);
+                    const deadline = task.deadlines[0];
+                    const timing = calculateDeadlineStatus(
+                      deadline?.date ?? null,
+                      new Date(),
+                      accepted,
+                      deadline?.isTimeStrict ?? true,
+                    );
+                    const variant = variants.get(task.id);
+                    return (
+                      <Link
+                        key={task.id}
+                        href={`/tasks/${task.id}`}
+                        className="study-row"
+                      >
+                        <span className="work-number">
+                          {task.number ?? index + 1}
+                        </span>
+                        <div className="study-row-main">
+                          <p className="eyebrow !tracking-normal !normal-case !text-slate-400 mb-1">
+                            {typeNames[task.type] ?? "Задание"}
+                          </p>
+                          <h3 className="study-row-title">{task.title}</h3>
+                          <div className="study-row-meta">
+                            <span>
+                              {deadline
+                                ? timing.formattedDate
+                                : "Срок не указан"}
+                            </span>
+                            {variant && (
+                              <span>Ваш вариант: {variant.variantNumber}</span>
+                            )}
+                          </div>
+                        </div>
+                        <div
+                          className={`study-row-end ${timing.urgency === "OVERDUE" ? "overdue" : ""}`}
+                        >
+                          <strong>{timing.badgeLabel}</strong>
+                          <span>
+                            {progress?.status === "ACCEPTED" && !accepted
+                              ? "Нужна проверка"
+                              : formatTaskStatus(progress?.status)}
+                          </span>
+                        </div>
+                        <ArrowUpRight
+                          size={16}
+                          className="shrink-0 text-slate-500"
+                        />
+                      </Link>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="quiet-empty">
+                  <p className="text-slate-200 text-lg mb-2">
+                    Опубликованных работ пока нет
+                  </p>
+                  <p>
+                    В приложении ещё нет доступных вам заданий по этому
+                    предмету. Это не означает, что заданий не было на занятии.
+                  </p>
+                </div>
+              )}
+              {canManage && (
+                <div className="sm:hidden mt-6">
+                  <CreateTaskModal
+                    courseOfferingId={id}
+                    courses={[
+                      {
+                        id,
+                        title: offering.courseDefinition.title,
+                        shortTitle: offering.courseDefinition.shortTitle,
+                      },
+                    ]}
+                  />
+                </div>
+              )}
+            </section>
+          )}
         </section>
         <aside className="workspace-aside">
           <section>
@@ -283,45 +327,6 @@ export default async function CoursePage({
             <p>
               Зачёт учитывается после независимого подтверждения результата.
             </p>
-          </section>
-          <section id="materials">
-            <h2>Материалы</h2>
-            {offering.materials.length ? (
-              offering.materials.map((m) => (
-                <a
-                  key={m.id}
-                  className="text-link !flex"
-                  href={m.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  {m.title}
-                  <ArrowUpRight size={15} />
-                </a>
-              ))
-            ) : (
-              <p>
-                Файлы и ссылки ещё не добавлены. Источники конкретных заданий —
-                внутри работ.
-              </p>
-            )}
-            <Link
-              className="text-link mt-2"
-              href={`/transcripts?course=${encodeURIComponent(offering.courseDefinition.code)}`}
-            >
-              Стенограммы занятий
-              <ArrowUpRight size={15} />
-            </Link>
-            {canEditCourse(user, id, "manage_materials") && (
-              <details className="mt-5">
-                <summary className="text-link cursor-pointer min-h-11">
-                  Добавить материал
-                </summary>
-                <div className="mt-4">
-                  <MaterialForm courseId={id} />
-                </div>
-              </details>
-            )}
           </section>
           <section id="about">
             <h2>О предмете</h2>

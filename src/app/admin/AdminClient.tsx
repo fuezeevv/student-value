@@ -915,7 +915,18 @@ export function AdminClient({ data }: { data: AdminData }) {
                                 ? "Убрана повторная запись задания"
                                 : log.action === "CONFIRM_TEACHING_ROLE"
                                   ? "Подтверждён вид занятий преподавателя"
-                                  : log.action;
+                                  : ((
+                                      {
+                                        RECONSTRUCT_LESSON:
+                                          "Восстановлено занятие",
+                                        IMPORT_TEACHING_FILE:
+                                          "Добавлен учебный файл",
+                                        IMPORT_TEACHING_LINK:
+                                          "Добавлена ссылка на материал",
+                                        ADD_SCHEDULE_COURSE:
+                                          "Добавлен предмет из расписания",
+                                      } as Record<string, string>
+                                    )[log.action] ?? log.action);
 
               return (
                 <div

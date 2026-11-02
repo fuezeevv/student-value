@@ -185,6 +185,16 @@ export async function saveLesson(
           },
         });
       }
+      // A recovered timetable entry can be completed through the ordinary editor.
+      // Preserve its source manifest while removing the obsolete "schedule only" label.
+      if (input.transcriptText || input.summary) {
+        await tx.lessonContext.updateMany({
+          where: { sessionId: session.id, coverage: "SCHEDULE_ONLY" },
+          data: {
+            coverage: input.transcriptText ? "TRANSCRIPT" : "RECONSTRUCTED",
+          },
+        });
+      }
       await tx.auditLog.create({
         data: {
           userId: user.id,

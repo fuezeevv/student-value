@@ -42,6 +42,14 @@ try {
   }
   const live = await fetch(base + "/api/health/live");
   assert.equal(live.status, 200);
+  for (const path of [
+    "/api/materials/unknown/file?chunk=0",
+    "/api/lessons/unknown/guide",
+  ]) {
+    const response = await fetch(base + path, { redirect: "manual" });
+    assert.equal(response.status, 401);
+    assert.equal(response.headers.get("cache-control"), "private, no-store");
+  }
   assert.deepEqual(await live.json(), { status: "ok" });
   const ready = await fetch(base + "/api/health");
   assert.equal(ready.status, 200);

@@ -639,6 +639,7 @@ model CourseMaterial {
   courseOffering CourseOffering    @relation(fields: [courseOfferingId], references: [id], onDelete: Cascade)
   tasks          TaskMaterial[]
   sessions       SessionMaterial[]
+  file           MaterialFile?
 
   @@index([courseOfferingId])
 }
@@ -679,8 +680,33 @@ model ClassSession {
   sources        Source[]
   tasks          SessionTask[]
   materials      SessionMaterial[]
+  context        LessonContext?
 
   @@index([courseOfferingId])
+}
+
+// Original teaching files stay behind the same group access as their course.
+// Keeping bytes separate prevents normal material/lesson queries loading bodies.
+model MaterialFile {
+  materialId String @id
+  filename   String
+  mimeType   String
+  byteSize   Int
+  sha256     String
+  content    Bytes
+  material   CourseMaterial @relation(fields: [materialId], references: [id], onDelete: Restrict)
+}
+
+model LessonContext {
+  sessionId       String @id
+  coverage        String
+  scheduleUrl     String?
+  audienceNote    String?
+  guideText       String?
+  assignmentNotes String?
+  evidence        Json @default("[]")
+  importDigest    String
+  session         ClassSession @relation(fields: [sessionId], references: [id], onDelete: Restrict)
 }
 
 model Transcript {

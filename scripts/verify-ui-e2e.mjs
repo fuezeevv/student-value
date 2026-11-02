@@ -296,6 +296,105 @@ try {
       assert(!(await page.content()).includes(`/courses/${oldCourse}`));
     },
   );
+  await scenario(
+    "course opens on the lesson journal, labels gaps and serves private source files without changing academic progress",
+    async () => {
+      const id = "test-journal-lesson",
+        materialId = "test-journal-source";
+      const content = Buffer.from("[TEST] Original teaching source");
+      await test.courseMaterial.upsert({
+        where: { id: materialId },
+        update: {},
+        create: {
+          id: materialId,
+          courseOfferingId: "test-course",
+          title: "[TEST] Original teaching source",
+          type: "FILE",
+          url: "https://studentvalue1984.eu.cc/materials/" + materialId,
+          file: {
+            create: {
+              filename: "original.txt",
+              mimeType: "text/plain",
+              byteSize: content.length,
+              sha256: createHash("sha256").update(content).digest("hex"),
+              content,
+            },
+          },
+        },
+      });
+      await test.classSession.upsert({
+        where: { id },
+        update: {},
+        create: {
+          id,
+          courseOfferingId: "test-course",
+          sessionDate: new Date("2026-10-05T09:00:00Z"),
+          endsAt: new Date("2026-10-05T10:40:00Z"),
+          isTimeKnown: true,
+          type: "LAB",
+          topic: "[TEST] Reconstructed lab",
+          status: "PUBLISHED",
+          context: {
+            create: {
+              coverage: "RECONSTRUCTED",
+              scheduleUrl: "https://ruz.spbstu.ru/",
+              audienceNote: "[TEST] subgroup 1",
+              guideText:
+                "## Test guide\n\n[TEST] Educational explanation <script>alert(1)</script>",
+              assignmentNotes: "[TEST] Due date is unknown",
+              evidence: [{ label: "[TEST] original", relation: "DIRECT" }],
+              importDigest: "a".repeat(64),
+            },
+          },
+          materials: { create: { materialId } },
+        },
+      });
+      await test.sessionTask.upsert({
+        where: { sessionId_taskId: { sessionId: id, taskId: "task-otu-lab1" } },
+        update: {},
+        create: { sessionId: id, taskId: "task-otu-lab1" },
+      });
+      for (const width of [360, 1280]) {
+        await page.setViewport({ width, height: 900 });
+        await go("/courses/test-course");
+        assert(
+          (await body()).includes("Журнал") ||
+            (await body()).includes("Занятия семестра"),
+        );
+        await page.click(`main a[href="/lessons/${id}"]`);
+        await page.waitForSelector(".lesson-guide");
+        assert((await body()).includes("[TEST] Due date is unknown"));
+        assert.equal(
+          await page.$eval(".lesson-guide", (n) => n.querySelector("script")),
+          null,
+        );
+        assert(
+          await page.evaluate(
+            () => document.documentElement.scrollWidth <= innerWidth,
+          ),
+        );
+        const response = await page.evaluate(async (mid) => {
+          const r = await fetch(`/api/materials/${mid}/file?chunk=0`);
+          return {
+            status: r.status,
+            text: await r.text(),
+            cache: r.headers.get("cache-control"),
+          };
+        }, materialId);
+        assert.equal(response.status, 200);
+        assert.equal(response.text, content.toString());
+        assert.equal(response.cache, "private, no-store");
+        await go(`/materials/${materialId}`);
+        await page.click("main button");
+        await page.waitForFunction(() =>
+          document.body.innerText.includes("Файл загружен и проверен"),
+        );
+        await go("/tasks/task-otu-lab1");
+        assert(await page.$(`main a[href="/lessons/${id}"]`));
+      }
+      await page.setViewport({ width: 1280, height: 900 });
+    },
+  );
   await scenario("student cannot access admin or private roster", async () => {
     await go("/admin");
     assert((await body()).includes("403 Доступ ограничен"));
@@ -403,6 +502,8 @@ try {
       await page.waitForFunction(
         () => location.pathname === "/courses/test-course",
       );
+      await page.click('main a[href="/courses/test-course?tab=work"]');
+      await page.waitForFunction(() => location.search === "?tab=work");
       await page.click('main a[href="/tasks/task-otu-lab1"]');
       await page.waitForSelector('select[aria-label="Мой этап работы"]');
       await page.click('button[aria-label="Открыть меню"]');

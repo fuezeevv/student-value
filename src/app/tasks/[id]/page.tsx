@@ -71,6 +71,23 @@ export default async function TaskDetailPage({ params }: TaskPageProps) {
       materials: {
         include: { material: true },
       },
+      sessions: {
+        where: {
+          session: {
+            status: "PUBLISHED",
+            courseOffering: {
+              status: "ACTIVE",
+              mergedIntoId: null,
+              tasks: { some: { id } },
+              groups: { some: { groupId: user.groupId } },
+            },
+          },
+        },
+        include: {
+          session: { select: { id: true, topic: true, sessionDate: true } },
+        },
+        orderBy: { session: { sessionDate: "asc" } },
+      },
     },
   });
 
@@ -201,6 +218,28 @@ export default async function TaskDetailPage({ params }: TaskPageProps) {
               Предложить уточнение или сообщить об ошибке
             </Link>
             <div className="sheet-divider" />
+            {task.sessions.length > 0 && (
+              <section className="mb-7">
+                <h2>Занятия и объяснения по этой работе</h2>
+                <p className="text-xs mb-3">
+                  Связь по теме не устанавливает дату выдачи задания.
+                </p>
+                {task.sessions.map(({ session }) => (
+                  <Link
+                    className="block underline text-sm py-2"
+                    key={session.id}
+                    href={`/lessons/${session.id}`}
+                  >
+                    {formatInTimeZone(
+                      session.sessionDate,
+                      "Europe/Moscow",
+                      "dd.MM.yyyy",
+                    )}{" "}
+                    · {session.topic ?? "Занятие"}
+                  </Link>
+                ))}
+              </section>
+            )}
             {assignedVariant ? (
               <div className="variant">
                 <strong>
@@ -535,7 +574,7 @@ export default async function TaskDetailPage({ params }: TaskPageProps) {
           </p>
           <Link
             className="text-link mt-5"
-            href={`/courses/${task.courseOfferingId}`}
+            href={`/courses/${task.courseOfferingId}?tab=work`}
           >
             <ArrowLeft size={14} />
             Все работы по предмету

@@ -9,6 +9,11 @@ import { LessonForm, MaterialForm } from "@/components/workspace/LessonForm";
 import { OperationForm } from "@/components/workspace/OperationForm";
 import { transcriptNotesAction } from "@/server/actions/proposal-actions";
 import { HighlightedText } from "@/components/text/HighlightedText";
+import {
+  coverageLabels,
+  lessonTypes,
+  parseLessonEvidence,
+} from "@/lib/study/lesson-context";
 export default async function LessonPage({
   params,
   searchParams,
@@ -26,6 +31,7 @@ export default async function LessonPage({
       courseOffering: { groups: { some: { groupId: user.groupId } } },
     },
     include: {
+      context: true,
       courseOffering: { include: { courseDefinition: true } },
       teacher: { select: { fullName: true } },
       transcripts: { orderBy: { createdAt: "desc" } },
@@ -49,6 +55,7 @@ export default async function LessonPage({
     : [];
   const shownTranscript =
     lesson.transcripts.find((t) => t.id === version) ?? lesson.transcripts[0];
+  const evidence = parseLessonEvidence(lesson.context?.evidence);
   const history = await prisma.auditLog.findMany({
     where: {
       entityType: "CLASS_SESSION",
@@ -71,6 +78,7 @@ export default async function LessonPage({
       </nav>
       <header>
         <p className="eyebrow">
+          {lessonTypes[lesson.type]} ·{" "}
           {formatInTimeZone(
             lesson.sessionDate,
             "Europe/Moscow",
@@ -89,6 +97,21 @@ export default async function LessonPage({
             "Кто проводил — уточняется"}
           {lesson.room ? ` · ${lesson.room}` : ""}
         </p>
+        {lesson.context && (
+          <p className="text-sm text-blue-200 mt-4">
+            {coverageLabels[lesson.context.coverage]}
+            {lesson.context.audienceNote
+              ? ` · ${lesson.context.audienceNote}`
+              : ""}
+          </p>
+        )}
+        {lesson.context?.coverage === "SCHEDULE_ONLY" && (
+          <p className="text-sm text-slate-400 mt-4">
+            Пара указана в расписании. Подтверждения проведения и содержания
+            пока нет. Тема, домашнее задание и отсутствие домашней работы из
+            расписания не следуют.
+          </p>
+        )}
         {lesson.status !== "PUBLISHED" && (
           <p className="mt-4 text-rose-200">
             {lesson.status === "CANCELLED"
@@ -117,7 +140,18 @@ export default async function LessonPage({
           Предложить уточнение ↗
         </Link>
       </div>
-      <section>
+      <nav className="lesson-filters" aria-label="Разделы занятия">
+        <a href="#overview">Обзор</a>
+        {lesson.context?.guideText && <a href="#guide">Памятка</a>}
+        {lesson.context?.assignmentNotes && (
+          <a href="#assignment">Что задано</a>
+        )}
+        <a href="#materials">Материалы</a>
+        {lesson.transcripts.length > 0 && (
+          <a href="#transcript">Текст занятия</a>
+        )}
+      </nav>
+      <section id="overview">
         <h2 className="text-xl mb-4">Что проходили</h2>
         {lesson.summary ? (
           <p className="whitespace-pre-wrap leading-relaxed text-slate-300">
@@ -135,7 +169,39 @@ export default async function LessonPage({
           </p>
         )}
       </section>
-      <section>
+      {lesson.context?.guideText && (
+        <section className="lesson-guide" id="guide">
+          <div className="section-heading">
+            <h2>Разбор и памятка к занятию</h2>
+            <a className="text-link" href={`/api/lessons/${id}/guide`}>
+              Скачать текст ↓
+            </a>
+          </div>
+          <p className="text-xs text-slate-400">
+            Составлено для Student Value по указанным ниже материалам. Это
+            учебное объяснение, а не новый документ преподавателя. Схемы,
+            таблицы сигналов и точные требования сверяйте с оригиналом.
+          </p>
+          {lesson.context.guideText
+            .split("\n\n")
+            .map((part, i) =>
+              part.startsWith("## ") ? (
+                <h3 key={i}>{part.slice(3)}</h3>
+              ) : (
+                <p key={i}>{part}</p>
+              ),
+            )}
+        </section>
+      )}
+      {lesson.context?.assignmentNotes && (
+        <section id="assignment">
+          <h2 className="text-xl mb-4">Что делать после занятия</h2>
+          <p className="whitespace-pre-wrap text-slate-300 leading-relaxed">
+            {lesson.context.assignmentNotes}
+          </p>
+        </section>
+      )}
+      <section id="related-work">
         <h2 className="text-xl mb-3">Связанные работы</h2>
         {lesson.tasks.length ? (
           lesson.tasks.map((link) => (
@@ -155,7 +221,7 @@ export default async function LessonPage({
           </p>
         )}
       </section>
-      <section>
+      <section id="materials">
         <h2 className="text-xl mb-3">Материалы</h2>
         {lesson.materials.length ? (
           lesson.materials.map((link) => (
@@ -166,7 +232,9 @@ export default async function LessonPage({
               target="_blank"
               rel="noopener noreferrer"
             >
-              <span>{link.material.title}</span>
+              <span className="min-w-0 break-words [overflow-wrap:anywhere]">
+                {link.material.title}
+              </span>
               <span>↗</span>
             </a>
           ))
@@ -259,9 +327,61 @@ export default async function LessonPage({
       </section>
       <section className="border-t border-slate-700 pt-6">
         <h2 className="text-lg mb-3">Откуда сведения</h2>
+        {lesson.context?.scheduleUrl && (
+          <a
+            className="text-link block mb-4"
+            target="_blank"
+            rel="noopener noreferrer"
+            href={lesson.context.scheduleUrl}
+          >
+            Расписание СПбПУ этой недели ↗
+          </a>
+        )}
         <p className="text-sm text-slate-400 whitespace-pre-wrap">
           {lesson.sourceNote ?? "Источник пока не указан"}
         </p>
+        {evidence.length > 0 && (
+          <div className="mt-5 space-y-4">
+            {evidence.map((e, i) => (
+              <details
+                className="border-l border-slate-600 pl-4 text-sm"
+                key={i}
+              >
+                <summary className="cursor-pointer text-slate-300 break-words [overflow-wrap:anywhere]">
+                  {e.label}
+                  {e.relation === "INFERRED"
+                    ? " · связь предположительная"
+                    : e.relation === "RELATED"
+                      ? " · материал по теме"
+                      : " · прямой источник"}
+                </summary>
+                {e.location && (
+                  <p className="text-xs text-slate-400 mt-3">{e.location}</p>
+                )}
+                {e.quote && (
+                  <blockquote className="text-slate-400 whitespace-pre-wrap mt-3">
+                    {e.quote}
+                  </blockquote>
+                )}
+                {e.url && (
+                  <a
+                    className="text-link block mt-3"
+                    href={e.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Открыть источник ↗
+                  </a>
+                )}
+                {e.sha256 && (
+                  <p className="text-xs text-slate-500 break-all mt-3">
+                    SHA-256: {e.sha256}
+                  </p>
+                )}
+              </details>
+            ))}
+          </div>
+        )}
         <p className="text-xs text-slate-500 mt-3">
           Доступ к записи управляется в сервисе, где хранится файл.
         </p>

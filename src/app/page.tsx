@@ -30,7 +30,10 @@ export default async function TodayPage() {
       },
       courseOffering: { groups: { some: { groupId: user.groupId } } },
     },
-    include: { courseOffering: { include: { courseDefinition: true } } },
+    include: {
+      courseOffering: { include: { courseDefinition: true } },
+      context: { select: { audienceNote: true, coverage: true } },
+    },
     orderBy: { sessionDate: "asc" },
     take: 10,
   });
@@ -142,6 +145,16 @@ export default async function TodayPage() {
                   <strong className="font-semibold text-slate-100 text-sm block group-hover:text-blue-200 transition-colors truncate">
                     {lesson.courseOffering.courseDefinition.shortTitle}
                   </strong>
+                  {lesson.context?.audienceNote && (
+                    <span className="block text-xs text-blue-200 mt-1">
+                      {lesson.context.audienceNote}
+                    </span>
+                  )}
+                  {lesson.context?.coverage === "SCHEDULE_ONLY" && (
+                    <span className="block text-xs text-slate-400 mt-1">
+                      По расписанию · содержание уточняется
+                    </span>
+                  )}
                   <span className="block text-xs text-slate-400 mt-0.5 truncate">
                     {lesson.topic ?? "Занятие"}
                     {lesson.room ? ` · ауд. ${lesson.room}` : ""}

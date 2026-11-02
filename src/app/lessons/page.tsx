@@ -3,13 +3,16 @@ import { formatInTimeZone } from "date-fns-tz";
 import { prisma } from "@/lib/db/prisma";
 import { requireCurrentUser } from "@/lib/auth/session";
 import { canEditCourse } from "@/server/domain/lessons";
+import { Prisma } from "@prisma/client";
+import { coverageLabels, lessonTypes } from "@/lib/study/lesson-context";
 export default async function LessonsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ course?: string }>;
+  searchParams: Promise<{ course?: string; page?: string }>;
 }) {
   const user = await requireCurrentUser();
-  const { course } = await searchParams;
+  const { course, page: rawPage } = await searchParams;
+  const page = rawPage && /^[1-9]\d{0,3}$/.test(rawPage) ? Number(rawPage) : 1;
   const courses = await prisma.courseOffering.findMany({
     where: {
       status: "ACTIVE",
@@ -21,22 +24,34 @@ export default async function LessonsPage({
   const editable = courses
     .filter((c) => canEditCourse(user, c.id))
     .map((c) => c.id);
-  const lessons = await prisma.classSession.findMany({
-    where: {
-      courseOffering: { groups: { some: { groupId: user.groupId } } },
-      ...(course ? { courseOfferingId: course } : {}),
-      OR: [
-        { status: { in: ["PUBLISHED", "CANCELLED"] } },
-        { courseOfferingId: { in: editable } },
-      ],
+  const where: Prisma.ClassSessionWhereInput = {
+    courseOffering: {
+      status: "ACTIVE",
+      mergedIntoId: null,
+      groups: { some: { groupId: user.groupId } },
     },
-    include: {
-      courseOffering: { include: { courseDefinition: true } },
-      _count: { select: { transcripts: true, materials: true } },
-    },
-    orderBy: { sessionDate: "desc" },
-    take: 100,
-  });
+    ...(course ? { courseOfferingId: course } : {}),
+    OR: [
+      { status: { in: ["PUBLISHED", "CANCELLED"] } },
+      { courseOfferingId: { in: editable } },
+    ],
+  };
+  const [lessons, total] = await Promise.all([
+    prisma.classSession.findMany({
+      where,
+      include: {
+        courseOffering: { include: { courseDefinition: true } },
+        _count: { select: { transcripts: true, materials: true } },
+        context: { select: { coverage: true, audienceNote: true } },
+      },
+      orderBy: [{ sessionDate: "desc" }, { id: "desc" }],
+      skip: (page - 1) * 50,
+      take: 50,
+    }),
+    prisma.classSession.count({ where }),
+  ]);
+  const pageUrl = (n: number) =>
+    `/lessons?${new URLSearchParams({ ...(course ? { course } : {}), page: String(n) })}`;
   return (
     <div className="max-w-5xl mx-auto">
       <header className="page-heading">
@@ -97,6 +112,13 @@ export default async function LessonsPage({
                 </p>
                 <h2 className="study-row-title">{lesson.topic ?? "Занятие"}</h2>
                 <p className="study-row-meta">
+                  {lessonTypes[lesson.type]}
+                  {lesson.context?.audienceNote
+                    ? ` · ${lesson.context.audienceNote}`
+                    : ""}
+                  {lesson.context
+                    ? ` · ${coverageLabels[lesson.context.coverage]}`
+                    : ""}
                   {lesson.recordingUrl ? "Есть запись" : ""}
                   {lesson._count.transcripts ? " · Есть текст" : ""}
                   {lesson._count.materials
@@ -118,6 +140,26 @@ export default async function LessonsPage({
             из расписания, затем прикрепить запись и текст после занятия.
           </p>
         </div>
+      )}
+      {total > 50 && (
+        <nav
+          className="flex flex-wrap gap-5 mt-8 text-sm"
+          aria-label="Страницы занятий"
+        >
+          {page > 1 && (
+            <Link className="text-link" href={pageUrl(page - 1)}>
+              ← Назад
+            </Link>
+          )}
+          <span className="text-slate-400">
+            Страница {page} из {Math.ceil(total / 50)} · занятий: {total}
+          </span>
+          {page * 50 < total && (
+            <Link className="text-link" href={pageUrl(page + 1)}>
+              Далее →
+            </Link>
+          )}
+        </nav>
       )}
     </div>
   );
