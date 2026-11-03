@@ -1,3 +1,4 @@
+import { StudyTaskRow } from "@/components/study/StudyTaskRow";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { courseDestination } from "@/server/domain/academic-aliases";
@@ -28,9 +29,12 @@ export default async function CoursePage({
 }) {
   const { id } = await params;
   const query = await searchParams;
-  const tab = ["work", "materials"].includes(query.tab ?? "")
-    ? query.tab
-    : "classes";
+  const tab =
+    query.type || query.tab === "classes"
+      ? "classes"
+      : query.tab === "materials"
+        ? "materials"
+        : "work";
   const user = await requireCurrentUser();
   const destination = await courseDestination(user, id);
   if (destination) redirect(`/courses/${destination}`);
@@ -61,6 +65,13 @@ export default async function CoursePage({
         where: await taskVisibilityWhere(user),
         orderBy: [{ number: "asc" }, { createdAt: "asc" }],
         include: {
+          materials: {
+            include: {
+              material: {
+                select: { id: true, title: true, url: true, type: true },
+              },
+            },
+          },
           deadlines: {
             where: confirmedDeadlineWhere,
             orderBy: { date: "asc" },
@@ -78,8 +89,10 @@ export default async function CoursePage({
     user,
     offering.tasks.map((t) => t.id),
   );
-  const done = offering.tasks.filter((t) =>
-    isTrustedAccepted(t.progress[0]),
+  const done = offering.tasks.filter(
+    (t) =>
+      isTrustedAccepted(t.progress[0]) ||
+      ["READY", "SUBMITTED"].includes(t.progress[0]?.status ?? ""),
   ).length;
   const canManage =
     hasPermission(user, "manage_tasks") ||
@@ -128,7 +141,7 @@ export default async function CoursePage({
       </header>
       <nav className="course-nav" aria-label="Разделы предмета">
         <Link
-          href={`/courses/${id}`}
+          href={`/courses/${id}?tab=classes`}
           aria-current={tab === "classes" ? "page" : undefined}
         >
           Занятия <span className="count">{offering.sessions.length}</span>
@@ -215,12 +228,35 @@ export default async function CoursePage({
               </section>
             </>
           )}
+          {tab === "work" &&
+            offering.materials.some(
+              (m) =>
+                m.type === "SOURCE_CODE" && /\.exe(?:\.zip)?$/i.test(m.title),
+            ) && (
+              <section className="course-tools mb-7">
+                <h2>Программы для работ</h2>
+                <p>Windows · исходные файлы из учебных материалов</p>
+                <div className="work-files">
+                  {offering.materials
+                    .filter(
+                      (m) =>
+                        m.type === "SOURCE_CODE" &&
+                        /\.exe(?:\.zip)?$/i.test(m.title),
+                    )
+                    .map((m) => (
+                      <a className="work-file" key={m.id} href={m.url}>
+                        {m.title} ↓
+                      </a>
+                    ))}
+                </div>
+              </section>
+            )}
           {tab === "work" && (
             <section id="work">
               <div className="section-heading">
                 <h2>Ваши работы</h2>
                 <span className="text-xs text-slate-400">
-                  {done} из {offering.tasks.length} зачтено
+                  {done} из {offering.tasks.length} выполнено
                 </span>
               </div>
               {offering.tasks.length ? (
@@ -228,54 +264,35 @@ export default async function CoursePage({
                   {offering.tasks.map((task, index) => {
                     const progress = task.progress[0];
                     const accepted = isTrustedAccepted(progress);
+                    const completed =
+                      accepted ||
+                      ["READY", "SUBMITTED"].includes(progress?.status ?? "");
                     const deadline = task.deadlines[0];
                     const timing = calculateDeadlineStatus(
                       deadline?.date ?? null,
                       new Date(),
-                      accepted,
+                      completed,
                       deadline?.isTimeStrict ?? true,
                     );
                     const variant = variants.get(task.id);
                     return (
-                      <Link
+                      <StudyTaskRow
                         key={task.id}
-                        href={`/tasks/${task.id}`}
-                        className="study-row"
-                      >
-                        <span className="work-number">
-                          {task.number ?? index + 1}
-                        </span>
-                        <div className="study-row-main">
-                          <p className="eyebrow !tracking-normal !normal-case !text-slate-400 mb-1">
-                            {typeNames[task.type] ?? "Задание"}
-                          </p>
-                          <h3 className="study-row-title">{task.title}</h3>
-                          <div className="study-row-meta">
-                            <span>
-                              {deadline
-                                ? timing.formattedDate
-                                : "Срок не указан"}
-                            </span>
-                            {variant && (
-                              <span>Ваш вариант: {variant.variantNumber}</span>
-                            )}
-                          </div>
-                        </div>
-                        <div
-                          className={`study-row-end ${timing.urgency === "OVERDUE" ? "overdue" : ""}`}
-                        >
-                          <strong>{timing.badgeLabel}</strong>
-                          <span>
-                            {progress?.status === "ACCEPTED" && !accepted
-                              ? "Нужна проверка"
-                              : formatTaskStatus(progress?.status)}
-                          </span>
-                        </div>
-                        <ArrowUpRight
-                          size={16}
-                          className="shrink-0 text-slate-500"
-                        />
-                      </Link>
+                        showCourse={false}
+                        task={{
+                          ...task,
+                          courseId: id,
+                          courseCode: offering.courseDefinition.code,
+                          courseShortTitle:
+                            offering.courseDefinition.shortTitle,
+                          courseTitle: offering.courseDefinition.title,
+                          userProgress: progress,
+                          accepted,
+                          completed,
+                          deadline: deadline ?? null,
+                          timing,
+                        }}
+                      />
                     );
                   })}
                 </div>
@@ -312,20 +329,28 @@ export default async function CoursePage({
             <h2>Мой прогресс</h2>
             <p>
               <span className="text-2xl text-slate-100 mr-1">{done}</span> из{" "}
-              {offering.tasks.length} работ зачтено
+              {offering.tasks.length} работ выполнено
             </p>
             {offering.tasks.length > 0 && (
               <div className="course-progress" aria-hidden="true">
                 {offering.tasks.map((t) => (
                   <span
                     key={t.id}
-                    className={isTrustedAccepted(t.progress[0]) ? "done" : ""}
+                    className={
+                      isTrustedAccepted(t.progress[0]) ||
+                      ["READY", "SUBMITTED"].includes(
+                        t.progress[0]?.status ?? "",
+                      )
+                        ? "done"
+                        : ""
+                    }
                   />
                 ))}
               </div>
             )}
             <p>
-              Зачёт учитывается после независимого подтверждения результата.
+              Отмечайте выполненные работы сами. Староста может подтвердить
+              отметку или вернуть работу на доработку.
             </p>
           </section>
           <section id="about">
@@ -335,6 +360,14 @@ export default async function CoursePage({
               offering.teachers.map((t) => (
                 <div className="teacher-line" key={t.id}>
                   {t.teacher.fullName}
+                  {t.teacher.email && (
+                    <a
+                      className="text-link block mt-1"
+                      href={`mailto:${t.teacher.email}`}
+                    >
+                      {t.teacher.email}
+                    </a>
+                  )}
                   {t.role && (
                     <span className="block text-slate-400 text-xs">
                       {t.role}

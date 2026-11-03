@@ -1,3 +1,7 @@
+import {
+  sharedCourseWhere,
+  requireHeadmanExchange,
+} from "@/server/domain/platform-workspace";
 import Link from "next/link";
 import { prisma } from "@/lib/db/prisma";
 import { requireCurrentUser } from "@/lib/auth/session";
@@ -11,6 +15,20 @@ import {
 } from "@/server/actions/proposal-actions";
 export default async function ExchangePage() {
   const user = await requireCurrentUser();
+  const canBrowse = await requireHeadmanExchange(user)
+    .then(() => true)
+    .catch(() => false);
+  const sharedCourses = canBrowse
+    ? await prisma.courseOffering.findMany({
+        where: sharedCourseWhere,
+        select: {
+          id: true,
+          courseDefinition: { select: { title: true } },
+          groups: { select: { group: { select: { name: true, code: true } } } },
+        },
+        orderBy: { courseDefinition: { title: "asc" } },
+      })
+    : [];
   const [briefs, courses] = await Promise.all([
     prisma.sharedBrief.findMany({
       where: { archivedAt: null },
@@ -43,6 +61,31 @@ export default async function ExchangePage() {
           повод сверить требования, а не готовое правило для вашей группы.
         </p>
       </header>
+      {canBrowse && (
+        <section className="space-y-4">
+          <h2 className="text-xl">Работы и материалы групп</h2>
+          <p className="text-sm text-slate-300">
+            Общие задания доступны старостам для чтения. Личные результаты и
+            заметки остаются внутри группы.
+          </p>
+          <div className="grid sm:grid-cols-2 gap-3">
+            {sharedCourses.map((c) => (
+              <Link
+                key={c.id}
+                className="work-item"
+                href={`/exchange/courses/${c.id}`}
+              >
+                <span>
+                  {c.courseDefinition.title}
+                  <small className="block text-blue-200 mt-2">
+                    {c.groups.map((g) => g.group.name).join(", ")} ↗
+                  </small>
+                </span>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
       {briefs.length ? (
         briefs.map((b) => (
           <article

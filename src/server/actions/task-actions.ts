@@ -25,6 +25,7 @@ function refreshTask(taskId: string, preferredUserId?: string) {
     "/",
     "/deadlines",
     "/analytics",
+    "/leaderboard",
     `/tasks/${taskId}`,
     "/courses",
   ])
@@ -37,15 +38,6 @@ export async function updateStudentProgressAction(
 ) {
   const user = await requireCurrentUser();
   await updateOwnProgress(user, taskId, newStatus, studentNotes);
-  if (newStatus === "SUBMITTED") {
-    await awardXp({
-      userId: user.id,
-      taskId,
-      ruleCode: "TASK_SUBMISSION",
-      reason: "Задание отправлено на проверку",
-    });
-    await checkAndUnlockAchievement(user.id, "FIRST_STEP");
-  }
   refreshTask(taskId, user.id);
   return { success: true };
 }

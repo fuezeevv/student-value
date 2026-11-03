@@ -70,6 +70,11 @@ export default async function GroupPage() {
         </div>
       </header>
       <div className="flex flex-wrap gap-5">
+        {user.isPlatformOwner && (
+          <Link className="text-link" href="/platform">
+            Все группы и аккаунты ↗
+          </Link>
+        )}
         <Link className="text-link" href="/members">
           Участники ↗
         </Link>

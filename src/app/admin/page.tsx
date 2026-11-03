@@ -1,4 +1,5 @@
 import { redactGroupAudit } from "@/server/domain/audit-privacy";
+import Link from "next/link";
 import React from "react";
 import { prisma } from "@/lib/db/prisma";
 import { requireCurrentUser } from "@/lib/auth/session";
@@ -172,6 +173,22 @@ export default async function AdminPage() {
           <Shield className="w-6 h-6 text-cyan-400" />
           Панель старосты
         </h1>
+      </div>
+      <div className="flex gap-5 flex-wrap">
+        <Link className="text-link" href="/admin/work">
+          Архив работ ↗
+        </Link>
+        <Link className="text-link" href="/teachers">
+          Преподаватели и контакты ↗
+        </Link>
+        <Link className="text-link" href="/exchange">
+          Работы соседних групп ↗
+        </Link>
+        {user.isPlatformOwner && (
+          <Link className="text-link" href="/platform">
+            Все группы и аккаунты ↗
+          </Link>
+        )}
       </div>
       <AdminClient data={data} />
     </div>

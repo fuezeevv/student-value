@@ -24,7 +24,7 @@ export default async function DeadlinesPage({
       (t) =>
         (!params.course || t.courseCode === params.course) &&
         (!params.type || t.deadline?.type === params.type) &&
-        (!(params.hideCompleted === "true") || !t.accepted),
+        (!(params.hideCompleted === "true") || !t.completed),
     )
     .sort(byDeadline);
   const sections = [
@@ -32,33 +32,36 @@ export default async function DeadlinesPage({
       id: "upcoming",
       title: "Ближайшие и предстоящие",
       items: items.filter(
-        (t) => t.deadline && !t.accepted && t.timing.urgency !== "OVERDUE",
+        (t) => t.deadline && !t.completed && t.timing.urgency !== "OVERDUE",
       ),
     },
     {
       id: "overdue",
       title: "Срок прошёл",
-      items: items.filter((t) => t.timing.urgency === "OVERDUE"),
+      items: items.filter(
+        (t) => !t.completed && t.timing.urgency === "OVERDUE",
+      ),
     },
     {
       id: "undated",
       title: "Без указанного срока",
-      items: items.filter((t) => !t.deadline && !t.accepted),
+      items: items.filter((t) => !t.deadline && !t.completed),
     },
     {
       id: "completed",
-      title: "Зачтено",
-      items: items.filter((t) => t.accepted),
+      title: "Выполнено",
+      items: items.filter((t) => t.completed),
     },
   ];
   return (
     <>
       <div className="page-heading">
         <div>
-          <p className="eyebrow">План на семестр</p>
-          <h1 className="page-title">Сроки</h1>
+          <p className="eyebrow">Всё, что нужно сделать</p>
+          <h1 className="page-title">Работы и сроки</h1>
           <p className="page-intro">
-            Только подтверждённые даты. Ваш статус работы показан рядом.
+            Лабораторные, расчётные и домашние задания. Отмечайте выполненное —
+            ждать подтверждения старосты не нужно.
           </p>
         </div>
         <Link className="text-link hidden sm:flex" href="/calendar">
@@ -87,7 +90,7 @@ export default async function DeadlinesPage({
           </select>
         </label>
         <label>
-          Зачтённые работы
+          Выполненные работы
           <select
             name="hideCompleted"
             defaultValue={params.hideCompleted ?? "false"}
@@ -122,8 +125,8 @@ export default async function DeadlinesPage({
               </h2>
               {section.id === "overdue" && (
                 <p className="text-xs text-slate-400 leading-relaxed mb-4">
-                  Дата прошла, подтверждённого зачёта нет. Если работа уже
-                  отправлена, отметьте это в её статусе.
+                  Эти работы ещё не отмечены выполненными. Если уже сделали —
+                  поставьте отметку рядом с заданием.
                 </p>
               )}
               <div className="space-y-2.5 mt-3">

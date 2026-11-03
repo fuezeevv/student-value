@@ -5,11 +5,13 @@ export function FileDownload({
   filename,
   byteSize,
   sha256,
+  shared = false,
 }: {
   id: string;
   filename: string;
   byteSize: number;
   sha256: string;
+  shared?: boolean;
 }) {
   const [status, setStatus] = useState("");
   const [busy, setBusy] = useState(false);
@@ -21,7 +23,7 @@ export function FileDownload({
       for (let i = 0; i < chunks; i++) {
         setStatus(`Загрузка: ${Math.round((i / chunks) * 100)}%`);
         const response = await fetch(
-          `/api/materials/${encodeURIComponent(id)}/file?chunk=${i}`,
+          `/api/${shared ? "exchange/" : ""}materials/${encodeURIComponent(id)}/file?chunk=${i}`,
           { cache: "no-store" },
         );
         if (!response.ok) throw Error();

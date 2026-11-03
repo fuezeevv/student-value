@@ -1,3 +1,4 @@
+import Link from "next/link";
 import React from "react";
 import { prisma } from "@/lib/db/prisma";
 import { requireCurrentUser } from "@/lib/auth/session";
@@ -53,6 +54,11 @@ export default async function MembersPage() {
 
   return (
     <div className="space-y-6">
+      {user.isPlatformOwner && (
+        <Link className="text-link" href="/platform">
+          Все группы и активированные аккаунты ↗
+        </Link>
+      )}
       {/* Header */}
       <div className="pb-3 border-b border-slate-800">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -123,7 +129,7 @@ export default async function MembersPage() {
                       {enr.studentIdNumber || "—"}
                     </td>
                     <td className="py-3 px-4">
-                      {enr.status === "VERIFIED" ? (
+                      {enr.status === "VERIFIED" || enr.status === "CLAIMED" ? (
                         <Badge variant="success" className="text-[10px]">
                           Подтвержден
                         </Badge>

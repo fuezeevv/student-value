@@ -25,6 +25,13 @@ export async function loadStudyWorkspace(user: SessionUser) {
         where: visibleTasks,
         orderBy: [{ number: "asc" }, { createdAt: "asc" }],
         include: {
+          materials: {
+            include: {
+              material: {
+                select: { id: true, title: true, url: true, type: true },
+              },
+            },
+          },
           deadlines: {
             where: confirmedDeadlineWhere,
             orderBy: { date: "asc" },
@@ -44,6 +51,8 @@ export async function loadStudyWorkspace(user: SessionUser) {
       const progress = task.progress[0];
       const accepted = isTrustedAccepted(progress);
       const deadline = task.deadlines[0] ?? null;
+      const completed =
+        accepted || ["READY", "SUBMITTED"].includes(progress?.status ?? "");
       return {
         ...task,
         courseId: offering.id,
@@ -52,11 +61,12 @@ export async function loadStudyWorkspace(user: SessionUser) {
         courseTitle: offering.courseDefinition.title,
         userProgress: progress,
         accepted,
+        completed,
         deadline,
         timing: calculateDeadlineStatus(
           deadline?.date ?? null,
           now,
-          accepted,
+          completed,
           deadline?.isTimeStrict ?? true,
         ),
       };
@@ -82,8 +92,8 @@ export function progressLabel(
   const labels = {
     NOT_STARTED: "Не начато",
     IN_PROGRESS: "В работе",
-    READY: "Готово к сдаче",
-    SUBMITTED: "На проверке",
+    READY: "Выполнено",
+    SUBMITTED: "Выполнено · отправлено",
     ACCEPTED: "Зачтено",
     NEEDS_FIX: "Нужны правки",
   };

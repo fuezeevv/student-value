@@ -2,22 +2,105 @@
 @tailwind components;
 @tailwind utilities;
 
-.course-nav a[aria-current="page"] { color: #e4efff; border-bottom: 2px solid #7ea8ef; }
-.lesson-filters { display: flex; gap: .5rem; flex-wrap: wrap; margin: .85rem 0 1.2rem; }
-.lesson-filters a { padding: .55rem .85rem; border: 1px solid #26354e; border-radius: 999px; font-size: .85rem; color: #a5b3ca; }
-.lesson-filters a[aria-current="page"] { background: #1b3153; color: #ebf4ff; border-color: #4d74aa; }
-.journal-month { margin: 1.3rem 0; }
-.journal-month-title { color: #94a7c4; font-size: .85rem; letter-spacing: .08em; padding-bottom: .75rem; }
-.journal-entry { display: grid; grid-template-columns: 4rem minmax(0,1fr) 1rem; gap: 1rem; padding: 1.3rem 0; border-top: 1px solid #243047; }
-.journal-entry:hover h4 { color: #92c8ff; }
-.journal-entry h4 { font-size: 1.05rem; line-height: 1.5; color: #e5ecf7; margin: .35rem 0; overflow-wrap: anywhere; }
-.journal-date { display: flex; flex-direction: column; gap: .35rem; font-size: .8rem; color: #8da2c2; }
-.journal-date strong { color: #dce8fa; font-size: 1rem; }
-.journal-kind { font-size: .78rem; color: #a7b9d4; line-height: 1.5; }
-.journal-meta { font-size: .78rem; color: #8d9fbc; line-height: 1.6; }
-.lesson-guide h3 { margin-top: 1.5rem; font-weight: 600; color: #e4edfa; }
-.lesson-guide p { white-space: pre-wrap; line-height: 1.85; color: #b9c9df; margin-top: .6rem; overflow-wrap: anywhere; }
-@media(max-width: 480px) { .journal-entry { gap: .65rem; grid-template-columns: 3.2rem minmax(0,1fr) .75rem; } .course-nav { max-width: 100%; overflow-x: auto; } .course-nav a { white-space: nowrap; flex-shrink: 0; } .course-nav .count { display: inline; margin-left: .2rem; } }
+.course-nav a[aria-current="page"] {
+  color: #e4efff;
+  border-bottom: 2px solid #7ea8ef;
+}
+.lesson-filters {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin: 0.85rem 0 1.2rem;
+}
+.lesson-filters a {
+  padding: 0.55rem 0.85rem;
+  border: 1px solid #26354e;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  color: #a5b3ca;
+}
+.lesson-filters a[aria-current="page"] {
+  background: #1b3153;
+  color: #ebf4ff;
+  border-color: #4d74aa;
+}
+.journal-month {
+  margin: 1.3rem 0;
+}
+.journal-month-title {
+  color: #94a7c4;
+  font-size: 0.85rem;
+  letter-spacing: 0.08em;
+  padding-bottom: 0.75rem;
+}
+.journal-entry {
+  display: grid;
+  grid-template-columns: 4rem minmax(0, 1fr) 1rem;
+  gap: 1rem;
+  padding: 1.3rem 0;
+  border-top: 1px solid #243047;
+}
+.journal-entry:hover h4 {
+  color: #92c8ff;
+}
+.journal-entry h4 {
+  font-size: 1.05rem;
+  line-height: 1.5;
+  color: #e5ecf7;
+  margin: 0.35rem 0;
+  overflow-wrap: anywhere;
+}
+.journal-date {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+  color: #8da2c2;
+}
+.journal-date strong {
+  color: #dce8fa;
+  font-size: 1rem;
+}
+.journal-kind {
+  font-size: 0.78rem;
+  color: #a7b9d4;
+  line-height: 1.5;
+}
+.journal-meta {
+  font-size: 0.78rem;
+  color: #8d9fbc;
+  line-height: 1.6;
+}
+.lesson-guide h3 {
+  margin-top: 1.5rem;
+  font-weight: 600;
+  color: #e4edfa;
+}
+.lesson-guide p {
+  white-space: pre-wrap;
+  line-height: 1.85;
+  color: #b9c9df;
+  margin-top: 0.6rem;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 480px) {
+  .journal-entry {
+    gap: 0.65rem;
+    grid-template-columns: 3.2rem minmax(0, 1fr) 0.75rem;
+  }
+  .course-nav {
+    max-width: 100%;
+    overflow-x: auto;
+  }
+  .course-nav a {
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .course-nav .count {
+    display: inline;
+    margin-left: 0.2rem;
+  }
+}
 
 @layer base {
   :root {
@@ -48,12 +131,21 @@
   body {
     background-color: var(--background);
     background-image:
-      radial-gradient(ellipse 70% 45% at 50% -10%, rgba(50, 108, 255, 0.09), transparent 70%),
-      radial-gradient(ellipse 50% 35% at 90% 15%, rgba(150, 59, 88, 0.05), transparent 60%);
+      radial-gradient(
+        ellipse 70% 45% at 50% -10%,
+        rgba(50, 108, 255, 0.09),
+        transparent 70%
+      ),
+      radial-gradient(
+        ellipse 50% 35% at 90% 15%,
+        rgba(150, 59, 88, 0.05),
+        transparent 60%
+      );
     background-attachment: fixed;
     color: var(--foreground);
     font-family:
-      -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial,
+      sans-serif;
     min-height: 100vh;
     overscroll-behavior-y: none;
     -webkit-font-smoothing: antialiased;
@@ -115,7 +207,9 @@
   position: sticky;
   top: 0;
   z-index: 40;
-  transition: border-color 0.2s ease, background-color 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    background-color 0.2s ease;
 }
 .nav-inner {
   max-width: 1280px;
@@ -252,7 +346,9 @@
   background: rgba(20, 32, 56, 0.88);
   backdrop-filter: blur(28px) saturate(190%);
   -webkit-backdrop-filter: blur(28px) saturate(190%);
-  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(129, 181, 255, 0.08);
+  box-shadow:
+    0 24px 70px rgba(0, 0, 0, 0.6),
+    0 0 0 1px rgba(129, 181, 255, 0.08);
   z-index: 60;
   animation: menuFadeIn 0.18s cubic-bezier(0.16, 1, 0.3, 1);
 }
@@ -273,7 +369,9 @@
   min-height: 44px;
   font-size: 14px;
   color: #d4e0f2;
-  transition: color 0.15s ease, transform 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  transition:
+    color 0.15s ease,
+    transform 0.15s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .account-menu > a:hover {
   color: #8fbbff;
@@ -428,8 +526,12 @@
   position: relative;
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.95);
-  box-shadow: 0 20px 48px -12px rgba(0, 0, 0, 0.35), 0 1px 2px rgba(0, 0, 0, 0.08);
-  transition: box-shadow 0.25s ease, transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow:
+    0 20px 48px -12px rgba(0, 0, 0, 0.35),
+    0 1px 2px rgba(0, 0, 0, 0.08);
+  transition:
+    box-shadow 0.25s ease,
+    transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .focus-sheet .eyebrow {
   color: #3b5f94;
@@ -478,17 +580,22 @@
   min-height: 46px;
   border-radius: 12px;
   background: linear-gradient(180deg, #2c68f6 0%, #1f53d5 100%);
-  box-shadow: 0 2px 10px rgba(39, 95, 232, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  box-shadow:
+    0 2px 10px rgba(39, 95, 232, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
   color: white;
   font-size: 14px;
   font-weight: 550;
-  transition: transform 0.16s cubic-bezier(0.16, 1, 0.3, 1),
-              box-shadow 0.16s cubic-bezier(0.16, 1, 0.3, 1),
-              background 0.16s ease;
+  transition:
+    transform 0.16s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.16s cubic-bezier(0.16, 1, 0.3, 1),
+    background 0.16s ease;
 }
 .action-primary:hover {
   background: linear-gradient(180deg, #3772fb 0%, #255de3 100%);
-  box-shadow: 0 4px 18px rgba(39, 95, 232, 0.48), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  box-shadow:
+    0 4px 18px rgba(39, 95, 232, 0.48),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
   transform: translateY(-1px);
 }
 .action-primary:active {
@@ -588,7 +695,9 @@
   margin: 0 -8px;
   border-radius: 12px;
   border-bottom: 1px solid #29364b;
-  transition: background-color 0.16s ease, transform 0.16s cubic-bezier(0.16, 1, 0.3, 1);
+  transition:
+    background-color 0.16s ease,
+    transform 0.16s cubic-bezier(0.16, 1, 0.3, 1);
   min-width: 0;
 }
 .study-row:hover {
@@ -659,7 +768,9 @@
   margin: 0 -8px;
   border-radius: 12px;
   border-top: 1px solid #29364b;
-  transition: background-color 0.16s ease, color 0.16s ease;
+  transition:
+    background-color 0.16s ease,
+    color 0.16s ease;
 }
 .course-line:hover {
   background: #14223a50;
@@ -995,10 +1106,11 @@
   -webkit-backdrop-filter: blur(14px);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 16px;
-  transition: border-color 0.2s cubic-bezier(0.16, 1, 0.3, 1),
-              box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1),
-              background-color 0.2s ease,
-              transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  transition:
+    border-color 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+    background-color 0.2s ease,
+    transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .glass-panel-hover:hover {
   background: rgba(23, 40, 63, 0.85);
@@ -1231,7 +1343,9 @@
     min-height: 48px;
     font-size: 10px;
     color: #a9bad4;
-    transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1), color 0.15s ease;
+    transition:
+      transform 0.15s cubic-bezier(0.16, 1, 0.3, 1),
+      color 0.15s ease;
   }
   .mobile-nav a:active,
   .mobile-nav button:active {
@@ -1336,5 +1450,157 @@
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+}
+
+/* Work is the primary object: clear title, visible file, one-step personal completion. */
+.work-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 1.25rem;
+  padding: 1.25rem;
+  border: 1px solid #35435d;
+  border-radius: 14px;
+  background: #132039;
+  color: #edf3ff;
+}
+.work-item-body {
+  flex: 1;
+  min-width: 0;
+}
+.work-subject {
+  display: inline-block;
+  color: #9dcfff;
+  font-size: 0.78rem;
+  margin-bottom: 0.45rem;
+}
+.work-title {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  font-size: 1.05rem;
+  line-height: 1.5;
+  font-weight: 650;
+  color: #f3f7ff;
+}
+.work-title svg {
+  flex-shrink: 0;
+  margin-top: 0.3rem;
+}
+.work-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1rem;
+  color: #bac9df;
+  font-size: 0.8rem;
+  line-height: 1.6;
+  margin-top: 0.5rem;
+}
+.work-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.85rem;
+}
+.work-file {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.65rem 0.85rem;
+  border-radius: 9px;
+  background: #263b5a;
+  border: 1px solid #536c92;
+  color: #e6f3ff;
+  font-size: 0.82rem;
+  overflow-wrap: anywhere;
+  max-width: 100%;
+}
+.work-file svg {
+  flex-shrink: 0;
+}
+.work-file:hover {
+  background: #324f78;
+}
+.completion-button {
+  border: 1px solid #6887b1;
+  background: #243c60;
+  border-radius: 9px;
+  color: #e6f2ff;
+  padding: 0.65rem 0.8rem;
+  font-size: 0.8rem;
+  min-height: 44px;
+  white-space: nowrap;
+}
+.completion-button:hover {
+  background: #335580;
+}
+.completion-button.is-complete {
+  background: #173e39;
+  border-color: #4a8d7c;
+  color: #b6f1dd;
+}
+.completion-button:disabled {
+  opacity: 0.65;
+}
+.work-item-complete {
+  background: #142630;
+}
+.task-assignment-files {
+  padding: 1rem;
+  background: #142b48;
+  border: 1px solid #6c94be;
+  border-radius: 12px;
+  margin: 1rem 0 1.5rem;
+}
+.task-assignment-files h3 {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #eef7ff;
+  margin-bottom: 0.7rem;
+}
+.task-assignment-files .work-file {
+  margin-top: 0.5rem;
+}
+.course-tools {
+  padding: 1.2rem;
+  background: #14263d;
+  border: 1px solid #405671;
+  border-radius: 12px;
+}
+.course-tools p {
+  color: #c1cfe3;
+  font-size: 0.8rem;
+  margin-top: 0.5rem;
+}
+.work-list {
+  display: grid;
+  gap: 0.8rem;
+}
+@media (max-width: 640px) {
+  .work-item {
+    flex-direction: column;
+    gap: 0.85rem;
+    padding: 1rem;
+  }
+  .work-item > .work-item-body {
+    width: 100%;
+  }
+  .work-item .completion-button {
+    width: 100%;
+  }
+  .work-item > div:last-child {
+    width: 100%;
+  }
+  .work-title {
+    font-size: 1rem;
+  }
+  .work-file {
+    font-size: 0.8rem;
+  }
+  .task-tracker {
+    order: -1;
+  }
+  .work-facts {
+    font-size: 0.78rem;
   }
 }

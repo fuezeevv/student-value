@@ -1,4 +1,5 @@
 import { enqueuePersonalCalendar } from "@/server/calendar/queue";
+import { awardActivation } from "@/server/services/gamification-service";
 import { randomBytes } from "node:crypto";
 import { prisma } from "@/lib/db/prisma";
 import { equalSecret, hashToken, type GoogleIdentity } from "@/lib/auth/google";
@@ -189,6 +190,7 @@ export async function completeGoogleLogin(
           },
         });
       }
+      await awardActivation(tx, target!);
       await enqueuePersonalCalendar(tx, target!);
       await tx.session.create({
         data: { userId: target!, tokenHash: hashToken(token), expiresAt },

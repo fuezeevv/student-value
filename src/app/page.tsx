@@ -54,7 +54,7 @@ export default async function TodayPage() {
       take: 3,
     }),
   ]);
-  const open = tasks.filter((t) => !t.accepted);
+  const open = tasks.filter((t) => !t.completed);
   const overdue = open
     .filter((t) => t.timing.urgency === "OVERDUE")
     .sort(byDeadline);
@@ -68,15 +68,19 @@ export default async function TodayPage() {
       ),
     )
     .sort(byDeadline);
+  const undated = open.filter((t) => !t.deadline);
+  const undatedPreview = undated
+    .filter((t, i, a) => a.findIndex((x) => x.courseId === t.courseId) === i)
+    .slice(0, 3);
   const focus = chooseFocus(tasks);
   const otherActive = active.filter((t) => t.id !== focus?.id);
-  const accepted = tasks.filter((t) => t.accepted).length;
+  const accepted = tasks.filter((t) => t.completed).length;
   const submitted = tasks.filter(
     (t) => t.userProgress?.status === "SUBMITTED",
   ).length;
   const courseOrder = [...offerings].sort((a, b) => {
     const rank = (id: string) =>
-      tasks.filter((t) => t.courseId === id && !t.accepted).length ? 0 : 1;
+      tasks.filter((t) => t.courseId === id && !t.completed).length ? 0 : 1;
     return rank(a.id) - rank(b.id);
   });
   const date = now.toLocaleDateString("ru-RU", {
@@ -109,76 +113,78 @@ export default async function TodayPage() {
         )}
       </div>
       <CalendarNotice userId={user.id} />
-      <section className="mb-8 border-b border-slate-700 pb-6">
-        <div className="section-heading">
-          <h2>Сегодня на занятиях</h2>
-          <Link className="text-link" href="/lessons">
-            Занятия и записи ↗
-          </Link>
-        </div>
-        {todayLessons.length ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
-            {todayLessons.map((lesson) => (
-              <Link
-                key={lesson.id}
-                className="group p-4 rounded-2xl bg-[#111c30]/55 hover:bg-[#15243e]/85 border border-white/[0.08] hover:border-blue-400/30 transition-all flex items-center gap-3.5 shadow-sm hover:shadow-md hover:-translate-y-0.5"
-                href={`/lessons/${lesson.id}`}
-              >
-                <span
-                  className={`px-2.5 py-1.5 rounded-xl font-mono text-xs font-semibold tracking-wider shrink-0 border ${
-                    lesson.status === "CANCELLED"
-                      ? "bg-rose-500/15 border-rose-500/30 text-rose-300"
-                      : "bg-blue-500/10 border-blue-400/25 text-blue-300"
-                  }`}
-                >
-                  {lesson.status === "CANCELLED"
-                    ? "Отменено"
-                    : lesson.isTimeKnown
-                      ? formatInTimeZone(
-                          lesson.sessionDate,
-                          "Europe/Moscow",
-                          "HH:mm",
-                        )
-                      : "Время ?"}
-                </span>
-                <span className="min-w-0 flex-1">
-                  <strong className="font-semibold text-slate-100 text-sm block group-hover:text-blue-200 transition-colors truncate">
-                    {lesson.courseOffering.courseDefinition.shortTitle}
-                  </strong>
-                  {lesson.context?.audienceNote && (
-                    <span className="block text-xs text-blue-200 mt-1">
-                      {lesson.context.audienceNote}
-                    </span>
-                  )}
-                  {lesson.context?.coverage === "SCHEDULE_ONLY" && (
-                    <span className="block text-xs text-slate-400 mt-1">
-                      По расписанию · содержание уточняется
-                    </span>
-                  )}
-                  <span className="block text-xs text-slate-400 mt-0.5 truncate">
-                    {lesson.topic ?? "Занятие"}
-                    {lesson.room ? ` · ауд. ${lesson.room}` : ""}
-                  </span>
-                </span>
-                <ArrowUpRight
-                  size={16}
-                  className="shrink-0 text-slate-500 group-hover:text-blue-300 transition-colors ml-auto"
-                />
-              </Link>
-            ))}
+      {todayLessons.length > 0 && (
+        <section className="mb-8 border-b border-slate-700 pb-6">
+          <div className="section-heading">
+            <h2>Сегодня на занятиях</h2>
+            <Link className="text-link" href="/lessons">
+              Занятия и записи ↗
+            </Link>
           </div>
-        ) : (
-          <p className="text-sm text-slate-400 py-3">
-            Расписание на сегодня ещё не добавлено. Это не означает, что занятий
-            нет.
-          </p>
-        )}
-        {hasPermission(user, "manage_courses") && offerings.length === 0 && (
-          <Link className="action-primary mt-5" href="/group">
-            Добавить первый предмет
-          </Link>
-        )}
-      </section>
+          {todayLessons.length ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+              {todayLessons.map((lesson) => (
+                <Link
+                  key={lesson.id}
+                  className="group p-4 rounded-2xl bg-[#111c30]/55 hover:bg-[#15243e]/85 border border-white/[0.08] hover:border-blue-400/30 transition-all flex items-center gap-3.5 shadow-sm hover:shadow-md hover:-translate-y-0.5"
+                  href={`/lessons/${lesson.id}`}
+                >
+                  <span
+                    className={`px-2.5 py-1.5 rounded-xl font-mono text-xs font-semibold tracking-wider shrink-0 border ${
+                      lesson.status === "CANCELLED"
+                        ? "bg-rose-500/15 border-rose-500/30 text-rose-300"
+                        : "bg-blue-500/10 border-blue-400/25 text-blue-300"
+                    }`}
+                  >
+                    {lesson.status === "CANCELLED"
+                      ? "Отменено"
+                      : lesson.isTimeKnown
+                        ? formatInTimeZone(
+                            lesson.sessionDate,
+                            "Europe/Moscow",
+                            "HH:mm",
+                          )
+                        : "Время ?"}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <strong className="font-semibold text-slate-100 text-sm block group-hover:text-blue-200 transition-colors truncate">
+                      {lesson.courseOffering.courseDefinition.shortTitle}
+                    </strong>
+                    {lesson.context?.audienceNote && (
+                      <span className="block text-xs text-blue-200 mt-1">
+                        {lesson.context.audienceNote}
+                      </span>
+                    )}
+                    {lesson.context?.coverage === "SCHEDULE_ONLY" && (
+                      <span className="block text-xs text-slate-400 mt-1">
+                        По расписанию · содержание уточняется
+                      </span>
+                    )}
+                    <span className="block text-xs text-slate-400 mt-0.5 truncate">
+                      {lesson.topic ?? "Занятие"}
+                      {lesson.room ? ` · ауд. ${lesson.room}` : ""}
+                    </span>
+                  </span>
+                  <ArrowUpRight
+                    size={16}
+                    className="shrink-0 text-slate-500 group-hover:text-blue-300 transition-colors ml-auto"
+                  />
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-slate-400 py-3">
+              Расписание на сегодня ещё не добавлено. Это не означает, что
+              занятий нет.
+            </p>
+          )}
+          {hasPermission(user, "manage_courses") && offerings.length === 0 && (
+            <Link className="action-primary mt-5" href="/group">
+              Добавить первый предмет
+            </Link>
+          )}
+        </section>
+      )}
       <div className="daily-grid">
         <section className="daily-focus" aria-label="На чём сосредоточиться">
           <div className="focus-sheet">
@@ -200,7 +206,7 @@ export default async function TodayPage() {
               {focus
                 ? focus.title
                 : tasks.length
-                  ? "Все работы отправлены или зачтены"
+                  ? "Все опубликованные работы выполнены"
                   : "Начните с предмета"}
             </h2>
             <p>
@@ -250,7 +256,7 @@ export default async function TodayPage() {
             <div className="overdue-note">
               <CornerDownRight size={17} />
               <span>
-                Срок прошёл: {overdue.length}. Зачёт не отмечен.{" "}
+                Срок прошёл: {overdue.length}. Пока не отмечены выполненными.{" "}
                 <Link href="/deadlines#overdue">Разобраться со сроками</Link>
               </span>
             </div>
@@ -259,7 +265,7 @@ export default async function TodayPage() {
             <div>
               <strong>
                 {accepted}
-                <span>зачтено из {tasks.length}</span>
+                <span>выполнено из {tasks.length}</span>
               </strong>
             </div>
             <div>
@@ -309,7 +315,8 @@ export default async function TodayPage() {
                 (t) => (t.timing.daysRemaining ?? Infinity) <= 7,
               ) && (
                 <p className="text-xs text-slate-400 leading-relaxed mt-4">
-                  На ближайшие 7 дней подтверждённых сроков нет.
+                  Ближайшие даты указаны выше. Работы без даты тоже требуют
+                  выполнения.
                 </p>
               )}
             </div>
@@ -318,6 +325,27 @@ export default async function TodayPage() {
               Предстоящие сроки пока не указаны. Задания без даты доступны в
               предметах.
             </p>
+          )}
+          {undated.length > 0 && (
+            <div className="mt-8">
+              <div className="section-heading">
+                <h2>
+                  Ещё нужно сделать{" "}
+                  <span className="count">{undated.length}</span>
+                </h2>
+                <Link className="text-link" href="/deadlines#undated">
+                  Все работы ↗
+                </Link>
+              </div>
+              <p className="text-sm text-slate-300 mb-3">
+                Точный срок не указан. Задания и файлы уже доступны.
+              </p>
+              <div className="space-y-3">
+                {undatedPreview.map((task) => (
+                  <StudyTaskRow key={task.id} task={task} />
+                ))}
+              </div>
+            </div>
           )}
         </section>
         <section className="daily-courses">
@@ -331,8 +359,10 @@ export default async function TodayPage() {
             </Link>
           </div>
           {courseOrder.slice(0, 5).map((o) => {
-            const done = o.tasks.filter((t) =>
-              isTrustedAccepted(t.progress[0]),
+            const done = o.tasks.filter(
+              (t) =>
+                ["READY", "SUBMITTED"].includes(t.progress[0]?.status ?? "") ||
+                isTrustedAccepted(t.progress[0]),
             ).length;
             return (
               <Link
@@ -347,7 +377,7 @@ export default async function TodayPage() {
                   {o.courseDefinition.title}
                   <span className="block text-slate-400 mt-1">
                     {o.tasks.length
-                      ? `${done} из ${o.tasks.length} зачтено`
+                      ? `${done} из ${o.tasks.length} выполнено`
                       : "Задания пока не опубликованы"}
                   </span>
                 </span>

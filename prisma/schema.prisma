@@ -176,6 +176,7 @@ model User {
   xpEvents            XpEvent[]
   gamificationProfile UserGamificationProfile?
   achievements        UserAchievement[]
+  reviewedCompletions StudentTaskProgress[] @relation("CompletionReviewedBy")
   reviewedSuggestions AiSuggestion[]
   calendarConnection  PersonalCalendarConnection?
   proposals           ChangeProposal[]            @relation("ProposalAuthor")
@@ -218,6 +219,7 @@ model StudyGroup {
   department String?
   program    String?
   calendarId String?
+  shareStudyContent Boolean @default(false)
   createdAt  DateTime @default(now())
 
   members       GroupMember[]
@@ -598,6 +600,10 @@ model StudentTaskProgress {
   verifiedAt                    DateTime?
   verificationSource            VerificationSource?
   verificationSourceReferenceId String?
+  completedAt                   DateTime?
+  completionReviewedAt          DateTime?
+  completionReviewedById        String?
+  completionReviewer            User? @relation("CompletionReviewedBy", fields: [completionReviewedById], references: [id], onDelete: SetNull)
   studentNotes                  String?
   submittedAt                   DateTime?
   acceptedAt                    DateTime?

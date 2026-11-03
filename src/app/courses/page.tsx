@@ -25,8 +25,10 @@ export default async function CoursesPage() {
       </div>
       <div>
         {offerings.map((o, index) => {
-          const done = o.tasks.filter((t) =>
-            isTrustedAccepted(t.progress[0]),
+          const done = o.tasks.filter(
+            (t) =>
+              ["READY", "SUBMITTED"].includes(t.progress[0]?.status ?? "") ||
+              isTrustedAccepted(t.progress[0]),
           ).length;
           return (
             <Link className="course-line" key={o.id} href={`/courses/${o.id}`}>
@@ -40,13 +42,13 @@ export default async function CoursesPage() {
                 {o.courseDefinition.title}
                 <span className="sm:hidden block text-slate-400 mt-1">
                   {o.tasks.length
-                    ? `${done} из ${o.tasks.length} зачтено`
+                    ? `${done} из ${o.tasks.length} выполнено`
                     : "Без опубликованных заданий"}
                 </span>
               </span>
               <span className="course-state">
                 {o.tasks.length
-                  ? `${done} / ${o.tasks.length} зачтено`
+                  ? `${done} / ${o.tasks.length} выполнено`
                   : "Заданий пока нет"}
               </span>
               <ArrowUpRight size={18} />

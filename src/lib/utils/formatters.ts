@@ -6,7 +6,7 @@ import {
 } from "@prisma/client";
 
 export function formatTaskStatus(
-  status?: StudentTaskProgressStatus | string | null
+  status?: StudentTaskProgressStatus | string | null,
 ): string {
   switch (status) {
     case "ACCEPTED":
@@ -14,7 +14,7 @@ export function formatTaskStatus(
     case "SUBMITTED":
       return "Сдано на проверку";
     case "READY":
-      return "Готово к сдаче";
+      return "Выполнено";
     case "IN_PROGRESS":
       return "В процессе";
     case "NEEDS_FIX":
@@ -25,7 +25,9 @@ export function formatTaskStatus(
   }
 }
 
-export function formatDeadlineType(type?: DeadlineType | string | null): string {
+export function formatDeadlineType(
+  type?: DeadlineType | string | null,
+): string {
   switch (type) {
     case "HARD":
       return "Жесткий дедлайн";
@@ -37,7 +39,7 @@ export function formatDeadlineType(type?: DeadlineType | string | null): string 
 }
 
 export function formatDeadlineProvenance(
-  provenance?: DeadlineProvenance | string | null
+  provenance?: DeadlineProvenance | string | null,
 ): { label: string; variant: "success" | "info" | "warning" | "muted" } {
   switch (provenance) {
     case "TEACHER":
@@ -55,7 +57,7 @@ export function formatDeadlineProvenance(
 }
 
 export function formatVerificationSource(
-  source?: VerificationSource | string | null
+  source?: VerificationSource | string | null,
 ): string {
   switch (source) {
     case "TEACHER_CONFIRMED":

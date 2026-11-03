@@ -179,6 +179,11 @@ export function Navbar({
                   .apk
                 </span>
               </a>
+              {user?.isPlatformOwner && (
+                <Link href="/platform" className="text-link block py-3">
+                  Все группы и аккаунты
+                </Link>
+              )}
               {isAdmin && (
                 <Link
                   href="/admin"

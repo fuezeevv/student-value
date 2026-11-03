@@ -8,12 +8,11 @@ import { StudyTaskRow } from "@/components/study/StudyTaskRow";
 export default async function ProgressPage() {
   const user = await requireCurrentUser();
   const { offerings, tasks } = await loadStudyWorkspace(user);
+  const completed = tasks.filter((t) => t.completed).length;
   const accepted = tasks.filter((t) => t.accepted).length;
   const waiting = tasks.filter((t) => t.userProgress?.status === "SUBMITTED");
   const active = tasks.filter((t) =>
-    ["IN_PROGRESS", "READY", "NEEDS_FIX"].includes(
-      t.userProgress?.status ?? "",
-    ),
+    ["IN_PROGRESS", "NEEDS_FIX"].includes(t.userProgress?.status ?? ""),
   );
   return (
     <>
@@ -30,8 +29,8 @@ export default async function ProgressPage() {
       <div className="progress-summary !mt-0 !mb-10 !gap-10 border-b border-slate-700 pb-7">
         <div>
           <strong>
-            {accepted}
-            <span>зачтено из {tasks.length}</span>
+            {completed}
+            <span>выполнено из {tasks.length}</span>
           </strong>
         </div>
         <div>
@@ -53,8 +52,10 @@ export default async function ProgressPage() {
             <h2>По предметам</h2>
           </div>
           {offerings.map((o) => {
-            const done = o.tasks.filter((t) =>
-              isTrustedAccepted(t.progress[0]),
+            const done = o.tasks.filter(
+              (t) =>
+                ["READY", "SUBMITTED"].includes(t.progress[0]?.status ?? "") ||
+                isTrustedAccepted(t.progress[0]),
             ).length;
             return (
               <Link
@@ -67,7 +68,7 @@ export default async function ProgressPage() {
                 </span>
                 <div className="course-name">
                   {o.tasks.length
-                    ? `${done} из ${o.tasks.length} зачтено`
+                    ? `${done} из ${o.tasks.length} выполнено`
                     : "Нет опубликованных работ"}
                   {o.tasks.length > 0 && (
                     <div className="course-progress" aria-hidden="true">
@@ -75,7 +76,11 @@ export default async function ProgressPage() {
                         <span
                           key={t.id}
                           className={
-                            isTrustedAccepted(t.progress[0]) ? "done" : ""
+                            ["READY", "SUBMITTED"].includes(
+                              t.progress[0]?.status ?? "",
+                            ) || isTrustedAccepted(t.progress[0])
+                              ? "done"
+                              : ""
                           }
                         />
                       ))}
@@ -91,13 +96,13 @@ export default async function ProgressPage() {
           <section>
             <h2>Как считается прогресс</h2>
             <p>
-              Вы сами отмечаете начало работы, готовность и отправку на
-              проверку. Зачёт учитывается только с независимым подтверждением и
-              источником результата.
+              Вы сами отмечаете выполненные работы; они сразу учитываются в
+              прогрессе. Староста может подтвердить отметку или вернуть работу к
+              выполнению.
             </p>
             <p className="mt-3">
-              Ноль зачтённых работ означает, что в приложении пока нет
-              подтверждённых результатов.
+              Отдельно записано зачётов преподавателя: {accepted}. Для них
+              по-прежнему нужны независимое подтверждение и источник результата.
             </p>
           </section>
         </aside>

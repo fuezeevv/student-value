@@ -5,6 +5,9 @@ import { inputClass } from "@/components/workspace/styles";
 import {
   editTaskContentAction,
   moveTaskDeadlineAction,
+  cancelTaskDeadlineAction,
+  archiveTaskAction,
+  reviewCompletionAction,
 } from "@/server/actions/task-context-actions";
 import { assignedVariants } from "@/server/domain/variants";
 import { confirmedDeadlineWhere } from "@/server/domain/deadline-visibility";
@@ -99,7 +102,7 @@ export default async function TaskDetailPage({ params }: TaskPageProps) {
     prisma.deadline.findMany({
       where: {
         taskId: id,
-        status: { in: ["ACTIVE", "SUPERSEDED"] },
+        status: { in: ["ACTIVE", "SUPERSEDED", "CANCELLED"] },
         provenance: { not: "UNKNOWN" },
         sourceReference: { confidence: "CONFIRMED" },
       },
@@ -329,6 +332,41 @@ export default async function TaskDetailPage({ params }: TaskPageProps) {
               </details>
             )}
           </div>
+          {verificationTargets.length > 0 && (
+            <details className="mt-8">
+              <summary className="text-link cursor-pointer min-h-11">
+                Проверить отметку выполнения студента
+              </summary>
+              <OperationForm
+                action={reviewCompletionAction}
+                label="Сохранить решение"
+                className="mt-4"
+              >
+                <input type="hidden" name="taskId" value={task.id} />
+                <label className="block">
+                  Студент
+                  <select name="userId" className={inputClass}>
+                    {verificationTargets.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.nickname}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block">
+                  Решение
+                  <select name="approve" className={inputClass}>
+                    <option value="true">Подтвердить выполнение</option>
+                    <option value="false">Вернуть к выполнению</option>
+                  </select>
+                </label>
+                <p className="text-sm text-slate-300">
+                  Это проверка самостоятельной отметки. Зачёт преподавателя
+                  записывается отдельно.
+                </p>
+              </OperationForm>
+            </details>
+          )}
           {(deadlineHistory.some((d) => d.originalDeadlineId) ||
             contentHistory.length > 0) && (
             <details className="source-details mt-5">
@@ -487,6 +525,21 @@ export default async function TaskDetailPage({ params }: TaskPageProps) {
         </div>
         <aside className="task-tracker">
           <h2>Моя работа</h2>
+          {task.materials.length > 0 && (
+            <div className="task-assignment-files">
+              <h3>Задание и файлы</h3>
+              {task.materials.map(({ material: m }) => (
+                <a key={m.id} href={m.url} className="work-file">
+                  {m.title} ↗
+                </a>
+              ))}
+            </div>
+          )}
+          {userProgress?.completionReviewedAt && (
+            <p className="text-emerald-200 text-sm">
+              Выполнение подтверждено старостой
+            </p>
+          )}
           <p className="eyebrow">Срок сдачи</p>
           <p className="task-date">
             {primaryDeadline ? deadlineCalc.formattedDate : "Срок не указан"}
@@ -505,6 +558,84 @@ export default async function TaskDetailPage({ params }: TaskPageProps) {
                 : "До конца указанного дня, по Москве."
               : "Подтверждённой даты в приложении нет."}
           </p>
+          {canEditCourse(user, task.courseOfferingId, "manage_deadlines") && (
+            <details className="mt-5">
+              <summary className="text-link cursor-pointer min-h-11">
+                Убрать ошибочный срок / восстановить
+              </summary>
+              <div className="space-y-5 mt-3">
+                {deadlineHistory
+                  .filter(
+                    (d) => d.status === "ACTIVE" || d.status === "CANCELLED",
+                  )
+                  .map((d) => (
+                    <OperationForm
+                      key={d.id}
+                      action={cancelTaskDeadlineAction}
+                      label={
+                        d.status === "CANCELLED"
+                          ? "Восстановить срок"
+                          : "Убрать срок"
+                      }
+                    >
+                      <input type="hidden" name="deadlineId" value={d.id} />
+                      <input
+                        type="hidden"
+                        name="restore"
+                        value={String(d.status === "CANCELLED")}
+                      />
+                      <p>
+                        {formatInTimeZone(
+                          d.date,
+                          "Europe/Moscow",
+                          "dd.MM.yyyy",
+                        )}{" "}
+                        · {d.status === "CANCELLED" ? "отменён" : "действует"}
+                      </p>
+                      <label className="block text-sm">
+                        Причина
+                        <input
+                          name="reason"
+                          required
+                          minLength={5}
+                          maxLength={2000}
+                          className={inputClass}
+                          placeholder="Например: добавил дату по ошибке"
+                        />
+                      </label>
+                    </OperationForm>
+                  ))}
+              </div>
+            </details>
+          )}
+          {canEditCourse(user, task.courseOfferingId, "manage_tasks") && (
+            <details className="mt-4">
+              <summary className="text-link cursor-pointer min-h-11">
+                Убрать ошибочную работу
+              </summary>
+              <OperationForm
+                action={archiveTaskAction}
+                label="Убрать в архив"
+                className="mt-3"
+              >
+                <input type="hidden" name="taskId" value={task.id} />
+                <p className="text-sm text-slate-300">
+                  Работа исчезнет из учебного списка и календаря. Результаты
+                  сохранятся; восстановление — в панели старосты.
+                </p>
+                <label className="block text-sm">
+                  Причина
+                  <input
+                    name="reason"
+                    required
+                    minLength={5}
+                    maxLength={2000}
+                    className={inputClass}
+                  />
+                </label>
+              </OperationForm>
+            </details>
+          )}
           {primaryDeadline &&
             canEditCourse(user, task.courseOfferingId, "manage_deadlines") && (
               <details className="mt-5">

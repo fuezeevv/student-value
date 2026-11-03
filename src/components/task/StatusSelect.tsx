@@ -1,5 +1,6 @@
 "use client";
 
+import { CompleteWorkButton } from "./CompleteWorkButton";
 import React, { useState, useTransition, useId } from "react";
 import { StudentTaskProgressStatus, VerificationSource } from "@prisma/client";
 import {
@@ -63,14 +64,14 @@ export function StatusSelect({
         return (
           <Badge variant="info" className="gap-1.5">
             <FileCheck className="w-3.5 h-3.5" />
-            На проверке
+            Выполнено · отправлено
           </Badge>
         );
       case "READY":
         return (
           <Badge variant="warning" className="gap-1.5">
             <Clock className="w-3.5 h-3.5" />
-            Готово к показу
+            Выполнено · моя отметка
           </Badge>
         );
       case "IN_PROGRESS":
@@ -152,6 +153,13 @@ export function StatusSelect({
         </div>
       )}
 
+      {isCurrentUser && (
+        <CompleteWorkButton
+          taskId={taskId}
+          complete={["READY", "SUBMITTED", "ACCEPTED"].includes(currentStatus)}
+          accepted={currentStatus === "ACCEPTED"}
+        />
+      )}
       {/* Student self-reported control */}
       {isCurrentUser && (
         <div className="flex flex-col gap-1 mt-1">
@@ -173,12 +181,10 @@ export function StatusSelect({
                 Нужны правки
               </option>
             )}
-            <option value="READY">Готово к сдаче</option>
+            <option value="READY">Выполнено</option>
             <option value="SUBMITTED">Отправлено на проверку</option>
-            <option value="ACCEPTED" disabled={!canVerify}>
-              {canVerify
-                ? "Принято (как модератор)"
-                : "Зачтено — после подтверждения"}
+            <option value="ACCEPTED" disabled>
+              Зачёт преподавателя
             </option>
           </select>
         </div>

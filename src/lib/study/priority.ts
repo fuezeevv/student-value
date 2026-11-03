@@ -9,7 +9,9 @@ export function chooseFocus<T extends PrioritizableWork>(
   tasks: T[],
 ): T | undefined {
   const open = tasks.filter(
-    (t) => !t.accepted && t.userProgress?.status !== "SUBMITTED",
+    (t) =>
+      !t.accepted &&
+      !["READY", "SUBMITTED"].includes(t.userProgress?.status ?? ""),
   );
   const byDate = (a: T, b: T) =>
     (a.deadline?.date.getTime() ?? Infinity) -

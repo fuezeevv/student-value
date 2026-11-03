@@ -297,7 +297,7 @@ try {
     },
   );
   await scenario(
-    "course opens on the lesson journal, labels gaps and serves private source files without changing academic progress",
+    "course work links to the lesson journal, labels gaps and serves private source files without changing academic progress",
     async () => {
       const id = "test-journal-lesson",
         materialId = "test-journal-source";
@@ -357,6 +357,8 @@ try {
       for (const width of [360, 1280]) {
         await page.setViewport({ width, height: 900 });
         await go("/courses/test-course");
+        await page.click('main a[href="/courses/test-course?tab=classes"]');
+        await page.waitForSelector(`main a[href="/lessons/${id}"]`);
         assert(
           (await body()).includes("Журнал") ||
             (await body()).includes("Занятия семестра"),
