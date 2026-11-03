@@ -2,10 +2,6 @@
 @tailwind components;
 @tailwind utilities;
 
-.course-nav a[aria-current="page"] {
-  color: #e4efff;
-  border-bottom: 2px solid #7ea8ef;
-}
 .lesson-filters {
   display: flex;
   gap: 0.5rem;
@@ -891,7 +887,7 @@
   color: #acc0db;
   font-size: 14px;
 }
-.course-nav a:first-child {
+.course-nav a[aria-current="page"] {
   color: #fff;
   border-bottom: 2px solid #8ab9ff;
 }
