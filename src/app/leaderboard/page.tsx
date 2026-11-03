@@ -59,7 +59,7 @@ export default async function LeaderboardPage() {
   // User XP Events (Immutable ledger)
   const xpEvents = user
     ? await prisma.xpEvent.findMany({
-        where: { userId: user.id },
+        where: { userId: user.id, points: { not: 0 } },
         orderBy: { createdAt: "desc" },
         include: { task: true },
         take: 10,
@@ -260,7 +260,9 @@ export default async function LeaderboardPage() {
                         {ach.title}
                       </span>
                       <span className="text-[10px] font-mono text-cyan-400 font-semibold">
-                        +{ach.points} XP
+                        {ach.points > 0
+                          ? `+${ach.points} XP`
+                          : "Этап прогресса"}
                       </span>
                     </div>
                     <p className="text-[11px] text-slate-300 leading-snug">
@@ -294,7 +296,8 @@ export default async function LeaderboardPage() {
                       </span>
                     </div>
                     <span className="font-mono font-bold text-cyan-400">
-                      +{evt.points} XP
+                      {evt.points > 0 ? "+" : ""}
+                      {evt.points} XP
                     </span>
                   </div>
                 ))}
