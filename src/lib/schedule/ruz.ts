@@ -178,6 +178,32 @@ export function parseRuzWeek(
     }),
   };
 }
+/** Read the official page's JSON snapshot without executing any page scripts. */
+export function extractRuzPagePayload(html: string, groupId: number): unknown {
+  if (html.length > 512 * 1024) throw Error("RUZ page too large");
+  for (const script of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)) {
+    const match =
+      /^\s*window\.__INITIAL_STATE__\s*=\s*(\{[\s\S]*\})\s*;?\s*$/.exec(
+        script[1],
+      );
+    if (!match) continue;
+    const state = z
+      .object({
+        lessons: z.object({
+          group: responseSchema.shape.group,
+          week: responseSchema.shape.week,
+          data: z.record(z.unknown()),
+        }),
+      })
+      .parse(JSON.parse(match[1]));
+    return {
+      group: state.lessons.group,
+      week: state.lessons.week,
+      days: state.lessons.data[String(groupId)],
+    };
+  }
+  throw Error("Official RUZ snapshot missing");
+}
 export function sourceUrl(data: RuzWeek) {
   return `${RUZ_ORIGIN}/faculty/${data.facultyId}/groups/${data.groupId}?date=${data.weekStart}`;
 }

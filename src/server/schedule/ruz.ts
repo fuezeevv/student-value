@@ -10,13 +10,9 @@ import {
   type RuzWeek,
 } from "@/lib/schedule/ruz";
 
+import { fetchRuzPayload, RuzProviderError } from "./ruz-transport";
+
 const TTL = 10 * 60 * 1000;
-const MAX_BYTES = 512 * 1024;
-class RuzProviderError extends Error {
-  constructor(readonly code: string) {
-    super("RUZ provider request failed");
-  }
-}
 export type ScheduleResult = {
   subgroup: number | null;
   state: "FRESH" | "STALE" | "UNAVAILABLE" | "UNCONFIGURED";
@@ -25,44 +21,6 @@ export type ScheduleResult = {
   weekStart: string;
 };
 type Dependencies = { now?: Date; fetcher?: (url: string) => Promise<unknown> };
-
-async function fetchRuz(url: string): Promise<unknown> {
-  if (process.env.NODE_ENV === "test" || process.env.SV_TEST_ISOLATED === "1")
-    throw Error("Real RUZ requests are forbidden in tests");
-  const response = await fetch(url, {
-    cache: "no-store",
-    signal: AbortSignal.timeout(12000),
-    redirect: "error",
-    headers: { Accept: "application/json" },
-  });
-  if (!response.ok) throw new RuzProviderError(`HTTP_${response.status}`);
-  if (!response.body) throw new RuzProviderError("EMPTY_RESPONSE");
-  const reader = response.body.getReader(),
-    chunks: Uint8Array[] = [];
-  let size = 0;
-  try {
-    while (true) {
-      const r = await reader.read();
-      if (r.done) break;
-      size += r.value.byteLength;
-      if (size > MAX_BYTES) throw new RuzProviderError("TOO_LARGE");
-      chunks.push(r.value);
-    }
-  } finally {
-    await reader.cancel().catch(() => {});
-  }
-  const bytes = new Uint8Array(size);
-  let offset = 0;
-  for (const c of chunks) {
-    bytes.set(c, offset);
-    offset += c.byteLength;
-  }
-  try {
-    return JSON.parse(new TextDecoder().decode(bytes));
-  } catch {
-    throw new RuzProviderError("INVALID_JSON");
-  }
-}
 
 function cachedWeek(
   payload: unknown,
@@ -159,7 +117,7 @@ export async function loadRuzSchedule(
     return present();
   }
   try {
-    const raw = await (deps.fetcher ?? fetchRuz)(
+    const raw = await (deps.fetcher ?? fetchRuzPayload)(
       `${RUZ_ORIGIN}/api/v1/ruz/scheduler/${group.ruzGroupId}?date=${weekStart}`,
     ).catch((error) => {
       if (error instanceof RuzProviderError) throw error;
