@@ -35,46 +35,65 @@ export async function seedPublicPreview(p: PrismaClient) {
       },
     });
     if (g.code === "5130901/40102") previewFixture.groupId = stored.id;
-    const payload = parseRuzWeek(
-      {
-        week: {
-          date_start: week.replaceAll("-", "."),
-          date_end: addDays(week, 6).replaceAll("-", "."),
-        },
-        group: { id: g.ruzId, name: g.code, faculty: { id: 125 } },
-        days: [
-          {
-            date: addDays(week, 3),
-            lessons: [
-              {
-                subject: "[TEST] Открытое расписание",
-                time_start: "10:00",
-                time_end: "11:40",
-                groups: [{ id: g.ruzId, name: g.code }],
-              },
-            ],
+    for (const offset of [0, 7, 14]) {
+      const start = addDays(week, offset);
+      const payload = parseRuzWeek(
+        {
+          week: {
+            date_start: start.replaceAll("-", "."),
+            date_end: addDays(start, 6).replaceAll("-", "."),
           },
-        ],
-      },
-      g.ruzId,
-      g.code,
-      week,
-    );
-    await p.ruzScheduleCache.upsert({
-      where: { groupId_weekStart: { groupId: stored.id, weekStart: week } },
-      create: {
-        groupId: stored.id,
-        weekStart: week,
-        payload: payload as unknown as Prisma.InputJsonValue,
-        fetchedAt: now,
-      },
-      update: {
-        payload: payload as unknown as Prisma.InputJsonValue,
-        fetchedAt: now,
-        retryAfter: null,
-        leaseUntil: null,
-      },
-    });
+          group: { id: g.ruzId, name: g.code, faculty: { id: 125 } },
+          days: [
+            {
+              date: addDays(start, 3),
+              lessons: [
+                {
+                  subject: `[TEST] Открытое расписание ${g.code}`,
+                  time_start: "10:00",
+                  time_end: "11:40",
+                  typeObj: { name: "Лекция", abbr: "Лек" },
+                  teachers: [{ full_name: `[TEST] Лектор ${g.code}` }],
+                  auditories: [
+                    { name: "101", building: { name: "[TEST] Корпус" } },
+                  ],
+                  groups: [{ id: g.ruzId, name: g.code }],
+                },
+              ],
+            },
+            {
+              date: addDays(start, 4),
+              lessons: [
+                {
+                  subject: `[TEST] Открытое расписание ${g.code}`,
+                  time_start: "12:00",
+                  time_end: "13:40",
+                  typeObj: { name: "Практика", abbr: "Пр" },
+                  teachers: [{ full_name: `[TEST] Практик ${g.code}` }],
+                  auditories: [
+                    { name: "202", building: { name: "[TEST] Корпус" } },
+                  ],
+                  groups: [{ id: g.ruzId, name: g.code }],
+                },
+              ],
+            },
+          ],
+        },
+        g.ruzId,
+        g.code,
+        start,
+      ) as unknown as Prisma.InputJsonValue;
+      await p.ruzScheduleCache.upsert({
+        where: { groupId_weekStart: { groupId: stored.id, weekStart: start } },
+        create: {
+          groupId: stored.id,
+          weekStart: start,
+          payload,
+          fetchedAt: now,
+        },
+        update: { payload, fetchedAt: now, retryAfter: null, leaseUntil: null },
+      });
+    }
   }
   await p.courseOffering.upsert({
     where: { id: previewFixture.courseId },

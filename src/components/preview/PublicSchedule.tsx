@@ -1,6 +1,10 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { SchedulePanel } from "@/components/schedule/SchedulePanel";
+import {
+  collectRuzSubjects,
+  matchSubjectCourse,
+} from "@/lib/schedule/subjects";
 import { loadPublicRuzSchedule } from "@/server/schedule/ruz";
 import { addDays, requestedWeek } from "@/lib/schedule/ruz";
 type Props = {
@@ -16,10 +20,18 @@ export async function PublicSchedule({
   compact = false,
 }: Props & { week?: string; compact?: boolean }) {
   const result = await loadPublicRuzSchedule(slug, week);
+  const liveCourses = collectRuzSubjects([result]).map((s) => {
+    const course = matchSubjectCourse(s, courses);
+    return {
+      id: course?.id ?? s.id,
+      title: s.title,
+      href: `${base}/courses/${course?.id ?? s.id}?week=${result.weekStart}`,
+    };
+  });
   return (
     <SchedulePanel
       result={result}
-      courses={courses}
+      courses={liveCourses}
       publicBase={base}
       compact={compact}
     />

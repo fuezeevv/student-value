@@ -1,14 +1,17 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
-import { ArrowUpRight, FileLock2 } from "lucide-react";
+import { FileLock2 } from "lucide-react";
 import { loadPublicWorkspace } from "@/server/queries/public-workspace";
 import { browsePath } from "@/lib/groups/public-groups";
 import { PublicTaskRow } from "@/components/preview/PublicTaskRow";
+import { PublicScheduleView } from "@/components/preview/PublicSchedule";
 import {
-  PublicSchedule,
-  PublicScheduleView,
-} from "@/components/preview/PublicSchedule";
+  PublicSubjects,
+  PublicSubjectPage,
+  PublicCourseSchedule,
+} from "@/components/preview/PublicSubjects";
+import { requestedWeek } from "@/lib/schedule/ruz";
 import { calculateDeadlineStatus } from "@/server/services/deadline-service";
 
 export default async function PublicGroupPage({
@@ -28,15 +31,33 @@ export default async function PublicGroupPage({
     view[0] === "courses" && view[1]
       ? courses.find((c) => c.id === view[1])
       : null;
+  const remoteSubjectId =
+    view[0] === "courses" && /^ruz-[a-f0-9]{16}$/.test(view[1] ?? "")
+      ? view[1]
+      : null;
   const task =
     view[0] === "tasks" && view[1] ? tasks.find((t) => t.id === view[1]) : null;
   if (
     view.length > 2 ||
-    (view.length === 2 && !course && !task) ||
+    (view.length === 2 && !course && !task && !remoteSubjectId) ||
     (view.length === 1 &&
       !["courses", "deadlines", "schedule"].includes(view[0]))
   )
     notFound();
+  const query = await searchParams;
+  let week: string | undefined;
+  try {
+    week = query.week ? requestedWeek(query.week) : undefined;
+  } catch {
+    return (
+      <>
+        <h1 className="page-title">Неделя недоступна</h1>
+        <Link className="text-link" href={`${base}/courses`}>
+          К текущим предметам группы
+        </Link>
+      </>
+    );
+  }
   const title = task
     ? task.title
     : course
@@ -47,7 +68,9 @@ export default async function PublicGroupPage({
           ? "Работы и сроки"
           : view[0] === "schedule"
             ? "Расписание пар"
-            : "Что по учёбе";
+            : courses.length
+              ? "Что по учёбе"
+              : "Пары и предметы";
   const upcoming = tasks
     .filter((t) => t.deadlines[0] && t.deadlines[0].date >= new Date())
     .sort(
@@ -78,7 +101,7 @@ export default async function PublicGroupPage({
         </span>
         <div className="preview-context-actions">
           <Link href={`${base}/schedule`}>Расписание ↗</Link>
-          <Link href="/browse">Сменить группу ↗</Link>
+          <Link href="/browse#groups">Сменить группу ↗</Link>
         </div>
       </div>
       <div className="page-heading">
@@ -94,11 +117,29 @@ export default async function PublicGroupPage({
               ? course.title
               : task
                 ? task.courseTitle
-                : "Общие работы и подтверждённые сроки — без регистрации."}
+                : tasks.length
+                  ? "Общие работы и подтверждённые сроки — без регистрации."
+                  : "Актуальное расписание, преподаватели и аудитории — по официальному РУЗ."}
           </p>
         </div>
       </div>
-      {task ? (
+      {remoteSubjectId ? (
+        <Suspense
+          fallback={
+            <p className="quiet-empty" role="status">
+              Получаем предмет и занятия из РУЗ…
+            </p>
+          }
+        >
+          <PublicSubjectPage
+            slug={slug}
+            base={base}
+            id={remoteSubjectId}
+            week={week}
+            courses={courses}
+          />
+        </Suspense>
+      ) : task ? (
         <section>
           <p className="preview-task-date">
             {task.deadlines[0]
@@ -151,42 +192,45 @@ export default async function PublicGroupPage({
             исходные материалы и записи открываются участникам группы после
             входа.
           </p>
+          <Suspense
+            fallback={
+              <p role="status" className="quiet-empty">
+                Получаем расписание предмета…
+              </p>
+            }
+          >
+            <PublicCourseSchedule
+              slug={slug}
+              courseTitle={course.title}
+              week={week}
+            />
+          </Suspense>
         </>
       ) : view[0] === "courses" ? (
-        <div className="course-list">
-          {courses.map((c, i) => (
-            <Link
-              className="course-line"
-              key={c.id}
-              href={`${base}/courses/${c.id}`}
-            >
-              <span className="course-index">
-                {String(i + 1).padStart(2, "0")}
-              </span>
-              <span className="course-code">{c.shortTitle}</span>
-              <span className="course-name">
-                {c.title}
-                <span className="block sm:hidden">
-                  Общих работ: {c.tasks.length}
-                </span>
-              </span>
-              <span className="course-state">
-                Общих работ: {c.tasks.length}
-              </span>
-              <ArrowUpRight size={18} />
-            </Link>
-          ))}
-        </div>
+        <Suspense
+          fallback={
+            <p role="status" className="quiet-empty">
+              Получаем предметы из РУЗ…
+            </p>
+          }
+        >
+          <PublicSubjects
+            slug={slug}
+            base={base}
+            courses={courses}
+            week={week}
+          />
+        </Suspense>
       ) : view[0] === "schedule" ? (
         <PublicScheduleView
           slug={slug}
           base={base}
-          rawWeek={(await searchParams).week}
+          rawWeek={week}
           courses={courses.map((c) => ({ id: c.id, title: c.title }))}
         />
       ) : (
         <>
-          {!view.length && (
+          {!view.length && tasks.length > 0 && (
             <div className="preview-overview">
               <p>
                 Работ: <strong>{tasks.length}</strong> · Предметов:{" "}
@@ -234,11 +278,12 @@ export default async function PublicGroupPage({
                 </p>
               }
             >
-              <PublicSchedule
+              <PublicSubjects
                 slug={slug}
                 base={base}
-                compact
-                courses={courses.map((c) => ({ id: c.id, title: c.title }))}
+                courses={courses}
+                week={week}
+                showSchedule
               />
             </Suspense>
           )}
@@ -251,11 +296,12 @@ export default async function PublicGroupPage({
           )}
         </>
       )}
-      {!courses.length && view[0] !== "schedule" && (
+      {!tasks.length && view[0] === "deadlines" && (
         <p className="quiet-empty">
-          Учебное пространство этой группы пока не наполнено. Официальное
-          расписание уже можно посмотреть; задания других групп сюда не
-          подставляются.
+          Задания и сроки этой группы пока не опубликованы.{" "}
+          <Link href={`${base}/courses`}>Предметы</Link> и{" "}
+          <Link href={`${base}/schedule`}>расписание</Link> уже можно
+          посмотреть.
         </p>
       )}
       <aside className="preview-account-note">

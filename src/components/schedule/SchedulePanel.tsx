@@ -5,7 +5,7 @@ import {
   addDays,
   appliesToSubgroup,
   moscowDay,
-  normalizeSubject,
+  subjectKey,
   showScheduleSubject,
   sourceUrl,
   RUZ_ORIGIN,
@@ -13,7 +13,7 @@ import {
 } from "@/lib/schedule/ruz";
 import type { ScheduleResult } from "@/server/schedule/ruz";
 
-type Course = { id: string; title: string };
+type Course = { id: string; title: string; href?: string };
 function LessonRow({
   lesson,
   courses,
@@ -25,17 +25,6 @@ function LessonRow({
   courses: Course[];
   compact?: boolean;
 }) {
-  const subjectKey = (value: string) => {
-    const aliases: Record<string, string> = {
-      [normalizeSubject("Архитектура процессоров и вычислительных систем")]:
-        normalizeSubject("Архитектура процессоров"),
-      [normalizeSubject(
-        "Инженерная и компьютерная графика. Технологии виртуальной реальности",
-      )]: normalizeSubject("Инженерная и компьютерная графика / VR"),
-    };
-    const key = normalizeSubject(value);
-    return aliases[key] ?? key;
-  };
   const matched = courses.filter(
     (c) => subjectKey(c.title) === subjectKey(lesson.subject),
   );
@@ -57,7 +46,7 @@ function LessonRow({
           <Link
             className="schedule-subject"
             title={lesson.subject}
-            href={`${publicBase ?? ""}/courses/${course.id}`}
+            href={course.href ?? `${publicBase ?? ""}/courses/${course.id}`}
           >
             {lesson.subject} ↗
           </Link>
@@ -119,7 +108,13 @@ export function SchedulePanel({
     })) ?? [];
   const current = days.find((d) => d.date === today),
     next = days.find((d) => d.date > today && d.lessons.length > 0);
-  const shown = compact ? (current?.lessons.length ? [current] : []) : days;
+  const shown = compact
+    ? current?.lessons.length
+      ? [current]
+      : publicBase && next
+        ? [next]
+        : []
+    : days;
   return (
     <section
       className={compact ? "schedule-panel schedule-compact" : "schedule-panel"}
@@ -200,15 +195,18 @@ export function SchedulePanel({
           </a>
         </p>
       )}
-      {compact && !current?.lessons.length && next && (
-        <Link
-          className="text-link block py-2"
-          href={`${publicBase ?? ""}/schedule#day-${next.date}`}
-        >
-          {next.date === addDays(today, 1) ? "Завтра" : label(next.date)} ·
-          расписание с {next.lessons[0].start} ↗
-        </Link>
-      )}
+      {compact &&
+        !current?.lessons.length &&
+        next &&
+        shown[0]?.date !== next.date && (
+          <Link
+            className="text-link block py-2"
+            href={`${publicBase ?? ""}/schedule#day-${next.date}`}
+          >
+            {next.date === addDays(today, 1) ? "Завтра" : label(next.date)} ·
+            расписание с {next.lessons[0].start} ↗
+          </Link>
+        )}
       {shown.map((day) => (
         <div key={day.date} className="schedule-day" id={`day-${day.date}`}>
           <h3 className="schedule-day-title">

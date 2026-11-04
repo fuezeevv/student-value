@@ -232,8 +232,19 @@ try {
   };
   await scenario("guest cannot use a fallback owner", async () => {
     await go("/");
-    assert(page.url().endsWith("/browse"));
-    assert(!(await body()).includes("test_headman"));
+    assert(page.url().endsWith("/login"));
+    assert.equal(await page.$(".account-button"), null);
+    assert(await page.$('[aria-label="Вход в аккаунт"]'));
+    assert.equal((await page.$$(".preview-group")).length, 8);
+    assert(
+      await page.evaluate(
+        () =>
+          document
+            .querySelector('[aria-label="Вход в аккаунт"]')
+            .getBoundingClientRect().bottom <
+          document.querySelector("#groups").getBoundingClientRect().top,
+      ),
+    );
   });
   await scenario(
     "anonymous visitors choose a group and inspect work on desktop/mobile without accounts or private access",
@@ -287,7 +298,32 @@ try {
           404,
         );
         await go("/browse/5130902-40204");
-        assert((await body()).includes("пока не наполнено"));
+        await page.waitForSelector(".public-subject-row");
+        assert(
+          (await body()).includes("[TEST] Открытое расписание 5130902/40204"),
+        );
+        await page.$eval(".public-subject-row", (el) =>
+          el.scrollIntoView({ block: "center" }),
+        );
+        await page.waitForFunction(() => {
+          const el = document.querySelector(".public-subject-row"),
+            r = el.getBoundingClientRect();
+          return (
+            document
+              .elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)
+              ?.closest("a") === el
+          );
+        });
+        await page.click(".public-subject-row");
+        await page.waitForSelector(".subject-teaching");
+        assert((await body()).includes("[TEST] Лектор 5130902/40204"));
+        assert((await body()).includes("[TEST] Практик 5130902/40204"));
+        assert(!(await body()).includes("5130901/40102"));
+        assert(
+          await page.evaluate(
+            () => document.documentElement.scrollWidth <= innerWidth,
+          ),
+        );
         await go("/browse/5130902-40204/schedule");
         assert((await body()).includes("[TEST] Открытое расписание"));
         await go("/tasks/test-preview-public");

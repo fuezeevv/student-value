@@ -61,7 +61,7 @@ export function PreviewNavbar({
               {label}
             </Link>
           ))}
-          <Link href="/browse">
+          <Link href="/browse#groups">
             <Grid2X2 size={19} />
             Группы
           </Link>

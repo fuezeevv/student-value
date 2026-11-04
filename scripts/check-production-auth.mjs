@@ -94,10 +94,7 @@ try {
         redirect: "manual",
       });
       assert([307, 308].includes(r.status), route);
-      assert.equal(
-        r.headers.get("location"),
-        route === "/" ? "/browse" : "/login",
-      );
+      assert.equal(r.headers.get("location"), "/login");
     }
     const r = await fetch(base + "/api/calendar/export", {
       headers: { cookie },

@@ -2122,3 +2122,143 @@ a.schedule-subject:hover {
   line-height: 1.25;
   max-width: 1000px;
 }
+.entry-groups {
+  border-top: 1px solid #35435d;
+  padding-top: 40px;
+  margin-top: 40px;
+  scroll-margin-top: 110px;
+}
+.entry-browse-link {
+  text-align: center;
+  margin-top: -16px;
+}
+@media (max-width: 767px) {
+  .entry-browse-link {
+    margin-top: 0;
+  }
+  .entry-groups {
+    padding-top: 28px;
+    margin-top: 28px;
+  }
+}
+.public-subject-section {
+  margin-top: 32px;
+}
+.subject-sources {
+  color: #aebfd7;
+  font-size: 12px;
+  line-height: 1.7;
+  margin: 12px 0 20px;
+}
+.subject-sources > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 20px;
+  margin: 8px 0;
+}
+.subject-sources a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  color: #9dcaff;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.public-subject-list {
+  border-bottom: 1px solid #35435d;
+}
+.public-subject-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 18px;
+  align-items: center;
+  gap: 20px;
+  border-top: 1px solid #35435d;
+  padding: 20px 8px;
+}
+.public-subject-row:hover,
+.public-subject-row:focus-visible {
+  background: #14223a;
+}
+.public-subject-row strong {
+  font-size: 16px;
+  line-height: 1.5;
+  font-weight: 550;
+  color: #edf3ff;
+}
+.public-subject-meta {
+  display: block;
+  color: #a8bdd8;
+  font-size: 12px;
+  line-height: 1.7;
+  margin-top: 5px;
+}
+.public-subject-origin {
+  color: #9db7db;
+  font-size: 12px;
+}
+.public-subject-row > svg {
+  color: #9dcaff;
+}
+.public-subject-details h2 {
+  margin: 28px 0 16px;
+  font-size: 20px;
+  font-weight: 550;
+}
+.subject-detail-title {
+  font-size: clamp(24px, 3vw, 34px);
+  font-weight: 600;
+  line-height: 1.35;
+  margin: 12px 0 20px;
+  max-width: 960px;
+}
+.subject-teaching {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px 48px;
+  padding: 16px 0;
+  border-block: 1px solid #35435d;
+}
+.subject-teaching h3 {
+  font-size: 13px;
+  color: #91baff;
+}
+.subject-teaching p {
+  font-size: 15px;
+  color: #d2dff2;
+  margin-top: 8px;
+}
+.subject-meeting {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  gap: 24px;
+  border-bottom: 1px solid #29364b;
+  padding: 18px 0;
+}
+.subject-meeting > div > span {
+  display: block;
+  font-size: 13px;
+  color: #a8bdd8;
+  margin-top: 5px;
+}
+.subject-meeting p {
+  font-size: 13px;
+  color: #c2d2e8;
+  margin-top: 5px;
+}
+@media (max-width: 767px) {
+  .public-subject-row {
+    grid-template-columns: minmax(0, 1fr) 18px;
+    gap: 12px;
+    padding: 18px 0;
+  }
+  .public-subject-origin {
+    display: none;
+  }
+  .public-subject-row strong {
+    font-size: 14px;
+  }
+  .subject-meeting {
+    grid-template-columns: 92px minmax(0, 1fr);
+    gap: 16px;
+  }
+}

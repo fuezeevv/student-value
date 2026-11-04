@@ -213,6 +213,18 @@ export function normalizeSubject(value: string) {
     .replace(/ё/g, "е")
     .replace(/[^а-яa-z0-9]/g, "");
 }
+// Only explicitly confirmed title aliases; never fuzzy-match unrelated subjects.
+export function subjectKey(value: string) {
+  const aliases: Record<string, string> = {
+    [normalizeSubject("Архитектура процессоров и вычислительных систем")]:
+      normalizeSubject("Архитектура процессоров"),
+    [normalizeSubject(
+      "Инженерная и компьютерная графика. Технологии виртуальной реальности",
+    )]: normalizeSubject("Инженерная и компьютерная графика / VR"),
+  };
+  const key = normalizeSubject(value);
+  return aliases[key] ?? key;
+}
 export function appliesToSubgroup(
   lesson: RuzLesson,
   groupCode: string,

@@ -21,7 +21,7 @@ import { TodaySchedule } from "@/components/schedule/TodaySchedule";
 
 export default async function TodayPage() {
   const user = await getCurrentUser();
-  if (!user || !user.groupId) redirect("/browse");
+  if (!user || !user.groupId) redirect("/login");
   const { offerings, tasks, now } = await loadStudyWorkspace(user);
   const [announcements, changes] = await Promise.all([
     prisma.announcement.findMany({
