@@ -1033,10 +1033,30 @@ try {
       });
       await go("/");
       await page.click('button[aria-label="Открыть меню"]');
-      await page.select(
-        'select[aria-label="Текущая группа"]',
-        "test-other-group",
+      await page.click(".group-switcher-trigger");
+      assert.equal(
+        await page.$eval('[role="option"][aria-selected="true"]', (el) =>
+          el.textContent.includes("Изолированные"),
+        ),
+        true,
       );
+      await page.waitForFunction(
+        () => document.activeElement?.getAttribute("role") === "option",
+      );
+      await page.keyboard.press("End");
+      await page.keyboard.press("Escape");
+      assert.equal(await page.$('[role="listbox"]'), null);
+      assert(await page.$("#account-menu"));
+      await page.click(".group-switcher-trigger");
+      const target = await page.$$(".group-option");
+      for (const option of target) {
+        if (
+          (await option.evaluate((el) => el.textContent)).includes(
+            "Другая тестовая группа",
+          )
+        )
+          await option.click();
+      }
       await page.waitForFunction(() =>
         document
           .querySelector("main")

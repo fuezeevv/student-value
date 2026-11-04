@@ -400,24 +400,32 @@ a.schedule-subject:hover {
 .desktop-nav a {
   display: inline-flex;
   align-items: center;
-  padding: 8px 16px;
-  border-radius: 9999px;
-  font-size: 13.5px;
+  min-height: 44px;
+  padding: 10px 16px;
+  position: relative;
+  font-size: 14px;
   font-weight: 500;
-  color: #94a3b8;
-  border: 1px solid transparent;
-  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  color: #a9bad4;
+  transition: color 0.16s ease;
+}
+.desktop-nav a::after {
+  content: "";
+  position: absolute;
+  height: 2px;
+  bottom: 0;
+  left: 16px;
+  right: 16px;
+  background: transparent;
+  border-radius: 2px;
 }
 .desktop-nav a:hover {
   color: #f1f5f9;
-  background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.08);
 }
 .desktop-nav a[aria-current] {
-  color: #ffffff;
-  background: rgba(49, 108, 255, 0.15);
-  border-color: rgba(129, 181, 255, 0.35);
-  box-shadow: 0 0 16px rgba(49, 108, 255, 0.25);
+  color: #f1f5f9;
+}
+.desktop-nav a[aria-current]::after {
+  background: #8fbbff;
 }
 .nav-actions {
   display: flex;
@@ -488,7 +496,7 @@ a.schedule-subject:hover {
   overflow: auto;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 18px;
-  background: rgba(20, 32, 56, 0.88);
+  background: #142038;
   backdrop-filter: blur(28px) saturate(190%);
   -webkit-backdrop-filter: blur(28px) saturate(190%);
   box-shadow:
@@ -648,11 +656,52 @@ a.schedule-subject:hover {
   display: grid;
   grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
   gap: 40px;
-  grid-template-areas: "focus deadlines" "courses changes";
+  grid-template-areas: "focus focus" "deadlines deadlines" "courses changes";
   align-items: start;
 }
 .daily-focus {
   grid-area: focus;
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+  gap: 28px;
+  align-items: start;
+}
+.daily-focus-aside {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.daily-focus-aside .progress-summary {
+  margin-top: 0;
+}
+.focus-progress-heading {
+  margin-bottom: 8px;
+}
+.focus-progress-heading .text-link {
+  padding: 10px;
+}
+.daily-focus-aside .overdue-note {
+  margin: 18px 0 0;
+  padding-top: 18px;
+  border-bottom: 0;
+  border-top: 1px solid #29364b;
+  order: 1;
+}
+.daily-focus-aside .work-item {
+  flex-direction: column;
+}
+.daily-focus-aside .progress-summary {
+  gap: 16px;
+}
+.daily-focus-aside .progress-summary > div {
+  min-width: 70px;
+  padding: 10px 0;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+  transform: none;
 }
 .daily-deadlines {
   grid-area: deadlines;
@@ -910,14 +959,19 @@ a.schedule-subject:hover {
   align-items: center;
   gap: 16px;
   padding: 21px 8px;
-  margin: 0 -8px;
-  border-radius: 12px;
+  margin: 0;
+  border-radius: 0;
   border-top: 1px solid #29364b;
   transition:
     background-color 0.16s ease,
     color 0.16s ease;
 }
-.course-line:hover {
+.course-list,
+.daily-courses {
+  border-bottom: 1px solid #29364b;
+}
+.course-line:hover,
+.course-line:focus-visible {
   background: #14223a50;
   color: #9bc4ff;
 }
@@ -1275,7 +1329,7 @@ a.schedule-subject:hover {
     gap: 20px;
   }
   .desktop-nav {
-    gap: 22px;
+    gap: 0;
   }
   .app-main {
     padding: 32px 28px 50px;
@@ -1368,6 +1422,10 @@ a.schedule-subject:hover {
   }
   .eyebrow {
     font-size: 10px;
+  }
+  .daily-focus {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 18px;
   }
   .daily-grid {
     grid-template-columns: minmax(0, 1fr);
@@ -1651,10 +1709,10 @@ a.schedule-subject:hover {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.65rem 0.85rem;
-  border-radius: 9px;
-  background: #263b5a;
-  border: 1px solid #536c92;
+  padding: 0.45rem 0.65rem;
+  border-radius: 6px;
+  background: #1a2e49;
+  border: 1px solid #415a7a;
   color: #e6f3ff;
   font-size: 0.82rem;
   overflow-wrap: anywhere;
@@ -1668,7 +1726,7 @@ a.schedule-subject:hover {
 }
 .completion-button {
   border: 1px solid #6887b1;
-  background: #243c60;
+  background: #1b2f4b;
   border-radius: 9px;
   color: #e6f2ff;
   padding: 0.65rem 0.8rem;
@@ -1748,4 +1806,105 @@ a.schedule-subject:hover {
   .work-facts {
     font-size: 0.78rem;
   }
+}
+
+/* Group selection stays within the account menu and the student's memberships. */
+.group-switcher {
+  margin: 18px 0 14px;
+}
+.group-switcher-label {
+  display: block;
+  color: #a9bad4;
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+.group-current,
+.group-switcher-trigger {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 48px;
+  padding: 10px 12px;
+  border: 1px solid #405675;
+  border-radius: 9px;
+  background: #1a2b45;
+  color: #edf3ff;
+  font-size: 13px;
+  text-align: left;
+}
+.group-current > span,
+.group-switcher-trigger > span {
+  min-width: 0;
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+.group-switcher-trigger > svg {
+  flex-shrink: 0;
+  color: #a9c9f4;
+}
+.group-switcher-trigger:hover {
+  border-color: #86aee2;
+}
+.group-switcher-trigger:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+.group-options {
+  margin-top: 6px;
+  padding: 5px;
+  max-height: 220px;
+  overflow-y: auto;
+  background: #0f1d33;
+  border: 1px solid #405675;
+  border-radius: 9px;
+}
+.group-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  width: 100%;
+  padding: 10px;
+  border-radius: 5px;
+  text-align: left;
+  font-size: 13px;
+  color: #c5d3e8;
+}
+.group-option > span {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.group-option small {
+  display: block;
+  color: #9fb3d0;
+  margin-top: 3px;
+  font-size: 11px;
+}
+.group-option svg {
+  flex-shrink: 0;
+  color: #9dcaff;
+}
+.group-option:hover,
+.group-option:focus-visible {
+  background: #243c5e;
+}
+.group-option[aria-selected="true"] {
+  color: #edf3ff;
+  background: #1b3251;
+}
+.group-switcher-error {
+  margin-top: 8px;
+  color: #ffb1c2;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.group-current small,
+.group-switcher-trigger small {
+  display: block;
+  margin-top: 4px;
+  color: #a9bad4;
+  font-size: 11px;
 }

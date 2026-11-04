@@ -188,49 +188,54 @@ export default async function TodayPage() {
               )}
             </div>
           </div>
-          {overdue.length > 0 && (
-            <div className="overdue-note">
-              <CornerDownRight size={17} />
-              <span>
-                Срок прошёл: {overdue.length}. Пока не отмечены выполненными.{" "}
-                <Link href="/deadlines#overdue">Разобраться со сроками</Link>
-              </span>
+          <div className="daily-focus-aside">
+            {overdue.length > 0 && (
+              <div className="overdue-note">
+                <CornerDownRight size={17} />
+                <span>
+                  Срок прошёл: {overdue.length}. Пока не отмечены выполненными.{" "}
+                  <Link href="/deadlines#overdue">Разобраться со сроками</Link>
+                </span>
+              </div>
+            )}
+            <div className="section-heading focus-progress-heading">
+              <h2>Мой прогресс</h2>
+              <Link
+                href="/analytics"
+                className="text-link"
+                aria-label="Подробнее о моём прогрессе"
+              >
+                <ArrowUpRight size={19} />
+              </Link>
             </div>
-          )}
-          <div className="progress-summary" aria-label="Мой учебный прогресс">
-            <div>
-              <strong>
-                {accepted}
-                <span>выполнено из {tasks.length}</span>
-              </strong>
+            <div className="progress-summary" aria-label="Мой учебный прогресс">
+              <div>
+                <strong>
+                  {accepted}
+                  <span>выполнено из {tasks.length}</span>
+                </strong>
+              </div>
+              <div>
+                <strong>
+                  {active.length}
+                  <span>в работе</span>
+                </strong>
+              </div>
+              <div>
+                <strong>
+                  {submitted}
+                  <span>на проверке</span>
+                </strong>
+              </div>
             </div>
-            <div>
-              <strong>
-                {active.length}
-                <span>в работе</span>
-              </strong>
-            </div>
-            <div>
-              <strong>
-                {submitted}
-                <span>на проверке</span>
-              </strong>
-            </div>
-            <Link
-              href="/analytics"
-              className="text-link"
-              aria-label="Подробнее о моём прогрессе"
-            >
-              <ArrowUpRight size={19} />
-            </Link>
+            {otherActive.length > 0 && (
+              <div className="space-y-2.5 mt-6">
+                {otherActive.slice(0, 2).map((task) => (
+                  <StudyTaskRow key={task.id} task={task} showDate={false} />
+                ))}
+              </div>
+            )}
           </div>
-          {otherActive.length > 0 && (
-            <div className="space-y-2.5 mt-6">
-              {otherActive.slice(0, 2).map((task) => (
-                <StudyTaskRow key={task.id} task={task} showDate={false} />
-              ))}
-            </div>
-          )}
         </section>
         <section className="daily-deadlines">
           <div className="section-heading">

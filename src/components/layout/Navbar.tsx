@@ -77,7 +77,7 @@ export function Navbar({
         setOpen(false);
     };
     const escape = (e: KeyboardEvent) => {
-      if (open && e.key === "Escape") {
+      if (open && e.key === "Escape" && !e.defaultPrevented) {
         setOpen(false);
         trigger.current?.focus();
       }

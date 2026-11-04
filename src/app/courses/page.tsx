@@ -23,7 +23,7 @@ export default async function CoursesPage() {
           {offerings.length} в семестре
         </span>
       </div>
-      <div>
+      <div className="course-list">
         {offerings.map((o, index) => {
           const done = o.tasks.filter(
             (t) =>
