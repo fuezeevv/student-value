@@ -1,3 +1,4 @@
+import { publicGroupDefinition } from "@/lib/groups/public-groups";
 import { randomUUID } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
@@ -43,8 +44,6 @@ export async function loadRuzSchedule(
   rawWeek?: string,
   deps: Dependencies = {},
 ): Promise<ScheduleResult> {
-  const now = deps.now ?? new Date(),
-    weekStart = requestedWeek(rawWeek, now);
   const group = await prisma.studyGroup.findFirst({
     where: {
       id: user.groupId,
@@ -65,7 +64,47 @@ export async function loadRuzSchedule(
     },
   });
   if (!group) throw new ForbiddenError("Нет доступа к расписанию этой группы");
-  const subgroup = group.enrollments[0]?.subgroup ?? null;
+  return loadGroupSchedule(
+    group,
+    group.enrollments[0]?.subgroup ?? null,
+    rawWeek,
+    deps,
+  );
+}
+
+/** Public RUZ contains no student data; resolve only the owner's fixed public catalog. */
+export async function loadPublicRuzSchedule(
+  slug: string,
+  rawWeek?: string,
+  deps: Dependencies = {},
+): Promise<ScheduleResult> {
+  const definition = publicGroupDefinition(slug);
+  if (!definition) throw new ForbiddenError("Группа недоступна для просмотра");
+  const group = await prisma.studyGroup.findUnique({
+    where: { code: definition.code },
+    select: { id: true, code: true, ruzGroupId: true },
+  });
+  if (!group) throw new ForbiddenError("Группа недоступна для просмотра");
+  if (group.ruzGroupId !== definition.ruzId)
+    return {
+      state: "UNCONFIGURED",
+      data: null,
+      fetchedAt: null,
+      subgroup: null,
+      weekStart: requestedWeek(rawWeek, deps.now ?? new Date()),
+    };
+  return loadGroupSchedule(group, null, rawWeek, deps);
+}
+
+async function loadGroupSchedule(
+  group: { id: string; code: string; ruzGroupId: number | null },
+  subgroup: number | null,
+  rawWeek?: string,
+  deps: Dependencies = {},
+): Promise<ScheduleResult> {
+  const now = deps.now ?? new Date(),
+    weekStart = requestedWeek(rawWeek, now);
+
   const base = { weekStart, fetchedAt: null, data: null, subgroup };
   if (!group.ruzGroupId) return { ...base, state: "UNCONFIGURED" };
   const where = { groupId_weekStart: { groupId: group.id, weekStart } };

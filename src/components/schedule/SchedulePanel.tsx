@@ -18,7 +18,9 @@ function LessonRow({
   lesson,
   courses,
   compact = false,
+  publicBase,
 }: {
+  publicBase?: string;
   lesson: RuzLesson;
   courses: Course[];
   compact?: boolean;
@@ -55,7 +57,7 @@ function LessonRow({
           <Link
             className="schedule-subject"
             title={lesson.subject}
-            href={`/courses/${course.id}`}
+            href={`${publicBase ?? ""}/courses/${course.id}`}
           >
             {lesson.subject} ↗
           </Link>
@@ -97,7 +99,9 @@ export function SchedulePanel({
   courses,
   now = new Date(),
   compact = false,
+  publicBase,
 }: {
+  publicBase?: string;
   result: ScheduleResult;
   courses: Course[];
   now?: Date;
@@ -124,12 +128,15 @@ export function SchedulePanel({
       <div className="section-heading">
         <h2>{compact ? "Пары и аудитории" : "Расписание недели"}</h2>
         {compact ? (
-          <Link className="text-link" href="/schedule">
+          <Link className="text-link" href={`${publicBase ?? ""}/schedule`}>
             Вся неделя ↗
           </Link>
         ) : (
-          <Link className="text-link" href="/lessons">
-            Занятия и записи ↗
+          <Link
+            className="text-link"
+            href={publicBase ? `${publicBase}/courses` : "/lessons"}
+          >
+            {publicBase ? "Предметы группы ↗" : "Занятия и записи ↗"}
           </Link>
         )}
       </div>
@@ -196,7 +203,7 @@ export function SchedulePanel({
       {compact && !current?.lessons.length && next && (
         <Link
           className="text-link block py-2"
-          href={`/schedule#day-${next.date}`}
+          href={`${publicBase ?? ""}/schedule#day-${next.date}`}
         >
           {next.date === addDays(today, 1) ? "Завтра" : label(next.date)} ·
           расписание с {next.lessons[0].start} ↗
@@ -222,6 +229,7 @@ export function SchedulePanel({
                   lesson={lesson}
                   courses={courses}
                   compact={compact}
+                  publicBase={publicBase}
                 />
               ),
             )
@@ -233,7 +241,7 @@ export function SchedulePanel({
           {compact && day.lessons.length > 2 && (
             <Link
               className="text-link block py-3"
-              href={`/schedule#day-${day.date}`}
+              href={`${publicBase ?? ""}/schedule#day-${day.date}`}
             >
               Ещё {day.lessons.length - 2} · открыть день ↗
             </Link>
@@ -244,7 +252,9 @@ export function SchedulePanel({
         <p className="schedule-footnote">
           {result.subgroup !== null
             ? `Показана ваша подгруппа ${result.subgroup}. `
-            : "Подгруппа в профиле группы не указана: показаны занятия всех подгрупп. "}
+            : publicBase
+              ? "Гостевой просмотр: показаны занятия всех подгрупп. "
+              : "Подгруппа в профиле группы не указана: показаны занятия всех подгрупп. "}
           Время — Москва. Расписание обновляется при открытии, не чаще одного
           раза в 10 минут на группу и неделю. Военная подготовка, форсайт и НИР
           скрыты в Student Value. Содержание прошедших занятий и задания — в

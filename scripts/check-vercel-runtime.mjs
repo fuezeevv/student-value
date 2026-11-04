@@ -78,7 +78,7 @@ async function check(patch, shouldStart) {
         }
         const live = await fetch("http://127.0.0.1:3305/api/health/live");
         assert.equal(live.status, 200);
-        const response = await fetch("http://127.0.0.1:3305/", {
+        const response = await fetch("http://127.0.0.1:3305/courses", {
           redirect: "manual",
           headers: { cookie: "study_dev_user_id=user-dev-owner" },
         });

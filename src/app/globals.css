@@ -1908,3 +1908,217 @@ a.schedule-subject:hover {
   color: #a9bad4;
   font-size: 11px;
 }
+
+/* Guest browsing is a separate read-only projection, never a student session. */
+.preview-landing {
+  max-width: 960px;
+  margin: auto;
+}
+.preview-track {
+  margin-top: 32px;
+}
+.preview-track h2 {
+  font-size: 19px;
+  color: #c5d9f8;
+  margin-bottom: 14px;
+}
+.preview-group-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.preview-group {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 22px;
+  border: 1px solid #35455e;
+  border-radius: 12px;
+  background: #142139;
+  transition:
+    background 0.16s ease,
+    border-color 0.16s ease;
+}
+.preview-group:hover {
+  background: #1b2d49;
+  border-color: #82afeb;
+}
+.preview-group strong {
+  font-size: 26px;
+  font-weight: 600;
+  color: #e4efff;
+}
+.preview-group > span {
+  flex: 1;
+  color: #afc3df;
+  font-size: 13px;
+}
+.preview-group > svg {
+  flex-shrink: 0;
+  color: #96c3ff;
+}
+.preview-explainer {
+  color: #aebfd7;
+  font-size: 13px;
+  line-height: 1.8;
+  margin-top: 28px;
+}
+.preview-explainer a {
+  color: #9dcaff;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.preview-context {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  color: #b2c7e5;
+  font-size: 12px;
+  border-bottom: 1px solid #35435d;
+  padding-bottom: 16px;
+  margin-bottom: 28px;
+}
+.preview-context a {
+  color: #9dcaff;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+}
+.preview-overview {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+  margin: 20px 0 32px;
+  color: #b4c7e3;
+}
+.preview-overview strong {
+  color: #f0f5ff;
+  font-size: 28px;
+}
+.preview-task-section {
+  margin-bottom: 32px;
+}
+.preview-file-count {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #9bb1d0;
+  margin-top: 12px;
+  font-size: 12px;
+}
+.preview-description {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.8;
+  font-size: 15px;
+  color: #d2dff1;
+  max-width: 850px;
+  margin: 24px 0;
+}
+.preview-task-date {
+  color: #b8d2f4;
+  margin: 16px 0;
+  font-size: 15px;
+}
+.preview-materials {
+  padding: 20px;
+  border: 1px solid #35435d;
+  border-radius: 12px;
+  margin: 24px 0;
+  max-width: 850px;
+}
+.preview-materials h2 {
+  font-size: 17px;
+  margin-bottom: 16px;
+}
+.preview-materials li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 0;
+  font-size: 13px;
+  color: #ceddf1;
+  overflow-wrap: anywhere;
+}
+.preview-materials li svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: #97afd0;
+}
+.preview-materials p {
+  color: #a9bad4;
+  font-size: 12px;
+  line-height: 1.7;
+  margin-top: 12px;
+}
+.preview-account-note {
+  margin-top: 40px;
+  padding: 24px 0;
+  border-top: 1px solid #35435d;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+.preview-account-note strong {
+  font-size: 17px;
+  font-weight: 550;
+}
+.preview-account-note p {
+  margin-top: 8px;
+  color: #a9bad4;
+  font-size: 13px;
+  line-height: 1.7;
+  max-width: 660px;
+}
+.preview-account-note .action-primary {
+  flex-shrink: 0;
+}
+.login-preview-entry {
+  border-top: 1px solid #35435d;
+  padding: 24px 0;
+}
+.login-preview-entry h2 {
+  font-size: 18px;
+}
+.login-preview-entry p {
+  color: #aebfd7;
+  font-size: 13px;
+  line-height: 1.7;
+  margin: 8px 0 18px;
+}
+@media (max-width: 767px) {
+  .preview-group-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .preview-group {
+    padding: 18px;
+  }
+  .preview-group strong {
+    font-size: 23px;
+  }
+  .preview-account-note {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .preview-login {
+    font-size: 12px;
+    white-space: nowrap;
+  }
+}
+
+.preview-context-actions {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+.preview-task-title {
+  font-size: clamp(26px, 3vw, 40px);
+  line-height: 1.25;
+  max-width: 1000px;
+}

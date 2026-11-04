@@ -1,5 +1,13 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ArrowRight, Lock, Sparkles, Clock, ShieldCheck, Download } from "lucide-react";
+import {
+  ArrowRight,
+  Lock,
+  Sparkles,
+  Clock,
+  ShieldCheck,
+  Download,
+} from "lucide-react";
 import { isDevAuthEnabled } from "@/lib/auth/dev-policy";
 import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
@@ -45,7 +53,7 @@ export default async function LoginPage({
         <div className="flex items-center justify-between gap-3 mb-7 flex-wrap">
           <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-500/10 border border-blue-400/25 text-blue-300 text-xs font-medium tracking-wide">
             <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
-            СПбПУ · 40102 · Семестр 5
+            СПбПУ · учебные группы
           </div>
           <span className="text-xs text-slate-400 font-mono tracking-wider">
             v1.984
@@ -91,6 +99,16 @@ export default async function LoginPage({
           </div>
         </div>
 
+        <section className="login-preview-entry">
+          <h2>Можно просто посмотреть</h2>
+          <p>
+            Выберите группу и откройте общие работы, сроки и расписание без
+            входа.
+          </p>
+          <Link className="action-primary" href="/browse">
+            Посмотреть без регистрации <ArrowRight size={17} />
+          </Link>
+        </section>
         {dev ? (
           <section className="border-t border-white/10 pt-6">
             <h2 className="text-base font-medium text-slate-200 mb-2">
@@ -153,8 +171,8 @@ export default async function LoginPage({
               </span>
             </div>
             <p className="text-xs text-slate-400 leading-relaxed mb-5">
-              Вход привязан к вашей университетской почте. Для первого
-              подключения требуется код-приглашение от старосты.
+              Вход привязан к вашему аккаунту Google. Для первого подключения
+              требуется код-приглашение от старосты.
             </p>
 
             {error && (
@@ -242,8 +260,8 @@ export default async function LoginPage({
               Вход готовится к запуску
             </h2>
             <p className="text-xs text-slate-400 leading-relaxed">
-              Подключаем вход через Google. Учебные данные доступны только
-              участникам группы после подтверждения.
+              Подключаем вход через Google. Личный прогресс и исходные файлы
+              доступны участникам группы после подтверждения.
             </p>
           </section>
         )}

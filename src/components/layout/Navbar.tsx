@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import type { SessionUser } from "@/lib/auth/session";
 import { switchDevUserAction } from "@/server/actions/task-actions";
 import { Logo } from "@/components/ui/Logo";
+import { PreviewNavbar } from "@/components/preview/PreviewNavbar";
 import { GroupSwitcher } from "@/components/workspace/GroupSwitcher";
 import {
   BookOpen,
@@ -93,6 +94,9 @@ export function Navbar({
     if (open) menu.current?.querySelector<HTMLAnchorElement>("a")?.focus();
   }, [open]);
   const toggle = () => setOpen((v) => !v);
+  if (pathname === "/browse" || pathname.startsWith("/browse/")) {
+    return <PreviewNavbar pathname={pathname} signedIn={!!user} />;
+  }
   return (
     <>
       <a className="skip-link" href="#main">

@@ -1,8 +1,9 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { chooseFocus } from "@/lib/study/priority";
 import { ArrowRight, ArrowUpRight, CornerDownRight } from "lucide-react";
 import { prisma } from "@/lib/db/prisma";
-import { requireCurrentUser } from "@/lib/auth/session";
+import { getCurrentUser } from "@/lib/auth/session";
 import { hasPermission } from "@/lib/permissions/checker";
 import { isTrustedAccepted } from "@/server/domain/trust";
 import {
@@ -19,7 +20,8 @@ import { Suspense } from "react";
 import { TodaySchedule } from "@/components/schedule/TodaySchedule";
 
 export default async function TodayPage() {
-  const user = await requireCurrentUser();
+  const user = await getCurrentUser();
+  if (!user || !user.groupId) redirect("/browse");
   const { offerings, tasks, now } = await loadStudyWorkspace(user);
   const [announcements, changes] = await Promise.all([
     prisma.announcement.findMany({

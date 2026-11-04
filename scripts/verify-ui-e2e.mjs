@@ -12,6 +12,11 @@ isolatedUrl.pathname = "/studentvalue_test_e2e";
 process.env.TEST_DATABASE_URL = isolatedUrl.href;
 const env = prepareTestDatabase();
 run("node", ["node_modules/tsx/dist/cli.mjs", "prisma/test-fixtures.ts"], env);
+run(
+  "node",
+  ["node_modules/tsx/dist/cli.mjs", "tests/fixtures/public-preview.ts"],
+  env,
+);
 const test = new PrismaClient({ datasourceUrl: env.DATABASE_URL });
 const working = new PrismaClient({ datasourceUrl: workingUrl });
 async function fingerprint() {
@@ -227,8 +232,89 @@ try {
   };
   await scenario("guest cannot use a fallback owner", async () => {
     await go("/");
-    assert(page.url().endsWith("/login"));
+    assert(page.url().endsWith("/browse"));
+    assert(!(await body()).includes("test_headman"));
   });
+  await scenario(
+    "anonymous visitors choose a group and inspect work on desktop/mobile without accounts or private access",
+    async () => {
+      const counts = async () =>
+        Promise.all([
+          test.user.count(),
+          test.session.count(),
+          test.enrollment.count(),
+          test.groupMember.count(),
+          test.studentTaskProgress.count(),
+          test.xpEvent.count(),
+        ]);
+      const before = await counts();
+      for (const width of [390, 1440]) {
+        await page.setViewport({ width, height: 900 });
+        await go("/browse");
+        assert.equal((await page.$$(".preview-group")).length, 8);
+        await page.click('a.preview-group[href="/browse/5130901-40102"]');
+        await page.waitForSelector(".preview-work");
+        assert((await body()).includes("[TEST] Открытая лабораторная"));
+        assert(!(await body()).includes("Отметить выполненным"));
+        assert.equal(await page.$(".completion-button"), null);
+        await go("/browse/5130901-40102/tasks/test-preview-public");
+        const html = await page.content();
+        assert(html.includes("[TEST] Методичка"));
+        for (const forbidden of [
+          "PRIVATE",
+          "/materials/test-preview-material",
+          "test-preview-individual",
+          "test-preview-mixed",
+        ]) {
+          assert(!html.includes(forbidden), forbidden);
+        }
+        assert(await page.$('a[href="/login"]'));
+        assert(
+          await page.evaluate(
+            () => document.documentElement.scrollWidth <= innerWidth,
+          ),
+        );
+        assert.equal(
+          (
+            await go("/browse/5130901-40102/tasks/test-preview-individual")
+          ).status(),
+          404,
+        );
+        assert.equal(
+          (
+            await go("/browse/5130901-40101/tasks/test-preview-public")
+          ).status(),
+          404,
+        );
+        await go("/browse/5130902-40204");
+        assert((await body()).includes("пока не наполнено"));
+        await go("/browse/5130902-40204/schedule");
+        assert((await body()).includes("[TEST] Открытое расписание"));
+        await go("/tasks/test-preview-public");
+        assert(page.url().endsWith("/login"));
+      }
+      for (const route of [
+        "/api/materials/test-preview-material/file?chunk=0",
+        "/api/calendar/export",
+      ]) {
+        const response = await page.goto(base + route);
+        assert.equal(response.status(), 401);
+      }
+      assert.deepEqual(await counts(), before);
+      const cookies = await page.cookies();
+      assert(
+        !cookies.some((c) =>
+          [
+            "__Host-session",
+            "study_dev_user_id",
+            "__Host-sv-group",
+            "sv_group",
+          ].includes(c.name),
+        ),
+      );
+      await page.setViewport({ width: 1280, height: 900 });
+    },
+  );
   await scenario(
     "guest can read legal pages and follow legal links on desktop and mobile",
     async () => {
