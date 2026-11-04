@@ -84,6 +84,13 @@ describe("isolated RUZ cache and access", () => {
     expect(stale.state).toBe("STALE");
     expect(stale.fetchedAt).toEqual(now);
     expect(stale.data).toEqual(first.data);
+    expect(
+      (
+        await p.ruzScheduleCache.findUniqueOrThrow({
+          where: { groupId_weekStart: { groupId, weekStart: "2026-11-02" } },
+        })
+      ).lastErrorCode,
+    ).toBe("NETWORK");
     await loadRuzSchedule(user, undefined, {
       now: new Date(now.getTime() + 11 * 60000 + 1000),
       fetcher,
@@ -103,6 +110,13 @@ describe("isolated RUZ cache and access", () => {
     });
     expect(result.state).toBe("STALE");
     expect(result.data?.groupId).toBe(ruzId);
+    expect(
+      (
+        await p.ruzScheduleCache.findUniqueOrThrow({
+          where: { groupId_weekStart: { groupId, weekStart: "2026-11-02" } },
+        })
+      ).lastErrorCode,
+    ).toBe("INVALID_RESPONSE");
     await expect(
       loadRuzSchedule(
         { ...user, id: "user-dev-student", isPlatformOwner: true },

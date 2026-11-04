@@ -12,6 +12,11 @@ import {
 
 const TTL = 10 * 60 * 1000;
 const MAX_BYTES = 512 * 1024;
+class RuzProviderError extends Error {
+  constructor(readonly code: string) {
+    super("RUZ provider request failed");
+  }
+}
 export type ScheduleResult = {
   subgroup: number | null;
   state: "FRESH" | "STALE" | "UNAVAILABLE" | "UNCONFIGURED";
@@ -26,11 +31,12 @@ async function fetchRuz(url: string): Promise<unknown> {
     throw Error("Real RUZ requests are forbidden in tests");
   const response = await fetch(url, {
     cache: "no-store",
-    signal: AbortSignal.timeout(6000),
+    signal: AbortSignal.timeout(12000),
     redirect: "error",
     headers: { Accept: "application/json" },
   });
-  if (!response.ok || !response.body) throw Error("RUZ unavailable");
+  if (!response.ok) throw new RuzProviderError(`HTTP_${response.status}`);
+  if (!response.body) throw new RuzProviderError("EMPTY_RESPONSE");
   const reader = response.body.getReader(),
     chunks: Uint8Array[] = [];
   let size = 0;
@@ -39,7 +45,7 @@ async function fetchRuz(url: string): Promise<unknown> {
       const r = await reader.read();
       if (r.done) break;
       size += r.value.byteLength;
-      if (size > MAX_BYTES) throw Error("RUZ payload too large");
+      if (size > MAX_BYTES) throw new RuzProviderError("TOO_LARGE");
       chunks.push(r.value);
     }
   } finally {
@@ -51,7 +57,11 @@ async function fetchRuz(url: string): Promise<unknown> {
     bytes.set(c, offset);
     offset += c.byteLength;
   }
-  return JSON.parse(new TextDecoder().decode(bytes));
+  try {
+    return JSON.parse(new TextDecoder().decode(bytes));
+  } catch {
+    throw new RuzProviderError("INVALID_JSON");
+  }
 }
 
 function cachedWeek(
@@ -131,7 +141,7 @@ export async function loadRuzSchedule(
     });
   // Lease value is a compare-and-swap token. Independent Vercel instances share it.
   const lease = new Date(
-    now.getTime() + 20000 + (parseInt(randomUUID().slice(0, 4), 16) % 1000),
+    now.getTime() + 30000 + (parseInt(randomUUID().slice(0, 4), 16) % 1000),
   );
   const locked = await prisma.ruzScheduleCache.updateMany({
     where: {
@@ -151,8 +161,20 @@ export async function loadRuzSchedule(
   try {
     const raw = await (deps.fetcher ?? fetchRuz)(
       `${RUZ_ORIGIN}/api/v1/ruz/scheduler/${group.ruzGroupId}?date=${weekStart}`,
-    );
-    const data = parseRuzWeek(raw, group.ruzGroupId, group.code, weekStart);
+    ).catch((error) => {
+      if (error instanceof RuzProviderError) throw error;
+      throw new RuzProviderError(
+        ["TimeoutError", "AbortError"].includes(error?.name)
+          ? "TIMEOUT"
+          : "NETWORK",
+      );
+    });
+    let data: RuzWeek;
+    try {
+      data = parseRuzWeek(raw, group.ruzGroupId, group.code, weekStart);
+    } catch {
+      throw new RuzProviderError("INVALID_RESPONSE");
+    }
     await prisma.ruzScheduleCache.updateMany({
       where: { groupId: group.id, weekStart, leaseUntil: lease },
       data: {
@@ -165,13 +187,14 @@ export async function loadRuzSchedule(
     });
     cached = await prisma.ruzScheduleCache.findUnique({ where });
     return present();
-  } catch {
+  } catch (error) {
     await prisma.ruzScheduleCache.updateMany({
       where: { groupId: group.id, weekStart, leaseUntil: lease },
       data: {
         leaseUntil: null,
         retryAfter: new Date(now.getTime() + 60000),
-        lastErrorCode: "UNAVAILABLE_OR_INVALID",
+        lastErrorCode:
+          error instanceof RuzProviderError ? error.code : "INTERNAL",
       },
     });
     cached = await prisma.ruzScheduleCache.findUnique({ where });
