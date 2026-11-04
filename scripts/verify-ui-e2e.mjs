@@ -397,6 +397,109 @@ try {
       await page.setViewport({ width: 1280, height: 900 });
     },
   );
+  await scenario(
+    "official timetable and channel links work on desktop/mobile, with explicit stale fallback",
+    async () => {
+      const group = await test.studyGroup.findUniqueOrThrow({
+        where: { id: "test-group" },
+      });
+      const today = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Europe/Moscow",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }).format(new Date());
+      const anchor = new Date(today + "T12:00:00Z"),
+        offset = (anchor.getUTCDay() + 6) % 7;
+      const start = new Date(anchor.getTime() - offset * 86400000)
+        .toISOString()
+        .slice(0, 10);
+      const payload = {
+        version: 1,
+        groupId: 888558,
+        groupCode: group.code,
+        facultyId: 125,
+        weekStart: start,
+        days: Array.from({ length: 7 }, (_, i) => ({
+          date: new Date(Date.parse(start + "T12:00:00Z") + i * 86400000)
+            .toISOString()
+            .slice(0, 10),
+          lessons:
+            i === offset
+              ? [
+                  {
+                    subject: "[TEST] Пара из РУЗ",
+                    start: "12:00",
+                    end: "13:40",
+                    type: "Лаб",
+                    note: "Подгруппа 1",
+                    teachers: ["[TEST] Преподаватель"],
+                    rooms: ["3 к. · 402"],
+                    lmsUrl: null,
+                  },
+                ]
+              : [],
+        })),
+      };
+      await test.studyGroup.update({
+        where: { id: group.id },
+        data: { ruzGroupId: 888558 },
+      });
+      const cacheWhere = {
+        groupId_weekStart: { groupId: group.id, weekStart: start },
+      };
+      try {
+        await test.ruzScheduleCache.upsert({
+          where: cacheWhere,
+          create: {
+            groupId: group.id,
+            weekStart: start,
+            payload,
+            fetchedAt: new Date(),
+          },
+          update: {
+            payload,
+            fetchedAt: new Date(),
+            retryAfter: null,
+            leaseUntil: null,
+          },
+        });
+        for (const width of [1280, 390]) {
+          await page.setViewport({ width, height: 900 });
+          await go("/schedule");
+          const content = await body();
+          assert(content.includes("[TEST] Пара из РУЗ"));
+          assert(content.includes("3 к. · 402"));
+          assert(content.includes("Подгруппа 1"));
+          assert(await page.$('a[href="https://t.me/studentvalue"]'));
+          assert(
+            await page.evaluate(
+              () => document.documentElement.scrollWidth <= innerWidth + 1,
+            ),
+          );
+        }
+        await test.ruzScheduleCache.update({
+          where: cacheWhere,
+          data: {
+            fetchedAt: new Date(Date.now() - 11 * 60000),
+            retryAfter: new Date(Date.now() + 120000),
+          },
+        });
+        await go("/schedule");
+        assert((await body()).includes("Показана сохранённая версия"));
+        assert((await body()).includes("[TEST] Пара из РУЗ"));
+        await go("/");
+        assert((await body()).includes("Пары и аудитории"));
+        assert((await body()).includes("[TEST] Пара из РУЗ"));
+      } finally {
+        await test.studyGroup.update({
+          where: { id: group.id },
+          data: { ruzGroupId: group.ruzGroupId },
+        });
+        await page.setViewport({ width: 1280, height: 900 });
+      }
+    },
+  );
   await scenario("student cannot access admin or private roster", async () => {
     await go("/admin");
     assert((await body()).includes("403 Доступ ограничен"));

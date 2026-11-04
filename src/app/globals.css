@@ -2,6 +2,155 @@
 @tailwind components;
 @tailwind utilities;
 
+.schedule-panel {
+  margin: 0 0 2rem;
+}
+.schedule-source {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1rem;
+  color: #b2c4dc;
+  font-size: 0.78rem;
+  margin: 0.5rem 0 1rem;
+}
+.schedule-source a {
+  color: #9fc9ff;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.schedule-day {
+  margin: 1.5rem 0 2rem;
+  scroll-margin-top: 6rem;
+}
+.schedule-day-title {
+  font-size: 1rem;
+  font-weight: 650;
+  color: #e9f2ff;
+  margin-bottom: 0.5rem;
+}
+.schedule-day-title::first-letter {
+  text-transform: uppercase;
+}
+.schedule-day-title span {
+  color: #b5c7df;
+  font-weight: 400;
+}
+.schedule-lesson {
+  display: flex;
+  gap: 1.25rem;
+  padding: 1.1rem 0;
+  border-bottom: 1px solid #2c3c54;
+}
+.schedule-time {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  min-width: 3.3rem;
+  font-variant-numeric: tabular-nums;
+  color: #b5c7df;
+  font-size: 0.82rem;
+}
+.schedule-time strong {
+  color: #b4d6ff;
+  font-size: 1.2rem;
+  font-weight: 650;
+}
+.schedule-kind {
+  color: #a7c5ea;
+  font-size: 0.75rem;
+  margin-bottom: 0.2rem;
+}
+.schedule-subject {
+  display: block;
+  color: #f1f6ff;
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+a.schedule-subject:hover {
+  color: #9fc9ff;
+}
+.schedule-room {
+  color: #d7e5f5;
+  margin-top: 0.35rem;
+  font-size: 0.88rem;
+}
+.schedule-teacher {
+  color: #b5c7df;
+  font-size: 0.82rem;
+  margin-top: 0.2rem;
+}
+.schedule-empty,
+.schedule-footnote {
+  color: #b5c7df;
+  font-size: 0.85rem;
+  line-height: 1.6;
+  padding: 0.5rem 0;
+}
+.schedule-warning,
+.schedule-holiday {
+  padding: 0.75rem 1rem;
+  border-left: 3px solid #9e4e66;
+  background: #281c2c;
+  color: #f4d4df;
+  font-size: 0.85rem;
+  line-height: 1.6;
+  margin: 0.75rem 0;
+}
+.schedule-week-nav {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 2rem;
+  border-bottom: 1px solid #34425b;
+}
+.schedule-week-nav a {
+  color: #b4d6ff;
+  padding: 0.75rem 0;
+  min-height: 44px;
+  font-size: 0.9rem;
+}
+.schedule-compact {
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #34425b;
+}
+.schedule-compact .schedule-day {
+  margin: 0.75rem 0 0;
+}
+.schedule-compact .schedule-lesson {
+  padding: 0.65rem 0;
+}
+.schedule-compact .schedule-teacher {
+  display: none;
+}
+.schedule-compact .schedule-subject {
+  font-size: 0.9rem;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.schedule-compact .schedule-time strong {
+  font-size: 1rem;
+}
+.schedule-compact .schedule-room {
+  font-size: 0.8rem;
+  margin-top: 0.15rem;
+}
+@media (min-width: 900px) {
+  .schedule-compact .schedule-day {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0 2rem;
+  }
+  .schedule-compact .schedule-day-title {
+    grid-column: 1 / -1;
+  }
+}
+
 .lesson-filters {
   display: flex;
   gap: 0.5rem;

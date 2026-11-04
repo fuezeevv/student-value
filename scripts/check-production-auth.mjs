@@ -75,6 +75,7 @@ try {
       "/tasks/task-otu-lab1",
       "/deadlines",
       "/calendar",
+      "/schedule",
       "/members",
       "/search?q=test",
       "/transcripts",

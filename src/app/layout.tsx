@@ -27,16 +27,14 @@ export const metadata: Metadata = {
     title: "Student Value 1.984",
   },
   metadataBase: new URL(
-    process.env.APP_ORIGIN || "https://studentvalue1984.eu.cc"
+    process.env.APP_ORIGIN || "https://studentvalue1984.eu.cc",
   ),
   icons: {
     icon: [
       { url: "/icon.svg", type: "image/svg+xml" },
       { url: "/favicon.ico", sizes: "any" },
     ],
-    apple: [
-      { url: "/apple-icon.png", sizes: "180x180", type: "image/png" },
-    ],
+    apple: [{ url: "/apple-icon.png", sizes: "180x180", type: "image/png" }],
   },
   openGraph: {
     title: "Student Value 1.984",
@@ -89,6 +87,14 @@ export default async function RootLayout({
             Student Value <span className="text-blue-300">1.984</span>
           </span>
           <span>Учёба в своём ритме.</span>
+          <a
+            href="https://t.me/studentvalue"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-link"
+          >
+            Новости и вопросы · Telegram ↗
+          </a>
           <LegalLinks />
         </footer>
       </body>

@@ -15,28 +15,12 @@ import { FluidRibbon } from "@/components/study/FluidRibbon";
 import { CreateTaskModal } from "@/components/task/CreateTaskModal";
 import { formatInTimeZone } from "date-fns-tz";
 import { CalendarNotice } from "@/components/workspace/CalendarNotice";
+import { Suspense } from "react";
+import { TodaySchedule } from "@/components/schedule/TodaySchedule";
 
 export default async function TodayPage() {
   const user = await requireCurrentUser();
   const { offerings, tasks, now } = await loadStudyWorkspace(user);
-  const day = formatInTimeZone(now, "Europe/Moscow", "yyyy-MM-dd");
-  const dayStart = new Date(`${day}T00:00:00+03:00`);
-  const todayLessons = await prisma.classSession.findMany({
-    where: {
-      status: { in: ["PUBLISHED", "CANCELLED"] },
-      sessionDate: {
-        gte: dayStart,
-        lt: new Date(dayStart.getTime() + 86400000),
-      },
-      courseOffering: { groups: { some: { groupId: user.groupId } } },
-    },
-    include: {
-      courseOffering: { include: { courseDefinition: true } },
-      context: { select: { audienceNote: true, coverage: true } },
-    },
-    orderBy: { sessionDate: "asc" },
-    take: 10,
-  });
   const [announcements, changes] = await Promise.all([
     prisma.announcement.findMany({
       where: { groupId: user.groupId, status: "PUBLISHED" },
@@ -113,78 +97,30 @@ export default async function TodayPage() {
         )}
       </div>
       <CalendarNotice userId={user.id} />
-      {todayLessons.length > 0 && (
-        <section className="mb-8 border-b border-slate-700 pb-6">
-          <div className="section-heading">
-            <h2>Сегодня на занятиях</h2>
-            <Link className="text-link" href="/lessons">
-              Занятия и записи ↗
-            </Link>
-          </div>
-          {todayLessons.length ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
-              {todayLessons.map((lesson) => (
-                <Link
-                  key={lesson.id}
-                  className="group p-4 rounded-2xl bg-[#111c30]/55 hover:bg-[#15243e]/85 border border-white/[0.08] hover:border-blue-400/30 transition-all flex items-center gap-3.5 shadow-sm hover:shadow-md hover:-translate-y-0.5"
-                  href={`/lessons/${lesson.id}`}
-                >
-                  <span
-                    className={`px-2.5 py-1.5 rounded-xl font-mono text-xs font-semibold tracking-wider shrink-0 border ${
-                      lesson.status === "CANCELLED"
-                        ? "bg-rose-500/15 border-rose-500/30 text-rose-300"
-                        : "bg-blue-500/10 border-blue-400/25 text-blue-300"
-                    }`}
-                  >
-                    {lesson.status === "CANCELLED"
-                      ? "Отменено"
-                      : lesson.isTimeKnown
-                        ? formatInTimeZone(
-                            lesson.sessionDate,
-                            "Europe/Moscow",
-                            "HH:mm",
-                          )
-                        : "Время ?"}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <strong className="font-semibold text-slate-100 text-sm block group-hover:text-blue-200 transition-colors truncate">
-                      {lesson.courseOffering.courseDefinition.shortTitle}
-                    </strong>
-                    {lesson.context?.audienceNote && (
-                      <span className="block text-xs text-blue-200 mt-1">
-                        {lesson.context.audienceNote}
-                      </span>
-                    )}
-                    {lesson.context?.coverage === "SCHEDULE_ONLY" && (
-                      <span className="block text-xs text-slate-400 mt-1">
-                        По расписанию · содержание уточняется
-                      </span>
-                    )}
-                    <span className="block text-xs text-slate-400 mt-0.5 truncate">
-                      {lesson.topic ?? "Занятие"}
-                      {lesson.room ? ` · ауд. ${lesson.room}` : ""}
-                    </span>
-                  </span>
-                  <ArrowUpRight
-                    size={16}
-                    className="shrink-0 text-slate-500 group-hover:text-blue-300 transition-colors ml-auto"
-                  />
-                </Link>
-              ))}
+      <Suspense
+        fallback={
+          <section className="schedule-panel schedule-compact">
+            <div className="section-heading">
+              <h2>Пары и аудитории</h2>
+              <Link className="text-link" href="/schedule">
+                Вся неделя ↗
+              </Link>
             </div>
-          ) : (
-            <p className="text-sm text-slate-400 py-3">
-              Расписание на сегодня ещё не добавлено. Это не означает, что
-              занятий нет.
+            <p className="schedule-empty" role="status">
+              Получаем расписание РУЗ…
             </p>
-          )}
-          {hasPermission(user, "manage_courses") && offerings.length === 0 && (
-            <Link className="action-primary mt-5" href="/group">
-              Добавить первый предмет
-            </Link>
-          )}
-        </section>
-      )}
+          </section>
+        }
+      >
+        <TodaySchedule
+          user={user}
+          now={now}
+          courses={offerings.map((c) => ({
+            id: c.id,
+            title: c.courseDefinition.title,
+          }))}
+        />
+      </Suspense>
       <div className="daily-grid">
         <section className="daily-focus" aria-label="На чём сосредоточиться">
           <div className="focus-sheet">

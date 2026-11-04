@@ -24,6 +24,7 @@ const primary = [
   { href: "/deadlines", label: "Сроки", icon: CalendarDays },
 ];
 const secondary = [
+  { href: "/schedule", label: "Расписание пар" },
   { href: "/lessons", label: "Занятия и записи" },
   { href: "/proposals", label: "Предложения и уточнения" },
   { href: "/group", label: "Моя группа и приглашения" },
@@ -168,6 +169,14 @@ export function Navbar({
                   <ArrowUpRight size={15} />
                 </Link>
               ))}
+              <a
+                href="https://t.me/studentvalue"
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => setOpen(false)}
+              >
+                Новости и вопросы · Telegram <ArrowUpRight size={15} />
+              </a>
               <a
                 href="/studentvalue1984.apk"
                 download

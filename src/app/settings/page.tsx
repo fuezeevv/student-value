@@ -35,6 +35,16 @@ export default async function SettingsPage() {
         }
       />
       <section className="border-t border-slate-700 mt-9 pt-7 text-sm text-slate-400 space-y-4">
+        <p>
+          <a
+            href="https://t.me/studentvalue"
+            className="text-link"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Канал Student Value · новости и вопросы ↗
+          </a>
+        </p>
         <h2 className="text-lg text-slate-100">Данные и доступ</h2>
         <p>
           Подключение и отключение Google Calendar — на{" "}

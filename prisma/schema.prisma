@@ -220,6 +220,7 @@ model StudyGroup {
   program    String?
   calendarId String?
   shareStudyContent Boolean @default(false)
+  ruzGroupId Int? @unique
   createdAt  DateTime @default(now())
 
   members       GroupMember[]
@@ -232,6 +233,21 @@ model StudyGroup {
   proposals     ChangeProposal[]
   sharedBriefs  SharedBrief[]
   notifications Notification[]
+  scheduleCache RuzScheduleCache[]
+}
+
+// Public timetable snapshots; separate from documented lessons and academic facts.
+model RuzScheduleCache {
+  groupId String
+  weekStart String
+  payload Json?
+  fetchedAt DateTime?
+  leaseUntil DateTime?
+  retryAfter DateTime?
+  lastErrorCode String?
+  group StudyGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@id([groupId, weekStart])
 }
 
 model Enrollment {
