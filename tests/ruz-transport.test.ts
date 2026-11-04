@@ -23,14 +23,14 @@ function page(data = raw) {
   return `<html><script>window.__INITIAL_STATE__ = ${JSON.stringify({ lessons: { group: data.group, week: data.week, data: { 45591: data.days } } })};</script></html>`;
 }
 describe("bounded official RUZ transport", () => {
-  it("recovers an API timeout through the same official public timetable", async () => {
+  it("recovers a page timeout through the same official API", async () => {
     let calls = 0;
     const request: typeof fetch = async () => {
       if (++calls === 1)
         throw Object.assign(new Error("timeout details are private"), {
           name: "TimeoutError",
         });
-      return new Response(page());
+      return Response.json(raw);
     };
     const result = parseRuzWeek(
       await fetchRuzPayload(url, request),
@@ -41,25 +41,28 @@ describe("bounded official RUZ transport", () => {
     expect(result.days[3].lessons).toHaveLength(1);
     expect(calls).toBe(2);
   });
-  it("uses API directly when it responds", async () => {
+  it("uses the official page JSON without executing scripts", async () => {
     let calls = 0;
     const request: typeof fetch = async (_input, init) => {
       calls++;
       expect(init?.redirect).toBe("error");
-      return Response.json(raw);
+      expect((init?.headers as Record<string, string>).Accept).toBe(
+        "text/html",
+      );
+      return new Response(
+        page() + "<script>throw Error('never execute')</script>",
+      );
     };
     expect(await fetchRuzPayload(url, request)).toEqual(raw);
     expect(calls).toBe(1);
   });
-  it("falls back to the official public page and validates its same group/week without executing scripts", async () => {
+  it("falls back to the official API and retains the usual group/week validation", async () => {
     const urls: string[] = [];
     const request: typeof fetch = async (input) => {
       urls.push(String(input));
       return urls.length === 1
         ? new Response("unavailable", { status: 503 })
-        : new Response(
-            page() + "<script>throw new Error('never execute')</script>",
-          );
+        : Response.json(raw);
     };
     const result = parseRuzWeek(
       await fetchRuzPayload(url, request),
@@ -69,15 +72,15 @@ describe("bounded official RUZ transport", () => {
     );
     expect(result.days[3].lessons[0].subject).toBe("[TEST] Пара");
     expect(urls).toEqual([
-      url,
       "https://ruz.spbstu.ru/faculty/125/groups/45591?date=2026-11-02",
+      url,
     ]);
   });
   it("enforces the size bound on both attempts", async () => {
     const request: typeof fetch = async () =>
       new Response("x".repeat(512 * 1024 + 1));
     await expect(fetchRuzPayload(url, request)).rejects.toMatchObject({
-      code: "PAGE_TOO_LARGE",
+      code: "API_TOO_LARGE",
     });
   });
   it("rejects executable/non-JSON state and never treats it as an empty timetable", async () => {
@@ -85,13 +88,13 @@ describe("bounded official RUZ transport", () => {
     const request: typeof fetch = async () => {
       calls++;
       return calls === 1
-        ? new Response("down", { status: 502 })
-        : new Response(
+        ? new Response(
             "<script>window.__INITIAL_STATE__ = (()=>{throw Error('unsafe')})();</script>",
-          );
+          )
+        : new Response("not JSON");
     };
     await expect(fetchRuzPayload(url, request)).rejects.toMatchObject({
-      code: "PAGE_INVALID_RESPONSE",
+      code: "API_INVALID_JSON",
     });
   });
   it("blocks other origins and real network access in tests", async () => {

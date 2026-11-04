@@ -88,34 +88,34 @@ export async function fetchRuzPayload(
     weekStartFor(week) !== week
   )
     throw new RuzProviderError("INVALID_REQUEST");
+  // The public page responds reliably from our production region and carries
+  // the same official JSON. The API remains a fallback if the page format changes.
+  // All configured groups belong to institute 125; validate identity/week later.
   try {
-    const text = await readText(
-      `${RUZ_ORIGIN}/api/v1/ruz/scheduler/${id}?date=${week}`,
-      request,
+    return extractRuzPagePayload(
+      await readText(
+        `${RUZ_ORIGIN}/faculty/125/groups/${id}?date=${week}`,
+        request,
+        "text/html",
+      ),
+      Number(id),
     );
-    try {
-      return JSON.parse(text);
-    } catch {
-      throw new RuzProviderError("INVALID_JSON");
-    }
   } catch {
-    // The same public timetable is embedded in the official institute page.
-    // All eight configured groups are in institute 125; the usual identity/week
-    // validator still runs before either response can enter the cache.
     try {
-      return extractRuzPagePayload(
-        await readText(
-          `${RUZ_ORIGIN}/faculty/125/groups/${id}?date=${week}`,
-          request,
-          "text/html",
-        ),
-        Number(id),
+      const text = await readText(
+        `${RUZ_ORIGIN}/api/v1/ruz/scheduler/${id}?date=${week}`,
+        request,
       );
+      try {
+        return JSON.parse(text);
+      } catch {
+        throw new RuzProviderError("INVALID_JSON");
+      }
     } catch (error) {
       throw new RuzProviderError(
         error instanceof RuzProviderError
-          ? `PAGE_${error.code}`
-          : "PAGE_INVALID_RESPONSE",
+          ? `API_${error.code}`
+          : "API_INVALID_RESPONSE",
       );
     }
   }
