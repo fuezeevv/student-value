@@ -77,7 +77,7 @@ export default async function LessonsPage({
           name="course"
           aria-label="Предмет"
           defaultValue={course ?? ""}
-          className="min-w-0 min-h-12 flex-1 rounded-xl border border-slate-600 bg-[#142139] px-4"
+          className="min-w-0 min-h-12 flex-1 rounded-xl border border-[rgba(11,26,45,0.15)] bg-white px-4 text-[#0b1a2d] focus:outline-none focus:border-[#962640]"
         >
           <option value="">Все предметы</option>
           {courses.map((c) => (

@@ -176,7 +176,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
           name="q"
           defaultValue={q}
           placeholder="Название или тема…"
-          className="min-w-0 flex-1 bg-[#142139] border border-slate-600 rounded-xl px-4 text-base min-h-12"
+          className="min-w-0 flex-1 bg-white border border-[rgba(11,26,45,0.15)] rounded-xl px-4 text-base min-h-12 text-[#0b1a2d] placeholder:text-[#577291] focus:outline-none focus:border-[#962640]"
           autoFocus
         />
         <input type="hidden" name="cat" value={cat} />

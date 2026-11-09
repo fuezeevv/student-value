@@ -54,7 +54,7 @@ export default async function NewLessonPage({
             Выберите предмет
             <select
               name="course"
-              className="block w-full mt-3 min-h-12 bg-[#142139] rounded-xl px-4 border border-slate-600"
+              className="block w-full mt-3 min-h-12 bg-white rounded-xl px-4 border border-[rgba(11,26,45,0.15)] text-[#0b1a2d] focus:outline-none focus:border-[#962640]"
             >
               {courses.map((c) => (
                 <option value={c.id} key={c.id}>

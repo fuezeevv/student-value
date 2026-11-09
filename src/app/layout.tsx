@@ -7,7 +7,7 @@ import { prisma } from "@/lib/db/prisma";
 import { LegalLinks } from "@/components/layout/LegalLinks";
 
 export const viewport: Viewport = {
-  themeColor: "#0b1222",
+  themeColor: "#d6eaf7",
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
@@ -23,7 +23,7 @@ export const metadata: Metadata = {
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
-    statusBarStyle: "black-translucent",
+    statusBarStyle: "default",
     title: "Student Value 1.984",
   },
   metadataBase: new URL(
@@ -72,7 +72,7 @@ export default async function RootLayout({
     : 0;
 
   return (
-    <html lang="ru" className="dark">
+    <html lang="ru">
       <body className="min-h-screen flex flex-col antialiased">
         <Navbar
           user={user}
@@ -84,7 +84,7 @@ export default async function RootLayout({
         </main>
         <footer className="site-footer flex-wrap gap-x-6 gap-y-4">
           <span>
-            Student Value <span className="text-blue-300">1.984</span>
+            Student Value <span className="font-bold text-[var(--wine)]">1.984</span>
           </span>
           <span>Учёба в своём ритме.</span>
           <a

@@ -20,7 +20,7 @@ export default function JoinPage() {
               required
               autoComplete="off"
               maxLength={124}
-              className="block w-full mt-2 min-h-14 px-4 rounded-xl border border-slate-600 bg-[#142139]"
+              className="block w-full mt-2 min-h-14 px-4 rounded-xl border border-[rgba(11,26,45,0.15)] bg-white text-[#0b1a2d] focus:outline-none focus:border-[#962640]"
             />
           </label>
           <button className="action-primary">Подтвердить через Google</button>

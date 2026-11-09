@@ -14,34 +14,50 @@ import {
 import type { ScheduleResult } from "@/server/schedule/ruz";
 
 type Course = { id: string; title: string; href?: string };
+type TaskPreview = {
+  id: string;
+  title: string;
+  courseId: string;
+  deadline?: { date: Date; title?: string | null } | null;
+};
+
 function LessonRow({
   lesson,
   courses,
   compact = false,
   publicBase,
+  isCurrent = false,
 }: {
   publicBase?: string;
   lesson: RuzLesson;
   courses: Course[];
   compact?: boolean;
+  isCurrent?: boolean;
 }) {
   const matched = courses.filter(
     (c) => subjectKey(c.title) === subjectKey(lesson.subject),
   );
   const course = matched.length === 1 ? matched[0] : null;
   return (
-    <article className="schedule-lesson">
+    <article
+      className={`schedule-lesson ${isCurrent ? "schedule-lesson-active" : ""}`}
+    >
       <div className="schedule-time">
-        <strong>{lesson.start}</strong>
+        <strong className={isCurrent ? "!text-[var(--wine)] font-extrabold" : ""}>
+          {lesson.start}
+        </strong>
         <span>{lesson.end}</span>
       </div>
       <div className="min-w-0 flex-1">
-        <p className="schedule-kind">
-          {lesson.type}
-          {lesson.note
-            ? ` · ${compact ? lesson.note.replace(/\d{7}\/\d{5}\s*п\/г\s*/g, "подгруппа ") : lesson.note}`
-            : ""}
-        </p>
+        <div className="flex items-center gap-2 flex-wrap">
+          <p className="schedule-kind">
+            {lesson.type}
+            {lesson.note
+              ? ` · ${compact ? lesson.note.replace(/\d{7}\/\d{5}\s*п\/г\s*/g, "подгруппа ") : lesson.note}`
+              : ""}
+          </p>
+          {isCurrent && <span className="schedule-hero-badge">Сейчас</span>}
+        </div>
         {course ? (
           <Link
             className="schedule-subject"
@@ -54,9 +70,6 @@ function LessonRow({
           <h3 className="schedule-subject" title={lesson.subject}>
             {lesson.subject}
           </h3>
-        )}
-        {lesson.rooms.length > 0 && (
-          <p className="schedule-room">{lesson.rooms.join(" / ")}</p>
         )}
         {lesson.teachers.length > 0 && (
           <p className="schedule-teacher">{lesson.teachers.join(", ")}</p>
@@ -72,9 +85,15 @@ function LessonRow({
           </a>
         )}
       </div>
+      {lesson.rooms.length > 0 && (
+        <div className="shrink-0 text-right">
+          <p className="schedule-room">{lesson.rooms.join(" / ")}</p>
+        </div>
+      )}
     </article>
   );
 }
+
 function label(day: string) {
   return formatInTimeZone(
     new Date(day + "T12:00:00+03:00"),
@@ -83,18 +102,21 @@ function label(day: string) {
     { locale: ru },
   );
 }
+
 export function SchedulePanel({
   result,
   courses,
   now = new Date(),
   compact = false,
   publicBase,
+  tasks = [],
 }: {
   publicBase?: string;
   result: ScheduleResult;
   courses: Course[];
   now?: Date;
   compact?: boolean;
+  tasks?: TaskPreview[];
 }) {
   const today = moscowDay(now);
   const days =
@@ -115,13 +137,30 @@ export function SchedulePanel({
         ? [next]
         : []
     : days;
+
+  const nowMoscow = formatInTimeZone(now, "Europe/Moscow", "HH:mm");
+  const activeLesson = current?.lessons.find(
+    (l) => l.start <= nowMoscow && nowMoscow <= l.end,
+  );
+  const nextLesson = current?.lessons.find((l) => nowMoscow < l.start);
+  const heroLesson =
+    activeLesson ||
+    nextLesson ||
+    (current?.lessons.length ? current.lessons[0] : null);
+  const heroCourse = heroLesson
+    ? courses.find((c) => subjectKey(c.title) === subjectKey(heroLesson.subject))
+    : null;
+  const heroTask = heroCourse
+    ? tasks.find((t) => t.courseId === heroCourse.id)
+    : null;
+
   return (
     <section
       className={compact ? "schedule-panel schedule-compact" : "schedule-panel"}
       aria-label="Официальное расписание"
     >
       <div className="section-heading">
-        <h2>{compact ? "Пары и аудитории" : "Расписание недели"}</h2>
+        <h2>{compact ? "Расписание и аудитории" : "Расписание недели"}</h2>
         {compact ? (
           <Link className="text-link" href={`${publicBase ?? ""}/schedule`}>
             Вся неделя ↗
@@ -141,7 +180,7 @@ export function SchedulePanel({
           target="_blank"
           rel="noopener noreferrer"
         >
-          Официальный РУЗ ↗
+          Официальный РУЗ СПбПУ ↗
         </a>
         {result.fetchedAt && (
           <span>
@@ -168,11 +207,88 @@ export function SchedulePanel({
         </p>
       )}
       {result.state === "UNCONFIGURED" && (
-        <p className="text-slate-300 py-3">
+        <p className="text-[var(--ink-secondary)] py-3">
           Для этой группы ещё не привязано расписание. Староста может передать
           владельцу сайта полный номер группы и ссылку РУЗ.
         </p>
       )}
+
+      {/* Hero Callout for Current/Next Class */}
+      {compact && heroLesson && current && current.lessons.length > 0 && (
+        <div className="schedule-hero">
+          <div className="space-y-1.5 flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="schedule-hero-badge">
+                {activeLesson
+                  ? `ИДЁТ СЕЙЧАС · до ${activeLesson.end}`
+                  : nextLesson
+                    ? `СЛЕДУЮЩАЯ ПАРА · в ${nextLesson.start}`
+                    : `ПАРА · в ${heroLesson.start}`}
+              </span>
+              <span className="text-xs text-[var(--ink-muted)] font-medium">
+                {heroLesson.type}
+              </span>
+              {heroLesson.teachers.length > 0 && (
+                <>
+                  <span className="text-xs text-[var(--ink-muted)]">·</span>
+                  <span className="text-xs text-[var(--ink-secondary)] font-medium">
+                    {heroLesson.teachers.join(", ")}
+                  </span>
+                </>
+              )}
+            </div>
+            <h3 className="text-xl sm:text-2xl font-bold text-[var(--ink)] tracking-tight">
+              {heroCourse ? (
+                <Link
+                  href={
+                    heroCourse.href ??
+                    `${publicBase ?? ""}/courses/${heroCourse.id}`
+                  }
+                  className="hover:text-[var(--wine)]"
+                >
+                  {heroLesson.subject} ↗
+                </Link>
+              ) : (
+                heroLesson.subject
+              )}
+            </h3>
+            {heroTask && (
+              <div className="pt-1 flex items-center gap-2 text-xs font-mono text-[var(--wine)] flex-wrap">
+                <span className="font-bold">⚡ Задание по этому предмету:</span>
+                <Link
+                  href={`/tasks/${heroTask.id}`}
+                  className="underline font-bold text-[var(--ink)] hover:text-[var(--wine)]"
+                >
+                  {heroTask.title}
+                </Link>
+                {heroTask.deadline && (
+                  <span className="text-[var(--ink-muted)]">
+                    (срок:{" "}
+                    {formatInTimeZone(
+                      heroTask.deadline.date,
+                      "Europe/Moscow",
+                      "d MMMM",
+                      { locale: ru },
+                    )}
+                    )
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+          {heroLesson.rooms.length > 0 && (
+            <div className="shrink-0 sm:text-right">
+              <span className="block text-xs font-mono uppercase tracking-wider text-[var(--ink-muted)] font-semibold">
+                Аудитория
+              </span>
+              <span className="schedule-hero-room">
+                {heroLesson.rooms.join(" / ")}
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+
       {compact &&
         current &&
         !current.lessons.length &&
@@ -220,29 +336,20 @@ export function SchedulePanel({
             ) : null}
           </h3>
           {day.lessons.length ? (
-            (compact ? day.lessons.slice(0, 2) : day.lessons).map(
-              (lesson, i) => (
-                <LessonRow
-                  key={`${lesson.start}-${i}`}
-                  lesson={lesson}
-                  courses={courses}
-                  compact={compact}
-                  publicBase={publicBase}
-                />
-              ),
-            )
+            day.lessons.map((lesson, i) => (
+              <LessonRow
+                key={`${lesson.start}-${i}`}
+                lesson={lesson}
+                courses={courses}
+                compact={compact}
+                publicBase={publicBase}
+                isCurrent={day.date === today && lesson === activeLesson}
+              />
+            ))
           ) : (
             <p className="schedule-empty">
               В РУЗ учебных пар для Student Value не указано.
             </p>
-          )}
-          {compact && day.lessons.length > 2 && (
-            <Link
-              className="text-link block py-3"
-              href={`${publicBase ?? ""}/schedule#day-${day.date}`}
-            >
-              Ещё {day.lessons.length - 2} · открыть день ↗
-            </Link>
           )}
         </div>
       ))}

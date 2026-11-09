@@ -34,8 +34,8 @@ export function StudyTaskRow({
             <span
               className={
                 !task.completed && task.timing.urgency === "OVERDUE"
-                  ? "text-rose-200"
-                  : "text-slate-200"
+                  ? "text-[var(--wine)] font-bold"
+                  : "text-[var(--ink-secondary)] font-medium"
               }
             >
               {task.deadline

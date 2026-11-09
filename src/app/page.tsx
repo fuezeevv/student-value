@@ -121,6 +121,14 @@ export default async function TodayPage() {
             id: c.id,
             title: c.courseDefinition.title,
           }))}
+          tasks={tasks
+            .filter((t) => !t.completed)
+            .map((t) => ({
+              id: t.id,
+              title: t.title,
+              courseId: t.courseId,
+              deadline: t.deadline,
+            }))}
         />
       </Suspense>
       <div className="daily-grid">
@@ -257,7 +265,7 @@ export default async function TodayPage() {
               {!upcoming.some(
                 (t) => (t.timing.daysRemaining ?? Infinity) <= 7,
               ) && (
-                <p className="text-xs text-slate-400 leading-relaxed mt-4">
+                <p className="text-xs text-[var(--ink-muted)] leading-relaxed mt-4">
                   Ближайшие даты указаны выше. Работы без даты тоже требуют
                   выполнения.
                 </p>
@@ -280,7 +288,7 @@ export default async function TodayPage() {
                   Все работы ↗
                 </Link>
               </div>
-              <p className="text-sm text-slate-300 mb-3">
+              <p className="text-sm text-[var(--ink-secondary)] mb-3">
                 Точный срок не указан. Задания и файлы уже доступны.
               </p>
               <div className="space-y-3">
@@ -318,13 +326,13 @@ export default async function TodayPage() {
                 </span>
                 <span className="course-name">
                   {o.courseDefinition.title}
-                  <span className="block text-slate-400 mt-1">
+                  <span className="block text-[var(--ink-muted)] mt-1">
                     {o.tasks.length
                       ? `${done} из ${o.tasks.length} выполнено`
                       : "Задания пока не опубликованы"}
                   </span>
                 </span>
-                <ArrowUpRight size={16} className="text-slate-500" />
+                <ArrowUpRight size={16} className="text-[var(--ink-muted)]" />
               </Link>
             );
           })}
@@ -344,7 +352,7 @@ export default async function TodayPage() {
           </div>
           {changes.map((change) => (
             <Link href="/notifications" key={change.id} className="change-link">
-              <span className="eyebrow !text-blue-300">Непрочитанное</span>
+              <span className="eyebrow !text-[var(--wine)]">Непрочитанное</span>
               {change.title}
               <span>{change.message}</span>
             </Link>
@@ -362,7 +370,7 @@ export default async function TodayPage() {
               <h3>{a.title}</h3>
               <p>{a.content}</p>
               {a.sourceReference && (
-                <details className="mt-3 text-xs text-slate-400 leading-relaxed">
+                <details className="mt-3 text-xs text-[var(--ink-muted)] leading-relaxed">
                   <summary className="min-h-8">
                     Источник ·{" "}
                     {a.sourceReference.confidence === "CONFIRMED"

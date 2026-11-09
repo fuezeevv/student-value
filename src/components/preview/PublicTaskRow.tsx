@@ -30,7 +30,7 @@ export function PublicTaskRow({
           <ArrowUpRight size={16} />
         </Link>
         <p
-          className={`work-facts ${timing.urgency === "OVERDUE" ? "!text-rose-200" : ""}`}
+          className={`work-facts ${timing.urgency === "OVERDUE" ? "!text-[var(--wine)] font-bold" : ""}`}
         >
           {deadline
             ? `${deadline.title || "Сдать до"}: ${timing.formattedDate}`

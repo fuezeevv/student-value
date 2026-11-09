@@ -36,7 +36,7 @@ export function SettingsClient({
       }
     });
   const inputClass =
-    "block w-full min-h-12 mt-2 bg-[#142139] border border-slate-600 rounded-xl px-4 text-base text-white";
+    "block w-full min-h-12 mt-2 bg-white border border-[rgba(11,26,45,0.15)] rounded-xl px-4 text-base text-[#0b1a2d] focus:outline-none focus:border-[#962640]";
   return (
     <div className="space-y-9">
       <form
@@ -47,9 +47,9 @@ export function SettingsClient({
             "Профиль сохранён",
           );
         }}
-        className="space-y-5 border-t border-slate-700 pt-7"
+        className="space-y-5 border-t border-[var(--border)] pt-7"
       >
-        <label className="block text-sm text-slate-300">
+        <label className="block text-sm text-[var(--ink-secondary)] font-medium">
           Публичный никнейм
           <input
             required

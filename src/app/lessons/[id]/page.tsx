@@ -270,7 +270,7 @@ export default async function LessonPage({
                 aria-label="Найти в тексте занятия"
                 placeholder="Найти в тексте…"
                 maxLength={200}
-                className="min-w-0 flex-1 min-h-12 rounded-xl border border-slate-600 bg-[#142139] px-4"
+                className="min-w-0 flex-1 min-h-12 rounded-xl border border-[rgba(11,26,45,0.15)] bg-white px-4 text-[#0b1a2d] placeholder:text-[#577291] focus:outline-none focus:border-[#962640]"
               />
               <button className="action-primary">Найти</button>
             </form>

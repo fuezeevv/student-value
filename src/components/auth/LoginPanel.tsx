@@ -28,73 +28,63 @@ export async function LoginPanel({ error }: { error?: string }) {
 
   return (
     <div className="relative max-w-xl mx-auto py-8 sm:py-14 px-2 sm:px-0">
-      {/* Ambient background glows (Gemini / Incy VPN style) */}
-      <div
-        className="absolute -top-16 left-1/2 -translate-x-1/2 w-80 h-80 bg-blue-500/15 rounded-full blur-[100px] pointer-events-none"
-        aria-hidden="true"
-      />
-      <div
-        className="absolute top-48 -right-16 w-64 h-64 bg-rose-500/10 rounded-full blur-[90px] pointer-events-none"
-        aria-hidden="true"
-      />
-
-      <div className="relative rounded-3xl border border-white/[0.12] bg-[#101b2e]/85 backdrop-blur-2xl p-7 sm:p-10 shadow-[0_24px_70px_rgba(0,0,0,0.55),_inset_0_1px_0_rgba(255,255,255,0.12)]">
+      <div className="relative rounded-3xl border border-[rgba(11,26,45,0.12)] bg-white/85 backdrop-blur-xl p-7 sm:p-10 shadow-[0_12px_40px_rgba(11,26,45,0.06)]">
         {/* Academic cohort badge */}
         <div className="flex items-center justify-between gap-3 mb-7 flex-wrap">
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-500/10 border border-blue-400/25 text-blue-300 text-xs font-medium tracking-wide">
-            <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[rgba(150,38,64,0.08)] border border-[rgba(150,38,64,0.2)] text-[#962640] text-xs font-semibold tracking-wide">
+            <span className="w-2 h-2 rounded-full bg-[#962640]" />
             СПбПУ · учебные группы
           </div>
-          <span className="text-xs text-slate-400 font-mono tracking-wider">
+          <span className="text-xs text-[#577291] font-mono font-bold tracking-wider">
             v1.984
           </span>
         </div>
 
         <div className="flex items-center gap-4 mb-6">
-          <div className="p-2.5 rounded-2xl bg-white/[0.04] border border-white/10 shadow-inner">
+          <div className="p-2.5 rounded-2xl bg-white border border-[rgba(11,26,45,0.1)] shadow-xs">
             <BrandMark className="w-11 h-11" />
           </div>
           <div>
             <p className="eyebrow !tracking-[2px]">Student Value</p>
-            <span className="text-xs text-slate-400">
+            <span className="text-xs text-[#577291]">
               академическое пространство
             </span>
           </div>
         </div>
 
-        <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-white">
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-[#0b1a2d]">
           Учёба становится яснее.
         </h1>
-        <p className="text-sm sm:text-base text-slate-300/85 leading-relaxed mt-3">
+        <p className="text-sm sm:text-base text-[#3a4e66] leading-relaxed mt-3">
           Что сделать сейчас, что скоро сдавать и всё нужное по предмету — в
           одном выверенном месте.
         </p>
 
-        {/* Feature telemetry chips (Yandex Weather & GitHub style) */}
+        {/* Feature telemetry chips */}
         <div className="grid grid-cols-3 gap-2.5 my-7 text-xs">
-          <div className="rounded-xl border border-white/[0.08] bg-white/[0.03] p-3 text-center">
-            <Clock className="w-4 h-4 mx-auto mb-1.5 text-blue-400" />
-            <span className="text-slate-300 font-medium block">Дедлайны</span>
-            <span className="text-[11px] text-slate-400">по МСК</span>
+          <div className="rounded-xl border border-[rgba(11,26,45,0.08)] bg-white/70 p-3 text-center shadow-xs">
+            <Clock className="w-4 h-4 mx-auto mb-1.5 text-[#962640]" />
+            <span className="text-[#0b1a2d] font-bold block">Дедлайны</span>
+            <span className="text-[11px] text-[#577291]">по МСК</span>
           </div>
-          <div className="rounded-xl border border-white/[0.08] bg-white/[0.03] p-3 text-center">
-            <Sparkles className="w-4 h-4 mx-auto mb-1.5 text-amber-300" />
-            <span className="text-slate-300 font-medium block">Фокус дня</span>
-            <span className="text-[11px] text-slate-400">без хаоса</span>
+          <div className="rounded-xl border border-[rgba(11,26,45,0.08)] bg-white/70 p-3 text-center shadow-xs">
+            <Sparkles className="w-4 h-4 mx-auto mb-1.5 text-amber-600" />
+            <span className="text-[#0b1a2d] font-bold block">Фокус дня</span>
+            <span className="text-[11px] text-[#577291]">без хаоса</span>
           </div>
-          <div className="rounded-xl border border-white/[0.08] bg-white/[0.03] p-3 text-center">
-            <ShieldCheck className="w-4 h-4 mx-auto mb-1.5 text-emerald-400" />
-            <span className="text-slate-300 font-medium block">Защита</span>
-            <span className="text-[11px] text-slate-400">OAuth / PKCE</span>
+          <div className="rounded-xl border border-[rgba(11,26,45,0.08)] bg-white/70 p-3 text-center shadow-xs">
+            <ShieldCheck className="w-4 h-4 mx-auto mb-1.5 text-emerald-600" />
+            <span className="text-[#0b1a2d] font-bold block">Защита</span>
+            <span className="text-[11px] text-[#577291]">OAuth / PKCE</span>
           </div>
         </div>
 
         {dev ? (
-          <section className="border-t border-white/10 pt-6">
-            <h2 className="text-base font-medium text-slate-200 mb-2">
+          <section className="border-t border-[rgba(11,26,45,0.1)] pt-6">
+            <h2 className="text-base font-bold text-[#0b1a2d] mb-2">
               Локальный вход (режим разработки)
             </h2>
-            <p className="text-xs text-slate-400 leading-relaxed mb-4">
+            <p className="text-xs text-[#577291] leading-relaxed mb-4">
               Выберите тестовую роль для проверки сценариев платформы:
             </p>
             <div className="space-y-2.5">
@@ -107,50 +97,50 @@ export async function LoginPanel({ error }: { error?: string }) {
                   >
                     <button
                       type="submit"
-                      className="w-full min-h-14 flex justify-between items-center gap-4 bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 hover:border-blue-400/40 rounded-2xl px-5 py-3 text-left transition-all active:scale-[0.98]"
+                      className="w-full min-h-14 flex justify-between items-center gap-4 bg-white/80 hover:bg-white border border-[rgba(11,26,45,0.1)] hover:border-[#962640] rounded-2xl px-5 py-3 text-left transition-all active:scale-[0.98] shadow-xs"
                     >
                       <div className="flex items-center gap-3">
                         <span
                           className={`w-9 h-9 rounded-xl flex items-center justify-center text-xs font-bold ${
                             isOwner
-                              ? "bg-amber-400/15 text-amber-300 border border-amber-400/30"
-                              : "bg-blue-400/15 text-blue-300 border border-blue-400/30"
+                              ? "bg-amber-100 text-amber-800 border border-amber-300"
+                              : "bg-blue-100 text-blue-800 border border-blue-300"
                           }`}
                         >
                           {isOwner ? "👑" : "🎓"}
                         </span>
                         <div>
-                          <span className="text-sm font-medium text-slate-100 block">
+                          <span className="text-sm font-bold text-[#0b1a2d] block">
                             {isOwner ? "Староста" : "Студент"}
                           </span>
-                          <span className="text-xs text-slate-400">
+                          <span className="text-xs text-[#577291]">
                             {account.nickname}
                           </span>
                         </div>
                       </div>
-                      <ArrowRight size={17} className="text-slate-400" />
+                      <ArrowRight size={17} className="text-[#577291]" />
                     </button>
                   </form>
                 );
               })}
             </div>
             {!accounts.length && (
-              <p className="text-slate-400 text-xs mt-3">
+              <p className="text-[#577291] text-xs mt-3">
                 Локальные аккаунты не настроены.
               </p>
             )}
           </section>
         ) : google ? (
-          <section className="border-t border-white/10 pt-6">
+          <section className="border-t border-[rgba(11,26,45,0.1)] pt-6">
             <div className="flex items-center justify-between mb-3">
-              <h2 className="text-base font-medium text-slate-200">
+              <h2 className="text-base font-bold text-[#0b1a2d]">
                 Войти в свою группу
               </h2>
-              <span className="text-xs text-slate-400">
+              <span className="text-xs text-[#577291] font-mono">
                 Google Cloud Identity
               </span>
             </div>
-            <p className="text-xs text-slate-400 leading-relaxed mb-5">
+            <p className="text-xs text-[#3a4e66] leading-relaxed mb-5">
               Вход привязан к вашему аккаунту Google. Для первого подключения
               требуется код-приглашение от старосты.
             </p>
@@ -158,7 +148,7 @@ export async function LoginPanel({ error }: { error?: string }) {
             {error && (
               <div
                 role="alert"
-                className="text-xs text-rose-300 bg-rose-500/10 border border-rose-500/20 rounded-xl p-3.5 mb-5 leading-relaxed"
+                className="text-xs text-[#962640] bg-[rgba(150,38,64,0.08)] border border-[rgba(150,38,64,0.2)] rounded-xl p-3.5 mb-5 leading-relaxed font-medium"
               >
                 Вход не завершён. Проверьте выбранный аккаунт Google и
                 персональный код. Если код уже был активирован ранее, оставьте
@@ -167,18 +157,18 @@ export async function LoginPanel({ error }: { error?: string }) {
             )}
 
             <form action="/api/auth/google" method="post" className="space-y-4">
-              <details className="group rounded-2xl border border-white/[0.08] bg-white/[0.02] p-4 text-xs transition-colors hover:border-white/15">
-                <summary className="cursor-pointer font-medium text-slate-300 flex items-center justify-between list-none">
+              <details className="group rounded-2xl border border-[rgba(11,26,45,0.1)] bg-white/70 p-4 text-xs transition-colors hover:border-[#962640]">
+                <summary className="cursor-pointer font-bold text-[#0b1a2d] flex items-center justify-between list-none">
                   <span className="flex items-center gap-2">
-                    <Lock size={14} className="text-blue-400" />
+                    <Lock size={14} className="text-[#962640]" />
                     Первый вход · код приглашения
                   </span>
-                  <span className="text-[11px] text-blue-400 group-open:rotate-90 transition-transform">
+                  <span className="text-[11px] text-[#962640] group-open:rotate-90 transition-transform">
                     →
                   </span>
                 </summary>
-                <div className="mt-3 pt-3 border-t border-white/5 space-y-2">
-                  <label className="block text-slate-400">
+                <div className="mt-3 pt-3 border-t border-[rgba(11,26,45,0.08)] space-y-2">
+                  <label className="block text-[#577291] font-medium">
                     Персональный код от старосты
                     <input
                       name="invite"
@@ -186,10 +176,10 @@ export async function LoginPanel({ error }: { error?: string }) {
                       autoComplete="off"
                       maxLength={124}
                       placeholder="Вставьте приглашение..."
-                      className="block w-full mt-1.5 min-h-11 px-3.5 rounded-xl border border-white/15 bg-[#0b1324] text-white text-sm focus:outline-none focus:border-blue-400 transition-colors font-mono"
+                      className="block w-full mt-1.5 min-h-11 px-3.5 rounded-xl border border-[rgba(11,26,45,0.15)] bg-white text-[#0b1a2d] text-sm focus:outline-none focus:border-[#962640] transition-colors font-mono"
                     />
                   </label>
-                  <p className="text-[11px] text-slate-500">
+                  <p className="text-[11px] text-[#577291]">
                     Код одноразовый и закрепляет ваше членство в академической
                     группе.
                   </p>
@@ -198,7 +188,7 @@ export async function LoginPanel({ error }: { error?: string }) {
 
               <button
                 type="submit"
-                className="w-full min-h-14 flex items-center justify-center gap-3.5 rounded-2xl bg-white text-slate-900 font-semibold text-sm shadow-[0_4px_24px_rgba(255,255,255,0.16)] hover:bg-slate-100 hover:shadow-[0_6px_30px_rgba(255,255,255,0.26)] active:scale-[0.98] transition-all cursor-pointer"
+                className="w-full min-h-14 flex items-center justify-center gap-3.5 rounded-2xl bg-[#0b1a2d] text-white font-semibold text-sm shadow-[0_4px_16px_rgba(11,26,45,0.15)] hover:bg-[#1a2d42] active:scale-[0.98] transition-all cursor-pointer"
               >
                 {/* Authentic 4-color Google G icon */}
                 <svg
@@ -224,22 +214,22 @@ export async function LoginPanel({ error }: { error?: string }) {
                   />
                 </svg>
                 <span>Войти через Google</span>
-                <ArrowRight size={17} className="text-slate-500 ml-auto" />
+                <ArrowRight size={17} className="text-slate-300 ml-auto" />
               </button>
             </form>
 
-            <p className="text-[11px] text-slate-400/90 leading-relaxed mt-4">
+            <p className="text-[11px] text-[#577291] leading-relaxed mt-4">
               Сервис запрашивает только имя и email. Google Drive не
               затрагивается. Личный Google Календарь подключается добровольно в
               настройках.
             </p>
           </section>
         ) : (
-          <section className="border-t border-white/10 pt-6">
-            <h2 className="text-base font-medium text-slate-200 mb-2">
+          <section className="border-t border-[rgba(11,26,45,0.1)] pt-6">
+            <h2 className="text-base font-bold text-[#0b1a2d] mb-2">
               Вход готовится к запуску
             </h2>
-            <p className="text-xs text-slate-400 leading-relaxed">
+            <p className="text-xs text-[#577291] leading-relaxed">
               Подключаем вход через Google. Личный прогресс и исходные файлы
               доступны участникам группы после подтверждения.
             </p>
@@ -247,16 +237,16 @@ export async function LoginPanel({ error }: { error?: string }) {
         )}
 
         {/* Android Native APK Download Card */}
-        <div className="mt-6 p-4 rounded-2xl bg-white/[0.03] border border-white/[0.08] flex items-center justify-between gap-3 text-xs">
+        <div className="mt-6 p-4 rounded-2xl bg-white/70 border border-[rgba(11,26,45,0.08)] flex items-center justify-between gap-3 text-xs shadow-xs">
           <div className="flex items-center gap-3">
-            <span className="w-9 h-9 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-base">
+            <span className="w-9 h-9 rounded-xl bg-emerald-100 border border-emerald-300 flex items-center justify-center text-base">
               🤖
             </span>
             <div>
-              <span className="font-medium text-slate-100 block text-xs">
+              <span className="font-bold text-[#0b1a2d] block text-xs">
                 Приложение для Android
               </span>
-              <span className="text-[11px] text-slate-400">
+              <span className="text-[11px] text-[#577291]">
                 Автономный .apk · v1.984
               </span>
             </div>
@@ -264,14 +254,14 @@ export async function LoginPanel({ error }: { error?: string }) {
           <a
             href="/studentvalue1984.apk"
             download
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-blue-500/15 hover:bg-blue-500/25 border border-blue-400/30 text-blue-300 font-medium transition-all active:scale-[0.96]"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[rgba(150,38,64,0.08)] hover:bg-[rgba(150,38,64,0.15)] border border-[rgba(150,38,64,0.2)] text-[#962640] font-bold transition-all active:scale-[0.96]"
           >
             <Download size={14} />
             <span>Скачать APK</span>
           </a>
         </div>
 
-        <div className="mt-7 pt-5 border-t border-white/[0.08] text-xs text-slate-400">
+        <div className="mt-7 pt-5 border-t border-[rgba(11,26,45,0.1)] text-xs text-[#577291]">
           <LegalLinks />
         </div>
       </div>
