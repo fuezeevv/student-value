@@ -72,7 +72,11 @@ export default async function RootLayout({
     : 0;
 
   return (
-    <html lang="ru">
+    <html lang="ru" suppressHydrationWarning>
+      <head>
+        {/* eslint-disable-next-line @next/next/no-sync-scripts */}
+        <script src="/theme-init.js" />
+      </head>
       <body className="min-h-screen flex flex-col antialiased">
         <Navbar
           user={user}

@@ -1,13 +1,16 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
 import { getCurrentUser } from "@/lib/auth/session";
-import { loadStudyWorkspace } from "@/server/queries/study-workspace";
+import { hasPermission } from "@/lib/permissions/checker";
+import { loadStudyWorkspace, type StudyTask } from "@/server/queries/study-workspace";
 import { loadRuzSchedule } from "@/server/schedule/ruz";
+import { CreateTaskModal } from "@/components/task/CreateTaskModal";
 import { CalendarNotice } from "@/components/workspace/CalendarNotice";
 import {
   ScheduleWorkbench,
-  type WorkbenchDay,
-  type WorkbenchTask,
+  WorkbenchDay,
+  WorkbenchTask,
 } from "@/components/schedule/ScheduleWorkbench";
 import { formatInTimeZone } from "date-fns-tz";
 import { ru } from "date-fns/locale";
@@ -16,6 +19,7 @@ import {
   showScheduleSubject,
   subjectKey,
   sourceUrl,
+  type RuzLesson,
 } from "@/lib/schedule/ruz";
 
 export default async function TodayPage() {
@@ -67,7 +71,7 @@ export default async function TodayPage() {
 
   // Filter lessons for user's subgroup & valid subjects
   const days: WorkbenchDay[] =
-    ruzResult.data?.days.map((d) => {
+    ruzResult.data?.days.map((d: { date: string; lessons: RuzLesson[] }) => {
       const dDate = new Date(d.date + "T12:00:00+03:00");
       const short = formatInTimeZone(dDate, "Europe/Moscow", "EEEEEE", {
         locale: ru,
@@ -79,11 +83,11 @@ export default async function TodayPage() {
 
       const lessons = d.lessons
         .filter(
-          (l) =>
+          (l: RuzLesson) =>
             showScheduleSubject(l.subject) &&
             appliesToSubgroup(l, ruzResult.data!.groupCode, ruzResult.subgroup),
         )
-        .map((l) => {
+        .map((l: RuzLesson) => {
           const matchedCourse = offerings.find(
             (o) =>
               subjectKey(o.courseDefinition.title) === subjectKey(l.subject),
@@ -112,7 +116,7 @@ export default async function TodayPage() {
     }) ?? [];
 
   // Map workspace tasks to WorkbenchTask
-  const workbenchTasks: WorkbenchTask[] = tasks.map((t) => ({
+  const workbenchTasks: WorkbenchTask[] = tasks.map((t: StudyTask) => ({
     id: t.id,
     title: t.title,
     courseTitle: t.courseTitle,
@@ -122,24 +126,43 @@ export default async function TodayPage() {
     deadlineFormatted: t.deadline
       ? t.timing.formattedDate
       : undefined,
-    urgency: t.timing.urgency as "OVERDUE" | "SOON" | "NORMAL" | "NONE",
+    urgency: t.timing.urgency as any,
     completed: t.completed,
     accepted: t.accepted,
-    materials: t.materials.map((m: { material: { id: string; title: string; url: string } }) => ({
+    materials: t.materials.map((m) => ({
       id: m.material.id,
       title: m.material.title,
       url: m.material.url,
     })),
   }));
 
-
   const groupCode = user.groupName || "5130901/40102";
 
   return (
-    <>
+    <div className="space-y-8">
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div>
+          <p className="eyebrow">
+            {formatInTimeZone(now, "Europe/Moscow", "EEEE, d MMMM", {
+              locale: ru,
+            })}
+          </p>
+          <h1 className="page-title !mt-1">Сегодня</h1>
+        </div>
+        {hasPermission(user, "manage_tasks") && offerings.length > 0 && (
+          <CreateTaskModal
+            courses={offerings.map((o) => ({
+              id: o.id,
+              title: o.courseDefinition.title,
+              shortTitle: o.courseDefinition.shortTitle,
+            }))}
+          />
+        )}
+      </div>
+
       <CalendarNotice userId={user.id} />
 
-      {/* SCHEDULE-FIRST WORKBENCH — primary interface */}
+      {/* SCHEDULE FIRST WORKBENCH */}
       <ScheduleWorkbench
         groupCode={groupCode}
         weekLabel={weekLabel}
@@ -154,9 +177,9 @@ export default async function TodayPage() {
         todayDateStr={todayDateStr}
       />
 
-      {/* Secondary: Announcements & updates if present */}
+      {/* Secondary: Announcements & Updates if available */}
       {(announcements.length > 0 || changes.length > 0) && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6 border-t border-[var(--ink-faint)] mt-2">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6 border-t border-[var(--ink-faint)]">
           {announcements.length > 0 && (
             <div className="space-y-3">
               <h3 className="text-sm font-bold text-[var(--ink)] tracking-tight">
@@ -195,6 +218,6 @@ export default async function TodayPage() {
           )}
         </div>
       )}
-    </>
+    </div>
   );
 }

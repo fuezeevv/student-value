@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import type { SessionUser } from "@/lib/auth/session";
 import { switchDevUserAction } from "@/server/actions/task-actions";
 import { Logo } from "@/components/ui/Logo";
+import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { PreviewNavbar } from "@/components/preview/PreviewNavbar";
 import { GroupSwitcher } from "@/components/workspace/GroupSwitcher";
 import {
@@ -119,6 +120,7 @@ export function Navbar({
             </nav>
           )}
           <div className="nav-actions">
+            <ThemeToggle />
             {user && (
               <>
                 <Link href="/search" className="icon-button" aria-label="Поиск">

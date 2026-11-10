@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { BookOpen, CalendarDays, Grid2X2, Sun } from "lucide-react";
 import { Logo } from "@/components/ui/Logo";
+import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { browsePath, publicGroupDefinition } from "@/lib/groups/public-groups";
 
 export function PreviewNavbar({
@@ -41,12 +42,15 @@ export function PreviewNavbar({
               </Link>
             ))}
           </nav>
-          <Link
-            className="text-link preview-login"
-            href={signedIn ? "/" : "/login"}
-          >
-            {signedIn ? "Мой аккаунт" : "Войти"} ↗
-          </Link>
+          <div className="flex items-center gap-3">
+            <ThemeToggle />
+            <Link
+              className="text-link preview-login"
+              href={signedIn ? "/" : "/login"}
+            >
+              {signedIn ? "Мой аккаунт" : "Войти"} ↗
+            </Link>
+          </div>
         </div>
       </header>
       {group && (

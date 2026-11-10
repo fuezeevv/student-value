@@ -1,31 +1,29 @@
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  /* Rabbit Pastel Blue Palette */
-  --canvas: #d6eaf7;
-  --canvas-subtle: #e4f2fb;
-  --surface: rgba(255, 255, 255, 0.75);
-  --surface-active: #ffffff;
+  /* Clean Editorial Light Palette */
+  --canvas: #f1f5f9;
+  --canvas-subtle: #ffffff;
+  --surface: #ffffff;
+  --surface-active: #f8fafc;
 
   /* Surgical Wine-Red Accent */
   --wine: #962640;
-  --wine-soft: rgba(150, 38, 64, 0.1);
+  --wine-soft: rgba(150, 38, 64, 0.08);
   --wine-hover: #7a1e34;
 
   /* Deep Ink Navy Typography */
   --ink: #0b1a2d;
   --ink-secondary: #273b52;
   --ink-muted: #577291;
-  --ink-faint: rgba(87, 114, 145, 0.2);
+  --ink-faint: rgba(87, 114, 145, 0.12);
 
   /* Tailwind CSS Token Mapping */
-  --background: #d6eaf7;
+  --background: #f1f5f9;
   --foreground: #0b1a2d;
-  --card: rgba(255, 255, 255, 0.75);
+  --card: #ffffff;
   --card-foreground: #0b1a2d;
   --popover: #ffffff;
   --popover-foreground: #0b1a2d;
@@ -39,10 +37,51 @@
   --accent-foreground: #ffffff;
   --destructive: #c23b56;
   --destructive-foreground: #ffffff;
-  --border: rgba(11, 26, 45, 0.12);
+  --border: rgba(11, 26, 45, 0.1);
   --input: #ffffff;
   --ring: #962640;
   --radius: 0.75rem;
+}
+
+:root[data-theme="dark"],
+:root.dark {
+  /* Midnight Sleek Dark Palette */
+  --canvas: #0b0f14;
+  --canvas-subtle: #131922;
+  --surface: #161f2c;
+  --surface-active: #1e293b;
+
+  /* Vivid Wine / Ruby Accent for Dark Mode */
+  --wine: #ff4d6d;
+  --wine-soft: rgba(255, 77, 109, 0.15);
+  --wine-hover: #ff3355;
+
+  /* Crisp Light Typography */
+  --ink: #f8fafc;
+  --ink-secondary: #cbd5e1;
+  --ink-muted: #94a3b8;
+  --ink-faint: rgba(255, 255, 255, 0.08);
+
+  /* Tailwind CSS Token Mapping */
+  --background: #0b0f14;
+  --foreground: #f8fafc;
+  --card: #161f2c;
+  --card-foreground: #f8fafc;
+  --popover: #161f2c;
+  --popover-foreground: #f8fafc;
+  --primary: #ff4d6d;
+  --primary-foreground: #ffffff;
+  --secondary: #1c2738;
+  --secondary-foreground: #f8fafc;
+  --muted: #1c2738;
+  --muted-foreground: #94a3b8;
+  --accent: #ff4d6d;
+  --accent-foreground: #ffffff;
+  --destructive: #ff3355;
+  --destructive-foreground: #ffffff;
+  --border: rgba(255, 255, 255, 0.1);
+  --input: #161f2c;
+  --ring: #ff4d6d;
 }
 
 @layer base {
@@ -51,22 +90,11 @@
   }
   body {
     background-color: var(--canvas);
-    background-image:
-      radial-gradient(
-        ellipse 80% 50% at 50% -20%,
-        rgba(255, 255, 255, 0.75),
-        transparent 70%
-      ),
-      radial-gradient(
-        ellipse 60% 40% at 90% 10%,
-        rgba(150, 38, 64, 0.04),
-        transparent 50%
-      );
-    background-attachment: fixed;
     color: var(--foreground);
+    transition: background-color 0.2s ease, color 0.2s ease;
     font-family:
-      "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI",
-      Roboto, Helvetica, Arial, sans-serif;
+      -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial,
+      sans-serif;
     min-height: 100vh;
     overscroll-behavior-y: none;
     -webkit-font-smoothing: antialiased;
@@ -121,59 +149,6 @@
   }
 }
 
-.font-mono {
-  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-}
-
-/* ==================== WORKBENCH: DAY TABS ==================== */
-.day-tab {
-  transition: color 0.15s ease;
-  color: var(--ink-muted);
-  background: none;
-  border: none;
-  padding: 0;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-}
-.day-tab:hover {
-  color: var(--ink);
-}
-.day-tab.active {
-  color: var(--wine);
-  font-weight: 700;
-  border-bottom: 2.5px solid var(--wine);
-}
-
-/* ==================== WORKBENCH: SCHEDULE ROWS ==================== */
-.schedule-row {
-  transition: background-color 0.12s ease;
-  border-radius: 8px;
-}
-.schedule-row:hover {
-  background-color: rgba(255, 255, 255, 0.45);
-}
-
-/* ==================== WORKBENCH: TASK CHECKBOX (Things 3 style) ==================== */
-.custom-check {
-  appearance: none;
-  width: 20px;
-  height: 20px;
-  border-radius: 6px;
-  border: 1.5px solid var(--ink-muted);
-  cursor: pointer;
-  display: inline-grid;
-  place-content: center;
-  flex-shrink: 0;
-  transition: all 0.12s ease;
-  background: none;
-}
-.custom-check:hover {
-  border-color: var(--wine);
-}
-.custom-check.is-checked {
-  background-color: var(--wine);
-  border-color: var(--wine);
-}
-
 /* ==================== SCHEDULE-FIRST STYLING ==================== */
 .schedule-panel {
   margin: 0 0 2rem;
@@ -219,10 +194,10 @@
   transition: background-color 0.12s ease;
 }
 .schedule-lesson:hover {
-  background: rgba(255, 255, 255, 0.5);
+  background: var(--surface);
 }
 .schedule-lesson-active {
-  background: rgba(255, 255, 255, 0.75);
+  background: var(--surface-active);
   border-left: 3px solid var(--wine);
   padding-left: 0.75rem;
 }
@@ -329,7 +304,8 @@ a.schedule-subject:hover {
 .schedule-hero {
   padding: 1.25rem 1.5rem;
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.78);
+  background: var(--surface);
+  border: 1px solid var(--border);
   box-shadow: 0 2px 12px rgba(11, 26, 45, 0.04);
   border-left: 4px solid var(--wine);
   margin-bottom: 1.5rem;
@@ -380,7 +356,7 @@ a.schedule-subject:hover {
   border-radius: 999px;
   font-size: 0.85rem;
   color: var(--ink-muted);
-  background: rgba(255, 255, 255, 0.6);
+  background: var(--surface);
 }
 .lesson-filters a[aria-current="page"] {
   background: var(--surface-active);
@@ -454,7 +430,7 @@ a.schedule-subject:hover {
 /* ==================== HEADER & NAVIGATION ==================== */
 .site-header {
   border-bottom: 1px solid var(--border);
-  background: rgba(214, 234, 247, 0.88);
+  background: var(--surface);
   backdrop-filter: blur(20px) saturate(180%);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
   position: sticky;
@@ -467,12 +443,12 @@ a.schedule-subject:hover {
 .nav-inner {
   max-width: 1280px;
   margin: auto;
-  height: 84px;
-  padding: 0 40px;
+  height: 58px;
+  padding: 0 24px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 28px;
+  gap: 20px;
   position: relative;
 }
 .brand {
@@ -939,7 +915,7 @@ a.schedule-subject:hover {
 .progress-summary > div {
   flex: 1;
   min-width: 90px;
-  background: rgba(255, 255, 255, 0.75);
+  background: var(--surface);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border: 1px solid var(--border);
@@ -949,7 +925,7 @@ a.schedule-subject:hover {
   box-shadow: 0 2px 8px rgba(11, 26, 45, 0.03);
 }
 .progress-summary > div:hover {
-  background: #ffffff;
+  background: var(--surface-active);
   border-color: rgba(150, 38, 64, 0.25);
   transform: translateY(-2px);
   box-shadow: 0 6px 18px rgba(11, 26, 45, 0.06);
@@ -973,13 +949,13 @@ a.schedule-subject:hover {
   align-self: center;
   padding: 10px;
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.8);
+  background: var(--surface);
   border: 1px solid var(--border);
   color: var(--ink-secondary);
   transition: all 0.16s ease;
 }
 .progress-summary a:hover {
-  background: #ffffff;
+  background: var(--surface-active);
   color: var(--wine);
 }
 
@@ -991,13 +967,13 @@ a.schedule-subject:hover {
   padding: 1.15rem 1.25rem;
   border: 1px solid var(--border);
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.72);
+  background: var(--surface);
   color: var(--ink);
   box-shadow: 0 1px 3px rgba(11, 26, 45, 0.02);
   transition: background-color 0.15s ease, box-shadow 0.15s ease;
 }
 .work-item:hover {
-  background: #ffffff;
+  background: var(--surface-active);
   box-shadow: 0 4px 14px rgba(11, 26, 45, 0.05);
 }
 .work-item-body {
@@ -1051,7 +1027,7 @@ a.schedule-subject:hover {
   gap: 0.5rem;
   padding: 0.4rem 0.65rem;
   border-radius: 6px;
-  background: rgba(255, 255, 255, 0.85);
+  background: var(--surface);
   border: 1px solid var(--border);
   color: var(--ink);
   font-size: 0.82rem;
@@ -1064,7 +1040,7 @@ a.schedule-subject:hover {
   color: var(--ink-muted);
 }
 .work-file:hover {
-  background: #ffffff;
+  background: var(--surface-active);
   border-color: var(--wine);
   color: var(--wine);
 }
@@ -1073,7 +1049,7 @@ a.schedule-subject:hover {
 }
 .completion-button {
   border: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.85);
+  background: var(--surface);
   border-radius: 8px;
   color: var(--ink-secondary);
   font-weight: 600;
@@ -1084,7 +1060,7 @@ a.schedule-subject:hover {
   transition: all 0.15s ease;
 }
 .completion-button:hover {
-  background: #ffffff;
+  background: var(--surface-active);
   border-color: var(--wine);
   color: var(--wine);
 }
@@ -1103,7 +1079,7 @@ a.schedule-subject:hover {
 }
 .task-assignment-files {
   padding: 1rem;
-  background: rgba(255, 255, 255, 0.75);
+  background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 12px;
   margin: 1rem 0 1.5rem;
@@ -1458,7 +1434,7 @@ a.schedule-subject:hover {
   margin-left: 10px;
 }
 .glass-panel {
-  background: rgba(255, 255, 255, 0.75);
+  background: var(--surface);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   border: 1px solid var(--border);
@@ -1471,7 +1447,7 @@ a.schedule-subject:hover {
     transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .glass-panel-hover:hover {
-  background: #ffffff;
+  background: var(--surface-active);
   border-color: rgba(150, 38, 64, 0.25);
   box-shadow: 0 8px 24px rgba(11, 26, 45, 0.08);
   transform: translateY(-1px);
@@ -1504,7 +1480,7 @@ a.schedule-subject:hover {
   padding: 10px 12px;
   border: 1px solid var(--border);
   border-radius: 9px;
-  background: #ffffff;
+  background: var(--surface-active);
   color: var(--ink);
   font-size: 13px;
   font-weight: 600;
@@ -1532,7 +1508,7 @@ a.schedule-subject:hover {
   padding: 5px;
   max-height: 220px;
   overflow-y: auto;
-  background: #ffffff;
+  background: var(--surface-active);
   border: 1px solid var(--border);
   border-radius: 9px;
   box-shadow: 0 8px 24px rgba(11, 26, 45, 0.1);
@@ -1614,14 +1590,14 @@ a.schedule-subject:hover {
   padding: 22px;
   border: 1px solid var(--border);
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.72);
+  background: var(--surface);
   transition:
     background 0.16s ease,
     border-color 0.16s ease,
     box-shadow 0.16s ease;
 }
 .preview-group:hover {
-  background: #ffffff;
+  background: var(--surface-active);
   border-color: var(--wine);
   box-shadow: 0 4px 16px rgba(11, 26, 45, 0.06);
 }
@@ -1715,7 +1691,7 @@ a.schedule-subject:hover {
   padding: 20px;
   border: 1px solid var(--border);
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.72);
+  background: var(--surface);
   margin: 24px 0;
   max-width: 850px;
 }
@@ -1847,7 +1823,7 @@ a.schedule-subject:hover {
 }
 .public-subject-row:hover,
 .public-subject-row:focus-visible {
-  background: rgba(255, 255, 255, 0.55);
+  background: var(--surface);
 }
 .public-subject-row strong {
   font-size: 16px;
@@ -2100,12 +2076,12 @@ a.schedule-subject:hover {
     left: 0;
     right: 0;
     z-index: 50;
-    background: rgba(255, 255, 255, 0.94);
+    background: var(--surface);
     backdrop-filter: blur(24px) saturate(190%);
     -webkit-backdrop-filter: blur(24px) saturate(190%);
     border-top: 1px solid var(--border);
-    padding: 8px 8px max(10px, env(safe-area-inset-bottom));
-    box-shadow: 0 -4px 20px rgba(11, 26, 45, 0.06);
+    padding: 6px 8px max(10px, env(safe-area-inset-bottom));
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.08);
   }
   .mobile-nav a,
   .mobile-nav button {
