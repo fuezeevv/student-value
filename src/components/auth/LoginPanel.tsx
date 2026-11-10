@@ -15,7 +15,14 @@ import { LegalLinks } from "@/components/layout/LegalLinks";
 
 export async function LoginPanel({ error }: { error?: string }) {
   const dev = isDevAuthEnabled();
-  const google = dev ? null : googleConfiguration();
+  let google = null;
+  if (!dev) {
+    try {
+      google = googleConfiguration();
+    } catch {
+      google = null;
+    }
+  }
   const accounts = dev
     ? await prisma.user.findMany({
         where: {
@@ -55,29 +62,10 @@ export async function LoginPanel({ error }: { error?: string }) {
         <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-[#0b1a2d]">
           Учёба становится яснее.
         </h1>
-        <p className="text-sm sm:text-base text-[#3a4e66] leading-relaxed mt-3">
+        <p className="text-sm sm:text-base text-[#3a4e66] leading-relaxed mt-3 mb-6">
           Что сделать сейчас, что скоро сдавать и всё нужное по предмету — в
           одном выверенном месте.
         </p>
-
-        {/* Feature telemetry chips */}
-        <div className="grid grid-cols-3 gap-2.5 my-7 text-xs">
-          <div className="rounded-xl border border-[rgba(11,26,45,0.08)] bg-white/70 p-3 text-center shadow-xs">
-            <Clock className="w-4 h-4 mx-auto mb-1.5 text-[#962640]" />
-            <span className="text-[#0b1a2d] font-bold block">Дедлайны</span>
-            <span className="text-[11px] text-[#577291]">по МСК</span>
-          </div>
-          <div className="rounded-xl border border-[rgba(11,26,45,0.08)] bg-white/70 p-3 text-center shadow-xs">
-            <Sparkles className="w-4 h-4 mx-auto mb-1.5 text-amber-600" />
-            <span className="text-[#0b1a2d] font-bold block">Фокус дня</span>
-            <span className="text-[11px] text-[#577291]">без хаоса</span>
-          </div>
-          <div className="rounded-xl border border-[rgba(11,26,45,0.08)] bg-white/70 p-3 text-center shadow-xs">
-            <ShieldCheck className="w-4 h-4 mx-auto mb-1.5 text-emerald-600" />
-            <span className="text-[#0b1a2d] font-bold block">Защита</span>
-            <span className="text-[11px] text-[#577291]">OAuth / PKCE</span>
-          </div>
-        </div>
 
         {dev ? (
           <section className="border-t border-[rgba(11,26,45,0.1)] pt-6">

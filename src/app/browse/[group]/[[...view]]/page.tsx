@@ -11,8 +11,21 @@ import {
   PublicSubjectPage,
   PublicCourseSchedule,
 } from "@/components/preview/PublicSubjects";
-import { requestedWeek } from "@/lib/schedule/ruz";
+import {
+  requestedWeek,
+  showScheduleSubject,
+  subjectKey,
+  sourceUrl,
+} from "@/lib/schedule/ruz";
+import { loadPublicRuzSchedule } from "@/server/schedule/ruz";
 import { calculateDeadlineStatus } from "@/server/services/deadline-service";
+import {
+  ScheduleWorkbench,
+  WorkbenchDay,
+  WorkbenchTask,
+} from "@/components/schedule/ScheduleWorkbench";
+import { formatInTimeZone } from "date-fns-tz";
+import { ru } from "date-fns/locale";
 
 export default async function PublicGroupPage({
   params,
@@ -58,6 +71,86 @@ export default async function PublicGroupPage({
       </>
     );
   }
+
+  const ruzResult = await loadPublicRuzSchedule(slug, week);
+
+  const now = new Date();
+  const nowMoscowTime = formatInTimeZone(now, "Europe/Moscow", "HH:mm");
+  const todayDateStr = formatInTimeZone(now, "Europe/Moscow", "yyyy-MM-dd");
+
+  // Academic week calculation
+  const moscowDate = new Date(todayDateStr + "T12:00:00+03:00");
+  const sept1 = new Date("2026-09-01T12:00:00+03:00");
+  const dayOfWeek = (sept1.getDay() + 6) % 7;
+  const firstMonday = new Date(sept1);
+  firstMonday.setDate(sept1.getDate() - dayOfWeek);
+  const diffDays = Math.floor(
+    (moscowDate.getTime() - firstMonday.getTime()) / 86400000,
+  );
+  const weekNumber = Math.max(1, Math.floor(diffDays / 7) + 1);
+  const isEven = weekNumber % 2 === 0;
+  const weekLabel = `${weekNumber}-я неделя · ${isEven ? "Чётная" : "Нечётная"}`;
+
+  const days: WorkbenchDay[] =
+    ruzResult.data?.days.map((d) => {
+      const dDate = new Date(d.date + "T12:00:00+03:00");
+      const short = formatInTimeZone(dDate, "Europe/Moscow", "EEEEEE", {
+        locale: ru,
+      });
+      const dayLabel = short.charAt(0).toUpperCase() + short.slice(1);
+      const dateLabel = formatInTimeZone(dDate, "Europe/Moscow", "d MMM", {
+        locale: ru,
+      }).replace(".", "");
+
+      const lessons = d.lessons
+        .filter((l) => showScheduleSubject(l.subject))
+        .map((l) => {
+          const matchedCourse = courses.find(
+            (c) => subjectKey(c.title) === subjectKey(l.subject),
+          );
+          return {
+            subject: l.subject,
+            start: l.start,
+            end: l.end,
+            type: l.type,
+            note: l.note,
+            teachers: l.teachers,
+            rooms: l.rooms,
+            lmsUrl: l.lmsUrl,
+            courseId: matchedCourse?.id,
+            courseHref: matchedCourse
+              ? `${base}/courses/${matchedCourse.id}`
+              : undefined,
+          };
+        });
+
+      return {
+        date: d.date,
+        dayLabel,
+        dateLabel,
+        isToday: d.date === todayDateStr,
+        lessons,
+      };
+    }) ?? [];
+
+  const workbenchTasks: WorkbenchTask[] = tasks.map((t) => {
+    const d = t.deadlines[0];
+    const timing = d
+      ? calculateDeadlineStatus(d.date, now, false, d.isTimeStrict)
+      : null;
+    return {
+      id: t.id,
+      title: t.title,
+      courseTitle: t.courseTitle,
+      courseId: t.courseId,
+      deadlineDate: d?.date,
+      deadlineFormatted: timing?.formattedDate,
+      urgency: timing?.urgency as any,
+      completed: false,
+      materials: t.materials.map((m) => ({ title: m.title })),
+    };
+  });
+
   const title = task
     ? task.title
     : course
@@ -71,6 +164,7 @@ export default async function PublicGroupPage({
             : courses.length
               ? "Что по учёбе"
               : "Пары и предметы";
+
   const upcoming = tasks
     .filter((t) => t.deadlines[0] && t.deadlines[0].date >= new Date())
     .sort(
@@ -93,36 +187,43 @@ export default async function PublicGroupPage({
           ["Ближайшие сроки", upcoming.slice(0, 3)],
           ["Можно приступать · без даты", undated.slice(0, 4)],
         ] as const);
+
   return (
     <>
-      <div className="preview-context">
-        <span>
-          Гостевой просмотр · {group.track} {group.label} · {group.code}
-        </span>
-        <div className="preview-context-actions">
-          <Link href={`${base}/schedule`}>Расписание ↗</Link>
-          <Link href="/browse#groups">Сменить группу ↗</Link>
+      {view.length > 0 && (
+        <div className="preview-context">
+          <span>
+            Гостевой просмотр · {group.track} {group.label} · {group.code}
+          </span>
+          <div className="preview-context-actions">
+            <Link href={`${base}/courses`}>Все предметы ↗</Link>
+            <Link href="/browse#groups">Сменить группу ↗</Link>
+          </div>
         </div>
-      </div>
-      <div className="page-heading">
-        <div>
-          <p className="eyebrow">
-            {courses[0]?.semester ?? "Учебное пространство группы"}
-          </p>
-          <h1 className={task ? "page-title preview-task-title" : "page-title"}>
-            {title}
-          </h1>
-          <p className="page-intro">
-            {course
-              ? course.title
-              : task
-                ? task.courseTitle
-                : tasks.length
-                  ? "Общие работы и подтверждённые сроки — без регистрации."
-                  : "Актуальное расписание, преподаватели и аудитории — по официальному РУЗ."}
-          </p>
+      )}
+
+      {view.length > 0 && (
+        <div className="page-heading">
+          <div>
+            <p className="eyebrow">
+              {courses[0]?.semester ?? "Учебное пространство группы"}
+            </p>
+            <h1 className={task ? "page-title preview-task-title" : "page-title"}>
+              {title}
+            </h1>
+            <p className="page-intro">
+              {course
+                ? course.title
+                : task
+                  ? task.courseTitle
+                  : tasks.length
+                    ? "Общие работы и подтверждённые сроки — без регистрации."
+                    : "Актуальное расписание, преподаватели и аудитории — по официальному РУЗ."}
+            </p>
+          </div>
         </div>
-      </div>
+      )}
+
       {remoteSubjectId ? (
         <Suspense
           fallback={
@@ -228,83 +329,58 @@ export default async function PublicGroupPage({
           rawWeek={week}
           courses={courses.map((c) => ({ id: c.id, title: c.title }))}
         />
-      ) : (
+      ) : view[0] === "deadlines" ? (
         <>
-          {!view.length && tasks.length > 0 && (
-            <div className="preview-overview">
-              <p>
-                Работ: <strong>{tasks.length}</strong> · Предметов:{" "}
-                {courses.length}
-              </p>
-              <Link className="text-link" href={`${base}/schedule`}>
-                Пары и аудитории · расписание ↗
-              </Link>
-            </div>
-          )}
-          {courses.length > 0 &&
-            lists.map(([label, items]) => (
-              <section className="preview-task-section" key={label}>
-                <div className="section-heading">
-                  <h2>
-                    {label}
-                    <span className="count">{items.length}</span>
-                  </h2>
-                  {!view.length && (
-                    <Link className="text-link" href={`${base}/deadlines`}>
-                      Все работы ↗
-                    </Link>
-                  )}
+          {lists.map(([label, items]) => (
+            <section className="preview-task-section" key={label}>
+              <div className="section-heading">
+                <h2>
+                  {label}
+                  <span className="count">{items.length}</span>
+                </h2>
+              </div>
+              {items.length ? (
+                <div className="work-list">
+                  {items.map((t) => (
+                    <PublicTaskRow key={t.id} task={t} base={base} />
+                  ))}
                 </div>
-                {items.length ? (
-                  <div className="work-list">
-                    {items.map((t) => (
-                      <PublicTaskRow key={t.id} task={t} base={base} />
-                    ))}
-                  </div>
-                ) : (
-                  <p className="quiet-empty">
-                    {label.includes("срок")
-                      ? "Подтверждённых дат в этом разделе пока нет."
-                      : "Работ в этом разделе пока нет."}
-                  </p>
-                )}
-              </section>
-            ))}
-          {!view.length && (
-            <Suspense
-              fallback={
-                <p role="status" className="quiet-empty">
-                  Получаем расписание РУЗ…
-                </p>
-              }
-            >
-              <PublicSubjects
-                slug={slug}
-                base={base}
-                courses={courses}
-                week={week}
-                showSchedule
-              />
-            </Suspense>
-          )}
-          {!view.length && overdue.length > 0 && (
-            <p className="preview-explainer">
-              Ещё {overdue.length} работ с прошедшей датой —{" "}
-              <Link href={`${base}/deadlines`}>в полном списке</Link>. Гостевой
-              режим не знает, какие из них вы уже выполнили.
-            </p>
-          )}
+              ) : (
+                <p className="quiet-empty">Работ в этом разделе пока нет.</p>
+              )}
+            </section>
+          ))}
         </>
+      ) : (
+        /* SCHEDULE-FIRST DEFAULT WORKBENCH VIEW */
+        <div className="space-y-8">
+          <ScheduleWorkbench
+            groupCode={group.code}
+            weekLabel={weekLabel}
+            days={days}
+            tasks={workbenchTasks}
+            totalXp={45}
+            isGuest={true}
+            publicBase={base}
+            fetchedAt={ruzResult.fetchedAt}
+            scheduleState={ruzResult.state}
+            sourceUrl={ruzResult.data ? sourceUrl(ruzResult.data) : undefined}
+            nowMoscowTime={nowMoscowTime}
+            todayDateStr={todayDateStr}
+          />
+
+          <div className="flex items-center justify-between pt-4 text-xs font-mono text-[var(--ink-muted)]">
+            <span>
+              Показаны официальные данные РУЗ СПбПУ для группы {group.code}
+            </span>
+            <Link className="text-link" href={`${base}/courses`}>
+              Все предметы группы ({courses.length}) ↗
+            </Link>
+          </div>
+        </div>
       )}
-      {!tasks.length && view[0] === "deadlines" && (
-        <p className="quiet-empty">
-          Задания и сроки этой группы пока не опубликованы.{" "}
-          <Link href={`${base}/courses`}>Предметы</Link> и{" "}
-          <Link href={`${base}/schedule`}>расписание</Link> уже можно
-          посмотреть.
-        </p>
-      )}
-      <aside className="preview-account-note">
+
+      <aside className="preview-account-note mt-8">
         <div>
           <strong>Хотите вести свой прогресс?</strong>
           <p>
