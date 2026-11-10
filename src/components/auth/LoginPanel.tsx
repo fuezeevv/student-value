@@ -1,16 +1,13 @@
-import Link from "next/link";
 import {
   ArrowRight,
   Lock,
-  Download,
 } from "lucide-react";
 import { isDevAuthEnabled } from "@/lib/auth/dev-policy";
 import { prisma } from "@/lib/db/prisma";
 import { switchDevUserAction } from "@/server/actions/task-actions";
 import { BrandMark } from "@/components/ui/Logo";
 import { googleConfiguration } from "@/lib/auth/google";
-import { LegalLinks } from "@/components/layout/LegalLinks";
-import { publicGroups } from "@/lib/groups/public-groups";
+import { GuestGroupSelect } from "./GuestGroupSelect";
 
 export async function LoginPanel({ error }: { error?: string }) {
   const dev = isDevAuthEnabled();
@@ -33,11 +30,11 @@ export async function LoginPanel({ error }: { error?: string }) {
     : [];
 
   return (
-    <div className="relative max-w-xl mx-auto py-6 sm:py-12 px-2 sm:px-0">
-      <div className="relative rounded-3xl border border-[var(--border)] bg-[var(--surface)] backdrop-blur-xl p-6 sm:p-9 shadow-sm">
+    <div className="w-full max-w-md mx-auto my-auto py-2">
+      <div className="relative rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-6 sm:p-7 shadow-xs">
         {/* Academic cohort badge */}
-        <div className="flex items-center justify-between gap-3 mb-6 flex-wrap">
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[rgba(150,38,64,0.08)] dark:bg-[rgba(255,77,109,0.12)] border border-[rgba(150,38,64,0.2)] dark:border-[rgba(255,77,109,0.3)] text-[#962640] dark:text-[#ff4d6d] text-xs font-semibold tracking-wide">
+        <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[rgba(150,38,64,0.08)] dark:bg-[rgba(255,77,109,0.12)] border border-[rgba(150,38,64,0.2)] dark:border-[rgba(255,77,109,0.3)] text-[#962640] dark:text-[#ff4d6d] text-xs font-semibold tracking-wide">
             <span className="w-2 h-2 rounded-full bg-[#962640] dark:bg-[#ff4d6d]" />
             СПбПУ · учебные группы
           </div>
@@ -46,9 +43,9 @@ export async function LoginPanel({ error }: { error?: string }) {
           </span>
         </div>
 
-        <div className="flex items-center gap-3.5 mb-5">
-          <div className="p-2.5 rounded-2xl bg-[var(--surface-active)] border border-[var(--border)] shadow-xs">
-            <BrandMark className="w-10 h-10" />
+        <div className="flex items-center gap-3 mb-4">
+          <div className="p-2 rounded-xl bg-[var(--surface-active)] border border-[var(--border)] shadow-xs">
+            <BrandMark className="w-9 h-9" />
           </div>
           <div>
             <p className="eyebrow !tracking-[2px]">Student Value</p>
@@ -58,54 +55,20 @@ export async function LoginPanel({ error }: { error?: string }) {
           </div>
         </div>
 
-        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-[var(--ink)]">
+        <h1 className="text-2xl font-bold tracking-tight text-[var(--ink)]">
           Учёба становится яснее.
         </h1>
-        <p className="text-sm text-[var(--ink-secondary)] leading-relaxed mt-2 mb-6">
-          Что сделать сейчас, что скоро сдавать и всё нужное по предмету — в одном выверенном месте.
+        <p className="text-xs text-[var(--ink-secondary)] leading-relaxed mt-1 mb-5">
+          Расписание, актуальные работы и дедлайны вашей группы в одном месте.
         </p>
 
-        {/* ==================== 1. БЫСТРЫЙ ВЫБОР ГРУППЫ БЕЗ ВХОДА (СВЕРХУ) ==================== */}
-        <div className="mb-7 p-4 sm:p-5 rounded-2xl bg-[var(--surface)] border border-[var(--border)] shadow-xs">
-          <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
-            <span className="text-xs font-mono font-bold text-[#962640] dark:text-[#ff4d6d] uppercase tracking-wider flex items-center gap-1.5">
-              <span>⚡ Расписание сразу без регистрации</span>
-            </span>
-            <span className="text-[11px] font-mono text-[var(--ink-muted)]">
-              8 официальных групп
-            </span>
-          </div>
-          <p className="text-xs text-[var(--ink-secondary)] leading-relaxed mb-3.5">
-            Нажмите на свою группу — расписание и пары откроются сразу:
-          </p>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            {publicGroups.map((g) => (
-              <Link
-                key={g.code}
-                href={`/browse/${g.code.replace("/", "-")}`}
-                className="px-3 py-2.5 rounded-xl bg-[var(--surface-active)] hover:bg-[#962640] hover:text-white dark:hover:bg-[#ff4d6d] border border-[var(--border)] text-center transition-all active:scale-[0.97] group shadow-xs"
-              >
-                <span className="block font-bold text-xs text-[var(--ink)] group-hover:text-white transition-colors">
-                  {g.track} {g.label}
-                </span>
-                <span className="block text-[10px] font-mono text-[var(--ink-muted)] group-hover:text-white/80 transition-colors">
-                  {g.code.split("/")[1]}
-                </span>
-              </Link>
-            ))}
-          </div>
-        </div>
-
-        {/* ==================== 2. ВХОД В ЛИЧНЫЙ АККАУНТ ==================== */}
+        {/* ==================== 1. ВХОД В ЛИЧНЫЙ АККАУНТ (ОСНОВНОЙ БЛОК) ==================== */}
         {dev ? (
-          <section className="border-t border-[var(--border)] pt-5">
-            <h2 className="text-base font-bold text-[var(--ink)] mb-1">
-              Локальный вход (режим разработки)
-            </h2>
-            <p className="text-xs text-[var(--ink-muted)] leading-relaxed mb-4">
-              Выберите тестовую роль для проверки сценариев платформы:
-            </p>
-            <div className="space-y-2.5">
+          <section className="space-y-3 mb-4">
+            <div className="text-xs font-bold text-[var(--ink)]">
+              Локальный вход (режим разработки):
+            </div>
+            <div className="space-y-2">
               {accounts.map((account) => {
                 const isOwner = account.id === "user-dev-owner";
                 return (
@@ -115,28 +78,20 @@ export async function LoginPanel({ error }: { error?: string }) {
                   >
                     <button
                       type="submit"
-                      className="w-full min-h-13 flex justify-between items-center gap-4 bg-[var(--surface-active)] hover:border-[#962640] border border-[var(--border)] rounded-xl px-4 py-3 text-left transition-all active:scale-[0.98] shadow-xs"
+                      className="w-full flex justify-between items-center gap-3 bg-[var(--surface-active)] hover:border-[#962640] border border-[var(--border)] rounded-xl px-4 py-2.5 text-left transition-all active:scale-[0.98] shadow-xs cursor-pointer"
                     >
-                      <div className="flex items-center gap-3">
-                        <span
-                          className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold ${
-                            isOwner
-                              ? "bg-amber-100 text-amber-800 border border-amber-300"
-                              : "bg-blue-100 text-blue-800 border border-blue-300"
-                          }`}
-                        >
-                          {isOwner ? "👑" : "🎓"}
-                        </span>
+                      <div className="flex items-center gap-2.5">
+                        <span className="text-base">{isOwner ? "👑" : "🎓"}</span>
                         <div>
-                          <span className="text-sm font-bold text-[var(--ink)] block">
+                          <span className="text-xs font-bold text-[var(--ink)] block">
                             {isOwner ? "Староста" : "Студент"}
                           </span>
-                          <span className="text-xs text-[var(--ink-muted)]">
+                          <span className="text-[11px] text-[var(--ink-muted)]">
                             {account.nickname}
                           </span>
                         </div>
                       </div>
-                      <ArrowRight size={17} className="text-[var(--ink-muted)]" />
+                      <ArrowRight size={15} className="text-[var(--ink-muted)]" />
                     </button>
                   </form>
                 );
@@ -144,41 +99,29 @@ export async function LoginPanel({ error }: { error?: string }) {
             </div>
           </section>
         ) : google ? (
-          <section className="border-t border-[var(--border)] pt-5">
-            <div className="flex items-center justify-between mb-2">
-              <h2 className="text-base font-bold text-[var(--ink)]">
-                Войти в личный кабинет
-              </h2>
-              <span className="text-xs text-[#577291] font-mono">
-                Синхронизация прогресса
-              </span>
-            </div>
-            <p className="text-xs text-[var(--ink-secondary)] leading-relaxed mb-4">
-              Сохраняет выполненные работы, личные варианты, опыт и календарь.
-            </p>
-
+          <section className="space-y-3 mb-4">
             {error && (
               <div
                 role="alert"
-                className="text-xs text-[#962640] dark:text-[#ff99ac] bg-[rgba(150,38,64,0.08)] border border-[rgba(150,38,64,0.2)] rounded-xl p-3.5 mb-4 leading-relaxed font-medium"
+                className="text-xs text-[#962640] dark:text-[#ff99ac] bg-[rgba(150,38,64,0.08)] border border-[rgba(150,38,64,0.2)] rounded-xl p-3 leading-relaxed font-medium"
               >
                 Вход не завершён. Проверьте выбранный аккаунт Google и
                 код-приглашение от старосты.
               </div>
             )}
 
-            <form action="/api/auth/google" method="post" className="space-y-3.5">
-              <details className="group rounded-xl border border-[var(--border)] bg-[var(--surface-active)] p-3.5 text-xs transition-colors hover:border-[#962640]">
+            <form action="/api/auth/google" method="post" className="space-y-3">
+              <details className="group rounded-xl border border-[var(--border)] bg-[var(--surface-active)] p-3 text-xs transition-colors hover:border-[#962640]">
                 <summary className="cursor-pointer font-bold text-[var(--ink)] flex items-center justify-between list-none">
                   <span className="flex items-center gap-2">
-                    <Lock size={14} className="text-[#962640] dark:text-[#ff4d6d]" />
+                    <Lock size={13} className="text-[#962640] dark:text-[#ff4d6d]" />
                     Первый вход · ввести код старосты
                   </span>
                   <span className="text-[11px] text-[#962640] dark:text-[#ff4d6d] group-open:rotate-90 transition-transform">
                     →
                   </span>
                 </summary>
-                <div className="mt-3 pt-3 border-t border-[var(--border)] space-y-2">
+                <div className="mt-2.5 pt-2.5 border-t border-[var(--border)] space-y-1.5">
                   <label className="block text-[var(--ink-muted)] font-medium">
                     Код-приглашение в группу
                     <input
@@ -187,22 +130,22 @@ export async function LoginPanel({ error }: { error?: string }) {
                       autoComplete="off"
                       maxLength={124}
                       placeholder="Вставьте приглашение..."
-                      className="block w-full mt-1 min-h-10 px-3.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] text-[var(--ink)] text-sm focus:outline-none focus:border-[#962640] transition-colors font-mono"
+                      className="block w-full mt-1 min-h-9 px-3 rounded-lg border border-[var(--border)] bg-[var(--surface)] text-[var(--ink)] text-xs focus:outline-none focus:border-[#962640] transition-colors font-mono"
                     />
                   </label>
-                  <p className="text-[11px] text-[var(--ink-muted)]">
-                    Код одноразовый и привязывает аккаунт к вашей учебной группе.
+                  <p className="text-[10px] text-[var(--ink-muted)]">
+                    Одноразовый код привязывает аккаунт к вашей учебной группе.
                   </p>
                 </div>
               </details>
 
               <button
                 type="submit"
-                className="w-full min-h-13 flex items-center justify-center gap-3 rounded-xl bg-[#0b1a2d] hover:bg-[#15273e] text-white font-semibold text-sm shadow-sm active:scale-[0.98] transition-all cursor-pointer"
+                className="w-full min-h-12 flex items-center justify-center gap-3 rounded-xl bg-[#0b1a2d] dark:bg-slate-800 hover:bg-[#15273e] dark:hover:bg-slate-700 text-white font-semibold text-sm shadow-xs active:scale-[0.98] transition-all cursor-pointer"
               >
                 {/* Authentic 4-color Google G icon */}
                 <svg
-                  className="w-5 h-5 shrink-0"
+                  className="w-4 h-4 shrink-0"
                   viewBox="0 0 24 24"
                   aria-hidden="true"
                 >
@@ -224,51 +167,42 @@ export async function LoginPanel({ error }: { error?: string }) {
                   />
                 </svg>
                 <span>Войти через Google</span>
-                <ArrowRight size={17} className="text-slate-300 ml-auto" />
+                <ArrowRight size={15} className="text-slate-300 ml-auto" />
               </button>
             </form>
           </section>
         ) : (
-          <section className="border-t border-[var(--border)] pt-5">
-            <h2 className="text-base font-bold text-[var(--ink)] mb-1">
-              Вход готовится к запуску
-            </h2>
-            <p className="text-xs text-[var(--ink-muted)] leading-relaxed">
-              Подключаем вход через Google. Личный прогресс и файлы доступны
-              участникам после авторизации.
+          <section className="p-3.5 rounded-xl bg-[var(--surface-active)] border border-[var(--border)] mb-4 text-xs">
+            <h2 className="font-bold text-[var(--ink)] mb-0.5">Вход готовится к запуску</h2>
+            <p className="text-[var(--ink-muted)]">
+              Подключаем вход через Google. Расписание доступно без авторизации ниже:
             </p>
           </section>
         )}
 
-        {/* ==================== 3. СКАЧАТЬ АНДРОИД APK (ЕДИНАЯ КНОПКА-ПЛАШКА) ==================== */}
+        {/* ==================== 2. ОДИН МАЛЕНЬКИЙ ПРЯМОУГОЛЬНИК: РАСПИСАНИЕ БЕЗ ВХОДА (ПОСЛЕ ВХОДА) ==================== */}
+        <div className="pt-3.5 border-t border-[var(--border)]">
+          <div className="flex items-center justify-between gap-3 text-xs flex-wrap">
+            <span className="text-[var(--ink-muted)] font-medium">
+              Или расписание без регистрации:
+            </span>
+            <GuestGroupSelect />
+          </div>
+        </div>
+
+        {/* ==================== 3. ЕДИНАЯ КНОПКА-СТРОКА: СКАЧАТЬ ANDROID APK (БЕЗ РОБОТА И БЕЗ ОВАЛА) ==================== */}
         <a
           href="/studentvalue1984.apk"
           download
-          className="mt-6 p-4 rounded-2xl bg-[var(--surface-active)] hover:border-[#962640] dark:hover:border-[#ff4d6d] border border-[var(--border)] flex items-center justify-between gap-3 text-xs shadow-xs transition-all active:scale-[0.98] group cursor-pointer"
+          className="mt-3.5 flex items-center justify-between px-4 py-2.5 rounded-xl border border-[var(--border)] hover:border-[var(--wine)] bg-[var(--surface-active)] text-xs text-[var(--ink-secondary)] hover:text-[var(--ink)] transition-all active:scale-[0.98] group cursor-pointer shadow-xs"
         >
-          <div className="flex items-center gap-3">
-            <span className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-700 flex items-center justify-center text-lg shrink-0">
-              🤖
-            </span>
-            <div>
-              <span className="font-bold text-[var(--ink)] block text-sm group-hover:text-[#962640] dark:group-hover:text-[#ff4d6d] transition-colors">
-                Приложение для Android (.apk)
-              </span>
-              <span className="text-[11px] text-[var(--ink-muted)]">
-                Установить на телефон · автономная работа · v1.984
-              </span>
-            </div>
-          </div>
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[rgba(150,38,64,0.08)] group-hover:bg-[#962640] group-hover:text-white text-[#962640] dark:text-[#ff4d6d] font-bold text-xs transition-colors shrink-0">
-            <Download size={14} />
-            <span>Скачать</span>
-          </div>
+          <span className="font-semibold text-[var(--ink)] group-hover:text-[var(--wine)] transition-colors">
+            Приложение для Android (.apk)
+          </span>
+          <span className="font-mono text-[11px] text-[var(--ink-muted)]">
+            v1.984 · 12 МБ ↓
+          </span>
         </a>
-
-        {/* Единый футер с юридическими условиями (без повторов) */}
-        <div className="mt-7 pt-4 border-t border-[var(--border)] text-xs text-[var(--ink-muted)]">
-          <LegalLinks />
-        </div>
       </div>
     </div>
   );

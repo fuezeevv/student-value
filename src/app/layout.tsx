@@ -7,7 +7,10 @@ import { prisma } from "@/lib/db/prisma";
 import { LegalLinks } from "@/components/layout/LegalLinks";
 
 export const viewport: Viewport = {
-  themeColor: "#d6eaf7",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f1f5f9" },
+    { media: "(prefers-color-scheme: dark)", color: "#0b0f14" },
+  ],
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,

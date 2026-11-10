@@ -7,6 +7,7 @@ import { loadStudyWorkspace, type StudyTask } from "@/server/queries/study-works
 import { loadRuzSchedule } from "@/server/schedule/ruz";
 import { CreateTaskModal } from "@/components/task/CreateTaskModal";
 import { CalendarNotice } from "@/components/workspace/CalendarNotice";
+import { StudentWellbeingCard } from "@/components/study/StudentWellbeingCard";
 import {
   ScheduleWorkbench,
   WorkbenchDay,
@@ -138,6 +139,28 @@ export default async function TodayPage() {
 
   const groupCode = user.groupName || "5130901/40102";
 
+  const totalTasks = workbenchTasks.length;
+  const completedTasks = workbenchTasks.filter((t) => t.completed).length;
+  const overdueTasks = workbenchTasks.filter(
+    (t) => !t.completed && t.urgency === "OVERDUE",
+  ).length;
+
+  const dayStatuses = days.map((d) => {
+    const isPast = d.date < todayDateStr;
+    const isToday = d.date === todayDateStr;
+    const dayLabel = d.dayLabel.charAt(0);
+    const dateNumMatch = d.dateLabel.match(/\d+/);
+    const dateLabel = dateNumMatch ? dateNumMatch[0] : d.dateLabel;
+    return {
+      dayLabel,
+      dateLabel,
+      isToday,
+      isPast,
+      completionRate: isPast ? 1 : isToday ? (completedTasks > 0 ? 1 : 0.5) : 0,
+      hasClasses: d.lessons.length > 0,
+    };
+  });
+
   return (
     <div className="space-y-8">
       <div className="flex items-center justify-between gap-4 flex-wrap">
@@ -161,6 +184,13 @@ export default async function TodayPage() {
       </div>
 
       <CalendarNotice userId={user.id} />
+
+      <StudentWellbeingCard
+        totalTasks={totalTasks}
+        completedTasks={completedTasks}
+        overdueTasks={overdueTasks}
+        dayStatuses={dayStatuses.length > 0 ? dayStatuses : undefined}
+      />
 
       {/* SCHEDULE FIRST WORKBENCH */}
       <ScheduleWorkbench

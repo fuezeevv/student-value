@@ -9,10 +9,8 @@ import { Logo } from "@/components/ui/Logo";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { PreviewNavbar } from "@/components/preview/PreviewNavbar";
 import { GroupSwitcher } from "@/components/workspace/GroupSwitcher";
+import { TodayIcon, SubjectsIcon, DeadlinesIcon } from "@/components/ui/Icons";
 import {
-  BookOpen,
-  CalendarDays,
-  Sun,
   Search,
   Bell,
   Menu,
@@ -21,9 +19,9 @@ import {
 } from "lucide-react";
 
 const primary = [
-  { href: "/", label: "Сегодня", icon: Sun },
-  { href: "/courses", label: "Предметы", icon: BookOpen },
-  { href: "/deadlines", label: "Сроки", icon: CalendarDays },
+  { href: "/", label: "Сегодня", icon: TodayIcon },
+  { href: "/courses", label: "Предметы", icon: SubjectsIcon },
+  { href: "/deadlines", label: "Сроки", icon: DeadlinesIcon },
 ];
 const secondary = [
   { href: "/schedule", label: "Расписание пар" },
@@ -120,7 +118,6 @@ export function Navbar({
             </nav>
           )}
           <div className="nav-actions">
-            <ThemeToggle />
             {user && (
               <>
                 <Link href="/search" className="icon-button" aria-label="Поиск">
@@ -142,7 +139,7 @@ export function Navbar({
               <button
                 ref={trigger}
                 onClick={toggle}
-                className="account-button"
+                className="account-button hidden lg:flex"
                 aria-label="Открыть меню"
                 aria-expanded={open}
                 aria-controls="account-menu"
@@ -161,7 +158,10 @@ export function Navbar({
           </div>
           {open && (
             <div id="account-menu" ref={menu} className="account-menu">
-              <p className="eyebrow">{user?.nickname}</p>
+              <div className="flex items-center justify-between pb-3 mb-2 border-b border-[var(--border)]">
+                <p className="eyebrow !mb-0">{user?.nickname}</p>
+                <ThemeToggle />
+              </div>
               {user?.groups && (
                 <GroupSwitcher groups={user.groups} current={user.groupId} />
               )}
@@ -253,9 +253,12 @@ export function Navbar({
             onClick={toggle}
             aria-expanded={open}
             aria-controls="account-menu"
+            className="flex flex-col items-center justify-center gap-1 cursor-pointer"
           >
-            <Menu size={20} />
-            <span>Ещё</span>
+            <span className="w-5 h-5 rounded-full bg-[var(--surface-active)] border border-[var(--border)] flex items-center justify-center text-[10px] font-bold text-[var(--ink)]">
+              {user.nickname.slice(0, 1).toUpperCase()}
+            </span>
+            <span>Профиль</span>
           </button>
         </nav>
       )}

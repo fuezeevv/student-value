@@ -1,7 +1,7 @@
 import Link from "next/link";
-import { BookOpen, CalendarDays, Grid2X2, Sun } from "lucide-react";
+import { Grid2X2 } from "lucide-react";
 import { Logo } from "@/components/ui/Logo";
-import { ThemeToggle } from "@/components/ui/ThemeToggle";
+import { TodayIcon, SubjectsIcon, DeadlinesIcon } from "@/components/ui/Icons";
 import { browsePath, publicGroupDefinition } from "@/lib/groups/public-groups";
 
 export function PreviewNavbar({
@@ -16,9 +16,9 @@ export function PreviewNavbar({
   const base = group ? browsePath(group.code) : "/browse";
   const links = group
     ? [
-        { href: base, label: "Обзор", icon: Sun },
-        { href: `${base}/courses`, label: "Предметы", icon: BookOpen },
-        { href: `${base}/deadlines`, label: "Сроки", icon: CalendarDays },
+        { href: base, label: "Обзор", icon: TodayIcon },
+        { href: `${base}/courses`, label: "Предметы", icon: SubjectsIcon },
+        { href: `${base}/deadlines`, label: "Сроки", icon: DeadlinesIcon },
       ]
     : [];
   const active = (href: string) =>
@@ -43,7 +43,6 @@ export function PreviewNavbar({
             ))}
           </nav>
           <div className="flex items-center gap-3">
-            <ThemeToggle />
             <Link
               className="text-link preview-login"
               href={signedIn ? "/" : "/login"}

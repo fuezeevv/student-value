@@ -39,7 +39,11 @@ describe("OAuth browser binding", () => {
       readGoogleFlow(cookie, makeGoogleFlow("", secret).flow.state, secret),
     ).toThrow();
     expect(() =>
-      readGoogleFlow("X" + cookie.slice(1), flow.state, secret),
+      readGoogleFlow(
+        (cookie[0] === "X" ? "Y" : "X") + cookie.slice(1),
+        flow.state,
+        secret,
+      ),
     ).toThrow();
     expect(() =>
       readGoogleFlow(

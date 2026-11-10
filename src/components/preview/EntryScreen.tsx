@@ -1,5 +1,6 @@
 import { LoginPanel } from "@/components/auth/LoginPanel";
 import { GuestGroupChooser } from "./GuestGroupChooser";
+
 export function EntryScreen({
   error,
   showLogin = true,
@@ -7,19 +8,16 @@ export function EntryScreen({
   error?: string;
   showLogin?: boolean;
 }) {
-  return (
-    <>
-      {showLogin && (
-        <section aria-label="Вход в аккаунт">
-          <LoginPanel error={error} />
-          <div className="entry-browse-link">
-            <a className="text-link" href="#groups">
-              Или посмотрите расписание и предметы без входа ↓
-            </a>
-          </div>
-        </section>
-      )}
-      <GuestGroupChooser />
-    </>
-  );
+  if (showLogin) {
+    return (
+      <section
+        aria-label="Вход в аккаунт"
+        className="flex items-center justify-center min-h-[calc(100dvh-170px)]"
+      >
+        <LoginPanel error={error} />
+      </section>
+    );
+  }
+
+  return <GuestGroupChooser />;
 }
