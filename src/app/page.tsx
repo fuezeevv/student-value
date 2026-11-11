@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
 import { getCurrentUser } from "@/lib/auth/session";
@@ -7,7 +6,6 @@ import { loadStudyWorkspace, type StudyTask } from "@/server/queries/study-works
 import { loadRuzSchedule } from "@/server/schedule/ruz";
 import { CreateTaskModal } from "@/components/task/CreateTaskModal";
 import { CalendarNotice } from "@/components/workspace/CalendarNotice";
-import { StudentWellbeingCard } from "@/components/study/StudentWellbeingCard";
 import {
   ScheduleWorkbench,
   WorkbenchDay,
@@ -139,36 +137,16 @@ export default async function TodayPage() {
 
   const groupCode = user.groupName || "5130901/40102";
 
-  const totalTasks = workbenchTasks.length;
-  const completedTasks = workbenchTasks.filter((t) => t.completed).length;
-  const overdueTasks = workbenchTasks.filter(
-    (t) => !t.completed && t.urgency === "OVERDUE",
-  ).length;
-
-  const dayStatuses = days.map((d) => {
-    const isPast = d.date < todayDateStr;
-    const isToday = d.date === todayDateStr;
-    const dayLabel = d.dayLabel.charAt(0);
-    const dateNumMatch = d.dateLabel.match(/\d+/);
-    const dateLabel = dateNumMatch ? dateNumMatch[0] : d.dateLabel;
-    return {
-      dayLabel,
-      dateLabel,
-      isToday,
-      isPast,
-      completionRate: isPast ? 1 : isToday ? (completedTasks > 0 ? 1 : 0.5) : 0,
-      hasClasses: d.lessons.length > 0,
-    };
-  });
-
   return (
-    <div className="space-y-8">
-      <div className="flex items-center justify-between gap-4 flex-wrap">
+    <div className="space-y-4">
+      {/* Subtle desktop-only heading */}
+      <div className="hidden lg:flex items-center justify-between gap-4 pb-2 border-b border-[var(--border)]">
         <div>
           <p className="eyebrow">
             {formatInTimeZone(now, "Europe/Moscow", "EEEE, d MMMM", {
               locale: ru,
             })}
+            {user.groupName ? ` · ${user.groupName}` : ""}
           </p>
           <h1 className="page-title !mt-1">Сегодня</h1>
         </div>
@@ -185,14 +163,7 @@ export default async function TodayPage() {
 
       <CalendarNotice userId={user.id} />
 
-      <StudentWellbeingCard
-        totalTasks={totalTasks}
-        completedTasks={completedTasks}
-        overdueTasks={overdueTasks}
-        dayStatuses={dayStatuses.length > 0 ? dayStatuses : undefined}
-      />
-
-      {/* SCHEDULE FIRST WORKBENCH */}
+      {/* SCHEDULE FIRST WORKBENCH — opens directly on timetable */}
       <ScheduleWorkbench
         groupCode={groupCode}
         weekLabel={weekLabel}
@@ -219,7 +190,7 @@ export default async function TodayPage() {
                 {announcements.map((a) => (
                   <div
                     key={a.id}
-                    className="p-3.5 rounded-xl bg-white/60 border border-[var(--ink-faint)] text-xs"
+                    className="p-3.5 rounded-xl bg-white/60 dark:bg-slate-900/60 border border-[var(--ink-faint)] text-xs"
                   >
                     <p className="font-bold text-[var(--ink)]">{a.title}</p>
                     <p className="text-[var(--ink-secondary)] mt-1">{a.content}</p>
@@ -238,7 +209,7 @@ export default async function TodayPage() {
                 {changes.map((n) => (
                   <div
                     key={n.id}
-                    className="p-3.5 rounded-xl bg-white/60 border border-[var(--ink-faint)] text-xs"
+                    className="p-3.5 rounded-xl bg-white/60 dark:bg-slate-900/60 border border-[var(--ink-faint)] text-xs"
                   >
                     <p className="font-medium text-[var(--ink)]">{n.message}</p>
                   </div>

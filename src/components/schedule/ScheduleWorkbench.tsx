@@ -6,7 +6,7 @@ import { formatInTimeZone } from "date-fns-tz";
 import { ru } from "date-fns/locale";
 import { publicGroups } from "@/lib/groups/public-groups";
 import { updateStudentProgressAction } from "@/server/actions/task-actions";
-import { ArrowUpRight, Check, ExternalLink, FileDown, Sparkles } from "lucide-react";
+import { ArrowUpRight, Check, ChevronDown, ExternalLink, FileDown, Sparkles } from "lucide-react";
 
 export type WorkbenchLesson = {
   subject: string;
@@ -125,10 +125,28 @@ export function ScheduleWorkbench({
   }, [days, todayDateStr]);
 
   const [selectedDate, setSelectedDate] = useState<string>(defaultDate);
+  const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
   const [tasks, setTasks] = useState<WorkbenchTask[]>(initialTasks);
   const [xp, setXp] = useState<number>(initialXp);
   const [xpFloat, setXpFloat] = useState<{ id: string; delta: number } | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  const selectedDateObj = useMemo(() => {
+    const raw = selectedDate || todayDateStr || days[0]?.date || "2026-11-11";
+    return new Date(raw + "T12:00:00+03:00");
+  }, [selectedDate, todayDateStr, days]);
+
+  const monthYearLabel = useMemo(() => {
+    const s = formatInTimeZone(selectedDateObj, "Europe/Moscow", "LLLL yyyy", { locale: ru });
+    return s.charAt(0).toUpperCase() + s.slice(1);
+  }, [selectedDateObj]);
+
+  const weekParityLabel = useMemo(() => {
+    if (weekLabel.includes("·")) {
+      return weekLabel.split("·")[1].trim().toLowerCase();
+    }
+    return "нечётная";
+  }, [weekLabel]);
 
   const currentDay = useMemo(() => {
     return days.find((d) => d.date === selectedDate) || days[0];
@@ -219,12 +237,56 @@ export function ScheduleWorkbench({
   const totalCount = tasks.length;
 
   return (
-    <div className="w-full flex flex-col space-y-6">
-      {/* ==================== КОМПАКТНАЯ ШАПКА ГРУППЫ И НЕДЕЛИ ==================== */}
-      <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-[var(--ink-faint)] text-xs font-mono">
-        <div className="flex items-center gap-3 flex-wrap">
-          <div className="flex items-center gap-2 bg-[var(--surface)] border border-[var(--border)] px-3 py-1.5 rounded-xl shadow-xs">
-            <span className="text-[var(--ink-muted)] font-medium">Группа:</span>
+    <div className="w-full flex flex-col space-y-4">
+      {/* ==================== 1. ПОЛИК-СТИЛЬ: ШАПКА НЕДЕЛИ И МЕСЯЦА (Image 1) ==================== */}
+      <div className="flex flex-col items-center justify-center text-center pt-1 pb-1">
+        <div className="flex items-center justify-between w-full max-w-xs px-2">
+          <button
+            type="button"
+            onClick={() => {
+              const curIdx = days.findIndex((d) => d.date === selectedDate);
+              if (curIdx > 0) {
+                setSelectedDate(days[curIdx - 1].date);
+              } else if (days[0]) {
+                setSelectedDate(days[0].date);
+              }
+            }}
+            className="w-9 h-9 rounded-full hover:bg-black/5 dark:hover:bg-white/10 flex items-center justify-center text-lg text-[var(--ink-secondary)] hover:text-[var(--ink)] cursor-pointer transition-colors"
+            aria-label="Предыдущий день"
+          >
+            ←
+          </button>
+
+          <div className="flex flex-col items-center">
+            <span className="text-base sm:text-lg font-bold text-[var(--ink)] tracking-tight">
+              {monthYearLabel}
+            </span>
+            <span className="text-xs font-medium text-[var(--ink-muted)]">
+              {weekParityLabel}
+            </span>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              const curIdx = days.findIndex((d) => d.date === selectedDate);
+              if (curIdx >= 0 && curIdx < days.length - 1) {
+                setSelectedDate(days[curIdx + 1].date);
+              } else if (days[days.length - 1]) {
+                setSelectedDate(days[days.length - 1].date);
+              }
+            }}
+            className="w-9 h-9 rounded-full hover:bg-black/5 dark:hover:bg-white/10 flex items-center justify-center text-lg text-[var(--ink-secondary)] hover:text-[var(--ink)] cursor-pointer transition-colors"
+            aria-label="Следующий день"
+          >
+            →
+          </button>
+        </div>
+
+        {/* Компактный переключатель группы */}
+        <div className="inline-flex items-center gap-1.5 px-3 py-0.5 mt-1 rounded-full bg-[var(--surface-active)] border border-[var(--border)] text-xs text-[var(--ink-secondary)] shadow-xs">
+          <span className="text-[11px] opacity-75">Группа:</span>
+          {isGuest ? (
             <select
               aria-label="Выбор группы"
               value={groupCode}
@@ -233,37 +295,17 @@ export function ScheduleWorkbench({
                 const path = `/browse/${target.replace("/", "-")}`;
                 window.location.href = path;
               }}
-              className="bg-transparent text-[var(--ink)] font-bold font-mono focus:outline-none cursor-pointer"
+              className="bg-transparent text-[var(--ink)] font-bold font-mono focus:outline-none cursor-pointer text-xs"
             >
               {publicGroups.map((g) => (
                 <option key={g.code} value={g.code} className="dark:bg-slate-900 dark:text-slate-100">
-                  {g.track} · {g.code} {g.code === groupCode ? "(Выбрана)" : ""}
+                  {g.track} · {g.code}
                 </option>
               ))}
             </select>
-          </div>
-
-          <span className="px-3 py-1.5 rounded-xl bg-[var(--surface)] border border-[var(--border)] text-[var(--ink-secondary)] font-medium shadow-xs">
-            {weekLabel}
-          </span>
-
-          {fetchedAt && (
-            <span className="text-[var(--ink-muted)] hidden sm:inline">
-              РУЗ проверен в{" "}
-              {formatInTimeZone(new Date(fetchedAt), "Europe/Moscow", "HH:mm")} МСК
-            </span>
+          ) : (
+            <span className="font-bold text-[var(--ink)] text-xs font-mono">{groupCode}</span>
           )}
-        </div>
-
-        <div className="flex items-center gap-3 text-xs">
-          <a
-            href={sourceUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-[var(--ink-muted)] hover:text-[var(--ink)] transition-colors hidden md:inline"
-          >
-            Официальный РУЗ ↗
-          </a>
         </div>
       </div>
 
@@ -273,199 +315,78 @@ export function ScheduleWorkbench({
         </div>
       )}
 
-      {/* ==================== 1. ПЕРЕКЛЮЧАТЕЛЬ ДНЕЙ НЕДЕЛИ С ТОЧКАМИ ==================== */}
-      <div className="flex items-baseline justify-between gap-4 border-b border-[var(--ink-faint)] pb-2 overflow-x-auto">
-        <div className="flex items-center gap-4 sm:gap-7 font-mono text-sm shrink-0">
-          {days.map((day) => {
-            const isActive = day.date === selectedDate;
-            const isToday = day.isToday || day.date === todayDateStr;
-            const pairCount = day.lessons.length;
+      {/* ==================== 2. ПОЛИК-СТИЛЬ: ПЛАШКИ ДНЕЙ НЕДЕЛИ (Image 1) ==================== */}
+      <div className="grid grid-cols-6 gap-1 sm:gap-2 w-full pt-1 pb-1">
+        {days.slice(0, 6).map((day) => {
+          const isActive = day.date === selectedDate;
+          const pairCount = day.lessons.length;
+          const dayNumber = day.dateLabel.split(" ")[0]; // "9", "10", "11", etc.
 
-            return (
-              <button
-                key={day.date}
-                type="button"
-                onClick={() => setSelectedDate(day.date)}
-                className={`pb-2.5 text-left relative cursor-pointer transition-all border-b-2 ${
-                  isActive
-                    ? "border-b-[var(--wine)] font-bold"
-                    : "border-b-transparent hover:text-[var(--ink)]"
-                }`}
-              >
-                <span
-                  className={`block text-[11px] uppercase tracking-wider font-mono ${
-                    isActive
-                      ? "text-[var(--wine)] font-extrabold"
-                      : "text-[var(--ink-muted)] font-semibold"
-                  }`}
-                >
-                  {isToday ? `${day.dayLabel} · СЕГОДНЯ` : day.dayLabel}
-                </span>
-                <span
-                  className={`font-bold text-base block mt-0.5 ${
-                    isActive ? "text-[var(--ink)]" : "text-[var(--ink-secondary)]"
-                  }`}
-                >
-                  {day.dateLabel}
-                </span>
-
-                {/* Точки-индикаторы количества пар в день (в стиле PolyK) */}
-                <div className="flex items-center gap-1 mt-1 justify-start">
-                  {pairCount > 0 ? (
-                    Array.from({ length: Math.min(5, pairCount) }).map((_, i) => (
-                      <span
-                        key={i}
-                        className={`w-1 h-1 rounded-full ${
-                          isActive
-                            ? "bg-[var(--wine)]"
-                            : "bg-[var(--ink-muted)]"
-                        }`}
-                      />
-                    ))
-                  ) : (
-                    <span className="text-[10px] text-[var(--ink-muted)]">—</span>
-                  )}
-                </div>
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Быстрый статус прямо сейчас */}
-        {activeLesson && (
-          <div className="shrink-0 hidden lg:flex items-center gap-2 font-mono text-xs">
-            <span className="w-2 h-2 rounded-full bg-[var(--wine)] animate-ping" />
-            <span className="text-[var(--wine)] font-bold uppercase tracking-wider">
-              Прямо сейчас:
-            </span>
-            <span className="font-bold text-[var(--ink)] truncate max-w-xs">
-              {activeLesson.subject}
-            </span>
-            {activeLesson.rooms.length > 0 && (
-              <span className="bg-[var(--surface-active)] font-bold px-2 py-0.5 rounded text-[var(--ink)] shadow-xs">
-                {activeLesson.rooms[0]}
+          return (
+            <button
+              key={day.date}
+              type="button"
+              onClick={() => setSelectedDate(day.date)}
+              className={`flex flex-col items-center justify-center py-2 sm:py-2.5 px-0.5 rounded-2xl transition-all cursor-pointer ${
+                isActive
+                  ? "bg-[#cfc6ff] text-[#0b1a2d] dark:bg-[#cfc6ff] dark:text-[#0b1a2d] font-bold shadow-xs ring-1 ring-[#cfc6ff]"
+                  : "bg-transparent text-[var(--ink)] hover:bg-black/5 dark:hover:bg-white/5"
+              }`}
+            >
+              <span className={`text-base sm:text-lg font-mono font-extrabold leading-none ${isActive ? "text-[#0b1a2d]" : "text-[var(--ink)]"}`}>
+                {dayNumber}
               </span>
-            )}
-          </div>
-        )}
-      </div>
+              <span className={`text-[10px] sm:text-[11px] font-mono uppercase font-bold tracking-wider mt-1 sm:mt-1.5 ${isActive ? "text-[#0b1a2d]/90 font-black" : "text-[var(--ink-muted)]"}`}>
+                {day.dayLabel}
+              </span>
 
-      {/* ==================== 2. ГЛАВНЫЙ ГЕРОЙ-БЛОК (ТЕКУЩАЯ / СЛЕДУЮЩАЯ ПАРА) ==================== */}
-      {heroLesson ? (
-        <div className="p-5 sm:p-7 rounded-2xl bg-[var(--surface)] backdrop-blur-md shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-6 border-l-4 border-l-[var(--wine)] border border-[var(--border)]">
-          <div className="space-y-2 flex-1 min-w-0">
-            {/* Дофаминовый таймер обратного отсчёта */}
-            <div className="flex items-center gap-2.5 font-mono text-xs flex-wrap">
-              {activeLesson ? (
-                <span className="px-2.5 py-1 rounded-md bg-[var(--wine)] text-white font-mono text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 shadow-xs">
-                  <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
-                  ИДЁТ СЕЙЧАС · осталось {formatCountdown(activeLesson.end, nowMoscowTime)} (до {activeLesson.end})
-                </span>
-              ) : nextLesson ? (
-                <span className="px-2.5 py-1 rounded-md bg-[var(--wine-soft)] text-[var(--wine)] border border-[rgba(150,38,64,0.25)] font-mono text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-[var(--wine)]" />
-                  СЛЕДУЮЩАЯ ПАРА · через {formatCountdown(nextLesson.start, nowMoscowTime)} (в {nextLesson.start})
-                </span>
-              ) : (
-                <span className="px-2.5 py-1 rounded-md bg-black/5 dark:bg-white/10 text-[var(--ink-secondary)] font-mono text-xs font-bold uppercase tracking-wider">
-                  ПАРА · в {heroLesson.start}
-                </span>
-              )}
-
-              <span className="text-[var(--ink-muted)]">{heroLesson.type}</span>
-              {heroLesson.teachers.length > 0 && (
-                <>
-                  <span className="text-[var(--ink-muted)]">·</span>
-                  <span className="text-[var(--ink-secondary)] font-medium">
-                    {heroLesson.teachers.join(", ")}
-                  </span>
-                </>
-              )}
-            </div>
-
-            <h2 className="text-xl sm:text-2xl lg:text-3xl font-extrabold text-[var(--ink)] tracking-tight">
-              {heroLesson.courseHref ? (
-                <Link
-                  href={heroLesson.courseHref}
-                  className="hover:text-[var(--wine)] transition-colors inline-flex items-center gap-1.5"
-                >
-                  <span>{heroLesson.subject}</span>
-                  <ArrowUpRight size={20} className="shrink-0 text-[var(--ink-muted)]" />
-                </Link>
-              ) : (
-                heroLesson.subject
-              )}
-            </h2>
-
-            {/* Контекстный дедлайн по предмету этой пары */}
-            {heroTask && (
-              <div className="pt-1 flex items-center gap-2.5 text-xs font-mono text-[var(--wine)] flex-wrap">
-                <span className="font-bold flex items-center gap-1">
-                  <Sparkles size={13} />
-                  Горит дедлайн по этому предмету:
-                </span>
-                <span className="font-semibold text-[var(--ink)]">{heroTask.title}</span>
-                {heroTask.deadlineFormatted && (
-                  <span className="text-[var(--ink-muted)]">
-                    ({heroTask.deadlineFormatted})
-                  </span>
-                )}
-                {heroTask.materials?.[0]?.url && (
-                  <a
-                    href={heroTask.materials[0].url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="underline font-bold text-[var(--ink)] hover:text-[var(--wine)]"
-                  >
-                    Скачать материалы ↗
-                  </a>
+              {/* Индикатор пар */}
+              <div className="flex items-center justify-center gap-0.5 mt-1 sm:mt-1.5 h-1.5">
+                {pairCount > 0 ? (
+                  <span
+                    className={`w-1.5 h-1.5 rounded-full ${
+                      isActive ? "bg-[#0b1a2d]" : "bg-[var(--wine)] dark:bg-[#a5b4fc]"
+                    }`}
+                  />
+                ) : (
+                  <span className="w-1.5 h-1.5" />
                 )}
               </div>
-            )}
-          </div>
+            </button>
+          );
+        })}
+      </div>
 
-          {/* Крупный номер аудитории без визуального мусора */}
-          {heroLesson.rooms.length > 0 && (
-            <div className="shrink-0 text-left md:text-right">
-              <span className="block text-xs font-mono uppercase tracking-wider text-[var(--ink-muted)] font-semibold">
-                Аудитория
-              </span>
-              <span className="font-mono text-3xl sm:text-4xl font-extrabold text-[var(--ink)] tracking-tight block">
-                {heroLesson.rooms.map(formatPolytechRoom).join(" / ")}
-              </span>
-              <span className="block text-xs text-[var(--ink-muted)] font-medium mt-0.5">
-                {heroLesson.building || "Учебный корпус"}
-              </span>
-            </div>
+      {/* ==================== 3. ПОЛИК-СТИЛЬ: СПИСОК ПАР СРАЗУ НА ЭКРАНЕ (Image 1) ==================== */}
+      <div className="space-y-3.5 pt-1">
+        <div className="flex items-center justify-between px-1 text-xs font-mono text-[var(--ink-muted)]">
+          <span>Пары и аудитории</span>
+          {currentDay && (
+            <span>
+              {currentDay.lessons.length}{" "}
+              {currentDay.lessons.length === 1
+                ? "пара"
+                : currentDay.lessons.length >= 2 && currentDay.lessons.length <= 4
+                  ? "пары"
+                  : "пар"}
+            </span>
           )}
-        </div>
-      ) : (
-        <div className="p-6 rounded-2xl bg-[var(--surface)] border border-[var(--border)] text-center">
-          <p className="font-bold text-[var(--ink)]">
-            В этот день пар нет
-          </p>
-          <p className="text-xs text-[var(--ink-muted)] mt-1">
-            Свободный день для подготовки, курсовых проектов и закрытия дедлайнов.
-          </p>
-        </div>
-      )}
-
-      {/* ==================== 3. ПОЛНАЯ ТАБЛИЦА ЗАНЯТИЙ С ПЕРЕРЫВАМИ ==================== */}
-      <div className="space-y-1">
-        <div className="flex items-center justify-between text-xs font-mono text-[var(--ink-muted)] pb-2 px-3 border-b border-[var(--ink-faint)]">
-          <span>ВРЕМЯ И ПРЕДМЕТ</span>
-          <span>АУДИТОРИЯ И КОРПУС</span>
         </div>
 
         {currentDay && currentDay.lessons.length > 0 ? (
           currentDay.lessons.map((lesson, idx) => {
+            const isExpanded = expandedIndex === idx;
             const isCurrent =
               isSelectedToday &&
               lesson.start <= nowMoscowTime &&
               nowMoscowTime <= lesson.end;
-            const isPast = isSelectedToday && lesson.end < nowMoscowTime;
+            const isNext = isSelectedToday && nextLesson?.start === lesson.start;
 
-            // Check if there is a break before this lesson
+            const remainingMin = isCurrent
+              ? Math.max(1, parseMinutes(lesson.end) - parseMinutes(nowMoscowTime))
+              : 0;
+
+            // Check break
             let breakElement = null;
             if (idx > 0) {
               const prev = currentDay.lessons[idx - 1];
@@ -474,109 +395,156 @@ export function ScheduleWorkbench({
                 breakElement = (
                   <div
                     key={`break-${idx}`}
-                    className="schedule-break my-1.5 py-1.5 px-4 rounded-lg bg-black/[0.03] dark:bg-white/[0.04] border border-dashed border-[var(--border)] text-xs font-mono text-[var(--ink-muted)] flex items-center justify-between"
+                    className="my-1.5 py-1 px-3 text-xs font-mono text-[var(--ink-muted)] flex items-center justify-between opacity-80"
                   >
                     <span className="flex items-center gap-1.5">
                       <span>⏱</span>
                       <span>Перерыв {breakMin} минут</span>
                     </span>
-                    <span className="text-[11px] opacity-75">{prev.end} — {lesson.start}</span>
+                    <span className="text-[11px]">{prev.end} — {lesson.start}</span>
                   </div>
                 );
               }
             }
 
+            // Task related to this subject
+            const matchedTask = tasks.find(
+              (t) =>
+                t.courseTitle &&
+                lesson.subject &&
+                (t.courseTitle.toLowerCase().includes(lesson.subject.toLowerCase()) ||
+                  lesson.subject.toLowerCase().includes(t.courseTitle.toLowerCase())),
+            );
+
             return (
-              <div key={`${lesson.start}-${idx}`}>
+              <div key={`${lesson.start}-${idx}`} className="space-y-1.5">
                 {breakElement}
 
-                <div
-                  className={`schedule-row p-3.5 flex items-start sm:items-center justify-between gap-4 transition-all rounded-xl ${
-                    isCurrent
-                      ? "bg-[var(--surface-active)] border-l-4 border-l-[var(--wine)] shadow-xs"
-                      : isPast
-                        ? "opacity-50 hover:opacity-100"
-                        : "hover:bg-[var(--surface-active)]"
-                  }`}
-                >
-                  <div className="flex items-start sm:items-center gap-4 flex-1 min-w-0">
-                    <div
-                      className={`font-mono text-xs w-28 shrink-0 ${
+                {/* Time row */}
+                <div className="flex items-center justify-between px-1 text-xs font-mono">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`font-bold ${
                         isCurrent
-                          ? "font-bold text-[var(--wine)] flex items-center gap-1.5"
-                          : "font-semibold text-[var(--ink-muted)]"
+                          ? "text-[var(--wine)] font-mono text-sm"
+                          : "text-[var(--ink)]"
                       }`}
                     >
-                      {isCurrent && (
-                        <span className="w-2 h-2 rounded-full bg-[var(--wine)] shrink-0" />
-                      )}
                       {lesson.start} — {lesson.end}
-                    </div>
+                    </span>
+                    {isCurrent && (
+                      <span className="px-2 py-0.5 rounded-full bg-[var(--wine)] text-white text-[10px] font-bold uppercase tracking-wider animate-pulse flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-white" />
+                        Идёт сейчас · {remainingMin} мин
+                      </span>
+                    )}
+                    {isNext && (
+                      <span className="px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 text-[10px] font-bold uppercase tracking-wider">
+                        Следующая пара
+                      </span>
+                    )}
+                  </div>
+                </div>
 
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        {lesson.courseHref ? (
-                          <Link
-                            href={lesson.courseHref}
-                            className="font-bold text-sm text-[var(--ink)] hover:text-[var(--wine)] truncate"
-                          >
-                            {lesson.subject}
-                          </Link>
-                        ) : (
-                          <span className="font-bold text-sm text-[var(--ink)] truncate">
-                            {lesson.subject}
-                          </span>
-                        )}
-                        <span
-                          className={`text-[11px] font-mono px-1.5 py-0.2 rounded ${
-                            isCurrent
-                              ? "bg-[var(--wine-soft)] text-[var(--wine)] font-bold"
-                              : "text-[var(--ink-muted)]"
-                          }`}
-                        >
-                          [ {lesson.type} ]
-                        </span>
-                      </div>
-
-                      <div className="flex items-center gap-2 text-xs text-[var(--ink-muted)] mt-0.5 flex-wrap">
-                        {lesson.teachers.length > 0 && (
-                          <span>{lesson.teachers.join(", ")}</span>
-                        )}
-                        {lesson.note && (
-                          <>
-                            <span>·</span>
-                            <span>{lesson.note}</span>
-                          </>
-                        )}
-                        {lesson.lmsUrl && (
-                          <>
-                            <span>·</span>
-                            <a
-                              href={lesson.lmsUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="underline text-[var(--ink-secondary)] hover:text-[var(--wine)]"
-                            >
-                              DL ↗
-                            </a>
-                          </>
-                        )}
-                      </div>
-                    </div>
+                {/* Card matching Image 1 PolyK */}
+                <div
+                  className={`p-4 sm:p-5 rounded-2xl bg-[var(--surface)] border transition-all ${
+                    isCurrent
+                      ? "border-l-4 border-l-[var(--wine)] border-[var(--border)] shadow-xs"
+                      : "border-[var(--border)] hover:border-black/20 dark:hover:border-white/20"
+                  }`}
+                >
+                  <div
+                    className="flex items-start justify-between gap-3 cursor-pointer select-none"
+                    onClick={() => setExpandedIndex(isExpanded ? null : idx)}
+                  >
+                    <h3 className="font-bold text-sm sm:text-base text-indigo-900 dark:text-[#cfc6ff] leading-snug">
+                      {lesson.subject}
+                    </h3>
+                    <button
+                      type="button"
+                      aria-label={isExpanded ? "Свернуть" : "Развернуть"}
+                      className="text-[var(--ink-muted)] hover:text-[var(--ink)] p-1 -mr-1 shrink-0 transition-transform cursor-pointer"
+                    >
+                      <ChevronDown
+                        size={18}
+                        className={`transition-transform duration-200 ${
+                          isExpanded ? "rotate-180" : ""
+                        }`}
+                      />
+                    </button>
                   </div>
 
-                  {lesson.rooms.length > 0 && (
-                    <div className="font-mono text-right shrink-0">
-                      <span
-                        className={`text-sm font-bold ${
-                          isCurrent ? "text-[var(--wine)]" : "text-[var(--ink)]"
-                        }`}
-                      >
-                        {lesson.rooms.map(formatPolytechRoom).join(" / ")}
+                  <div className="mt-2 text-xs space-y-0.5">
+                    <p className="font-medium text-[var(--ink-secondary)]">
+                      {lesson.type}
+                    </p>
+                    <p className="text-[var(--ink-muted)]">
+                      {lesson.building || "3-й учебный корпус"}, {lesson.rooms.map(formatPolytechRoom).join(" / ")}
+                    </p>
+                    {lesson.teachers.length > 0 && (
+                      <p className="font-medium text-[var(--ink-secondary)]">
+                        {lesson.teachers.join(", ")}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Expandable details: link to course, DL link, notes */}
+                  {isExpanded && (
+                    <div className="mt-3 pt-3 border-t border-[var(--border)] text-xs space-y-2">
+                      {lesson.courseHref && (
+                        <div>
+                          <Link
+                            href={lesson.courseHref}
+                            className="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400 font-semibold hover:underline"
+                          >
+                            <span>Материалы курса и конспекты</span>
+                            <ArrowUpRight size={13} />
+                          </Link>
+                        </div>
+                      )}
+                      {lesson.lmsUrl && (
+                        <div>
+                          <a
+                            href={lesson.lmsUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-[var(--ink-muted)] hover:text-[var(--ink)]"
+                          >
+                            <span>Курс в СДО DL СПбПУ</span>
+                            <ExternalLink size={12} />
+                          </a>
+                        </div>
+                      )}
+                      {lesson.note && (
+                        <p className="text-[11px] text-[var(--ink-muted)] italic">
+                          {lesson.note}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Contextual deadline pill if a lab or assignment is active for this subject */}
+                  {matchedTask && (
+                    <div className="mt-3 pt-2.5 border-t border-[var(--border)] flex items-center justify-between text-xs flex-wrap gap-2">
+                      <span className="text-[var(--wine)] font-semibold flex items-center gap-1.5">
+                        <Sparkles size={12} />
+                        <span>Дедлайн: {matchedTask.title}</span>
+                        {matchedTask.deadlineFormatted && (
+                          <span className="text-[var(--ink-muted)]">({matchedTask.deadlineFormatted})</span>
+                        )}
                       </span>
-                      <span className="block text-[11px] text-[var(--ink-muted)]">
-                        {lesson.building || "Корпус"}
-                      </span>
+                      {matchedTask.materials?.[0]?.url && (
+                        <a
+                          href={matchedTask.materials[0].url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="underline text-blue-600 dark:text-blue-400 font-semibold hover:text-[var(--wine)] inline-flex items-center gap-1"
+                        >
+                          <span>Файлы</span>
+                          <ArrowUpRight size={12} />
+                        </a>
+                      )}
                     </div>
                   )}
                 </div>
@@ -584,8 +552,8 @@ export function ScheduleWorkbench({
             );
           })
         ) : (
-          <div className="py-8 text-center text-xs text-[var(--ink-muted)] font-mono">
-            На этот день в РУЗ занятий не запланировано.
+          <div className="p-8 rounded-2xl bg-[var(--surface)] border border-[var(--border)] text-center text-xs text-[var(--ink-muted)] font-mono">
+            В этот день пар нет · Свободный день
           </div>
         )}
       </div>
@@ -602,14 +570,16 @@ export function ScheduleWorkbench({
             </p>
           </div>
 
-          <div className="text-xs font-mono">
-            <span className="text-[var(--ink-muted)]">Выполнено: </span>
-            <span className="font-bold text-[var(--ink)]">
-              {completedCount} из {totalCount}
-            </span>
-            <span className="text-[var(--ink-muted)] ml-3">Опыт: </span>
-            <span className="font-bold text-[var(--wine)]">{xp} XP</span>
-          </div>
+          {!isGuest && (
+            <div className="text-xs font-mono">
+              <span className="text-[var(--ink-muted)]">Выполнено: </span>
+              <span className="font-bold text-[var(--ink)]">
+                {completedCount} из {totalCount}
+              </span>
+              <span className="text-[var(--ink-muted)] ml-3">Опыт: </span>
+              <span className="font-bold text-[var(--wine)]">{xp} XP</span>
+            </div>
+          )}
         </div>
 
         {/* Список задач */}
@@ -623,24 +593,26 @@ export function ScheduleWorkbench({
               return (
                 <div
                   key={task.id}
-                  className={`p-4 rounded-xl bg-[var(--surface)] hover:bg-[var(--surface-active)] border border-[var(--border)] transition-all flex items-start gap-4 relative ${
+                  className={`work-item preview-work p-4 rounded-xl bg-[var(--surface)] hover:bg-[var(--surface-active)] border border-[var(--border)] transition-all flex items-start gap-4 relative ${
                     task.completed ? "opacity-60" : ""
                   }`}
                 >
-                  <button
-                    type="button"
-                    onClick={() => toggleTask(task.id)}
-                    className={`custom-check mt-1 shrink-0 ${
-                      task.completed ? "is-checked" : ""
-                    }`}
-                    aria-label={
-                      task.completed
-                        ? "Вернуть к выполнению"
-                        : "Отметить выполненным"
-                    }
-                  >
-                    {task.completed && <Check size={12} strokeWidth={3} className="text-white" />}
-                  </button>
+                  {!isGuest && (
+                    <button
+                      type="button"
+                      onClick={() => toggleTask(task.id)}
+                      className={`custom-check mt-1 shrink-0 ${
+                        task.completed ? "is-checked" : ""
+                      }`}
+                      aria-label={
+                        task.completed
+                          ? "Вернуть к выполнению"
+                          : "Отметить выполненным"
+                      }
+                    >
+                      {task.completed && <Check size={12} strokeWidth={3} className="text-white" />}
+                    </button>
+                  )}
 
                   {/* Дофаминовый бейдж +20 XP при клике */}
                   {isFloating && (

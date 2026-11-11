@@ -369,6 +369,23 @@ export default async function PublicGroupPage({
             todayDateStr={todayDateStr}
           />
 
+          {/* RUZ Live Subjects for empty groups or browsing */}
+          <Suspense
+            fallback={
+              <p role="status" className="quiet-empty">
+                Получаем предметы из РУЗ…
+              </p>
+            }
+          >
+            <PublicSubjects
+              slug={slug}
+              base={base}
+              courses={courses}
+              week={week}
+              showSchedule
+            />
+          </Suspense>
+
           <div className="flex items-center justify-between pt-4 text-xs font-mono text-[var(--ink-muted)]">
             <span>
               Показаны официальные данные РУЗ СПбПУ для группы {group.code}

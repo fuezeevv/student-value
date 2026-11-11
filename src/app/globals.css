@@ -227,7 +227,6 @@
   color: var(--ink-muted);
   font-size: 0.75rem;
   font-weight: 600;
-  text-transform: uppercase;
   letter-spacing: 0.03em;
   margin-bottom: 0.2rem;
 }
@@ -1979,18 +1978,17 @@ a.schedule-subject:hover {
     min-width: 40px;
   }
   .account-menu {
-    position: fixed;
-    top: auto;
-    bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+    position: absolute;
+    top: 64px;
     right: 16px;
     left: 16px;
     width: auto;
-    max-height: 75vh;
+    max-height: calc(100dvh - 90px);
     border-radius: 20px;
     z-index: 70;
   }
   .app-main {
-    padding: 24px 18px 45px;
+    padding: 12px 14px 80px;
   }
   .site-footer {
     width: calc(100% - 36px);
@@ -2118,11 +2116,8 @@ a.schedule-subject:hover {
   }
   .mobile-nav [aria-current],
   .mobile-nav [aria-current="page"] {
-    color: var(--wine);
+    color: var(--ink);
     font-weight: 700;
-  }
-  .mobile-nav [aria-current] svg {
-    fill: var(--wine-soft);
   }
   .breadcrumb {
     margin-bottom: 18px;

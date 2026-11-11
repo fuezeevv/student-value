@@ -26,7 +26,7 @@ export function BrandMark({ className = "" }: { className?: string }) {
 
 export function Logo({
   className = "",
-  showSubtitle = true,
+  showSubtitle = false,
 }: {
   className?: string;
   showSubtitle?: boolean;
@@ -37,8 +37,8 @@ export function Logo({
       className={`brand ${className}`}
       aria-label="Student Value 1.984 — сегодня"
     >
-      <BrandMark className="h-10 w-10 shrink-0" />
-      <span className="brand-type">
+      <BrandMark className="h-9 w-9 shrink-0" />
+      <span className="brand-type hidden sm:inline">
         Student Value <span className="brand-coefficient">1.984</span>
         {showSubtitle && <span className="brand-caption">место для учёбы</span>}
       </span>

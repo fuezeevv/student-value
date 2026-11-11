@@ -10,9 +10,8 @@ import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { PreviewNavbar } from "@/components/preview/PreviewNavbar";
 import { GroupSwitcher } from "@/components/workspace/GroupSwitcher";
 import { TodayIcon, SubjectsIcon, DeadlinesIcon } from "@/components/ui/Icons";
+import { WellbeingHeaderTrigger } from "@/components/study/WellbeingHeaderTrigger";
 import {
-  Search,
-  Bell,
   Menu,
   X,
   ArrowUpRight,
@@ -103,7 +102,31 @@ export function Navbar({
       </a>
       <header className="site-header">
         <div className="nav-inner">
-          <Logo />
+          {/* Mobile: 3 полоски (hamburger) icon when signed in */}
+          {user ? (
+            <div className="flex items-center gap-2 lg:hidden">
+              <button
+                type="button"
+                onClick={toggle}
+                className="w-10 h-10 -ml-2 rounded-xl flex items-center justify-center text-[var(--ink)] hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer"
+                aria-label="Открыть меню"
+                aria-expanded={open}
+                aria-controls="account-menu"
+              >
+                {open ? <X size={22} /> : <Menu size={22} />}
+              </button>
+            </div>
+          ) : (
+            <div className="lg:hidden">
+              <Logo />
+            </div>
+          )}
+
+          {/* Desktop Logo */}
+          <div className="hidden lg:flex items-center">
+            <Logo />
+          </div>
+
           {user && (
             <nav className="desktop-nav" aria-label="Главная навигация">
               {primary.map(({ href, label }) => (
@@ -118,23 +141,7 @@ export function Navbar({
             </nav>
           )}
           <div className="nav-actions">
-            {user && (
-              <>
-                <Link href="/search" className="icon-button" aria-label="Поиск">
-                  <Search size={19} />
-                </Link>
-                <Link
-                  href="/notifications"
-                  className="icon-button notification-link"
-                  aria-label={`Уведомления${unreadCount ? `: ${unreadCount} непрочитанных` : ""}`}
-                >
-                  <Bell size={19} />
-                  {unreadCount > 0 && (
-                    <span>{unreadCount > 9 ? "9+" : unreadCount}</span>
-                  )}
-                </Link>
-              </>
-            )}
+            {user && <WellbeingHeaderTrigger />}
             {user ? (
               <button
                 ref={trigger}
@@ -239,26 +246,47 @@ export function Navbar({
       </header>
       {user && (
         <nav className="mobile-nav" aria-label="Навигация на телефоне">
-          {primary.map(({ href, label, icon: Icon }) => (
-            <Link
-              key={href}
-              href={href}
-              aria-current={active(href) ? "page" : undefined}
-            >
-              <Icon size={20} strokeWidth={1.7} />
-              <span>{label}</span>
-            </Link>
-          ))}
+          {primary.map(({ href, label, icon: Icon }) => {
+            const isTabActive = active(href);
+            return (
+              <Link
+                key={href}
+                href={href}
+                aria-current={isTabActive ? "page" : undefined}
+                className="flex flex-col items-center justify-center"
+              >
+                <span
+                  className={`flex items-center justify-center transition-all ${
+                    isTabActive
+                      ? "px-4 py-1 rounded-full bg-[#cfc6ff] text-[#0b1a2d] dark:bg-[#cfc6ff] dark:text-[#0b1a2d] shadow-xs"
+                      : "text-[var(--ink-muted)] hover:text-[var(--ink)]"
+                  }`}
+                >
+                  <Icon size={20} strokeWidth={isTabActive ? 2.2 : 1.7} />
+                </span>
+                <span
+                  className={`text-[10px] mt-0.5 ${
+                    isTabActive ? "font-bold text-[var(--ink)]" : "text-[var(--ink-muted)]"
+                  }`}
+                >
+                  {label}
+                </span>
+              </Link>
+            );
+          })}
           <button
             onClick={toggle}
             aria-expanded={open}
             aria-controls="account-menu"
-            className="flex flex-col items-center justify-center gap-1 cursor-pointer"
+            aria-label="Профиль и меню"
+            className="flex flex-col items-center justify-center cursor-pointer"
           >
-            <span className="w-5 h-5 rounded-full bg-[var(--surface-active)] border border-[var(--border)] flex items-center justify-center text-[10px] font-bold text-[var(--ink)]">
-              {user.nickname.slice(0, 1).toUpperCase()}
+            <span className="flex items-center justify-center px-2 py-1">
+              <span className="w-5 h-5 rounded-full bg-[var(--surface-active)] border border-[var(--border)] flex items-center justify-center text-[10px] font-bold text-[var(--ink)]">
+                {user.nickname.slice(0, 1).toUpperCase()}
+              </span>
             </span>
-            <span>Профиль</span>
+            <span className="text-[10px] mt-0.5 text-[var(--ink-muted)]">Профиль</span>
           </button>
         </nav>
       )}
