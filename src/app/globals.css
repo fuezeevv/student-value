@@ -1962,10 +1962,16 @@ a.schedule-subject:hover {
     display: none;
   }
   .nav-actions {
-    gap: 0;
+    gap: 8px;
   }
   .account-button {
-    padding: 0 0 0 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    min-width: 32px;
+    height: 32px;
+    border-radius: 9999px;
   }
   .account-button > svg {
     display: none;
@@ -1973,22 +1979,30 @@ a.schedule-subject:hover {
   .account-initial {
     width: 28px;
     height: 28px;
+    font-size: 13px;
+  }
+  .site-header {
+    height: 48px;
+  }
+  .nav-inner {
+    height: 48px;
+    padding: 0 16px;
   }
   .icon-button {
     min-width: 40px;
   }
   .account-menu {
     position: absolute;
-    top: 64px;
+    top: 54px;
     right: 16px;
     left: 16px;
     width: auto;
-    max-height: calc(100dvh - 90px);
+    max-height: calc(100dvh - 80px);
     border-radius: 20px;
     z-index: 70;
   }
   .app-main {
-    padding: 12px 14px 80px;
+    padding: 6px 14px 80px;
   }
   .site-footer {
     width: calc(100% - 36px);
@@ -2084,7 +2098,8 @@ a.schedule-subject:hover {
   }
   .mobile-nav {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
     position: fixed;
     bottom: 0;
     left: 0;

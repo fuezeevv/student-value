@@ -138,7 +138,7 @@ export default async function TodayPage() {
   const groupCode = user.groupName || "5130901/40102";
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-2.5 sm:space-y-4">
       {/* Subtle desktop-only heading */}
       <div className="hidden lg:flex items-center justify-between gap-4 pb-2 border-b border-[var(--border)]">
         <div>

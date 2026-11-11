@@ -102,28 +102,8 @@ export function Navbar({
       </a>
       <header className="site-header">
         <div className="nav-inner">
-          {/* Mobile: 3 полоски (hamburger) icon when signed in */}
-          {user ? (
-            <div className="flex items-center gap-2 lg:hidden">
-              <button
-                type="button"
-                onClick={toggle}
-                className="w-10 h-10 -ml-2 rounded-xl flex items-center justify-center text-[var(--ink)] hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer"
-                aria-label="Открыть меню"
-                aria-expanded={open}
-                aria-controls="account-menu"
-              >
-                {open ? <X size={22} /> : <Menu size={22} />}
-              </button>
-            </div>
-          ) : (
-            <div className="lg:hidden">
-              <Logo />
-            </div>
-          )}
-
-          {/* Desktop Logo */}
-          <div className="hidden lg:flex items-center">
+          {/* Brand Logo */}
+          <div className="flex items-center">
             <Logo />
           </div>
 
@@ -146,7 +126,7 @@ export function Navbar({
               <button
                 ref={trigger}
                 onClick={toggle}
-                className="account-button hidden lg:flex"
+                className="account-button flex items-center gap-1.5"
                 aria-label="Открыть меню"
                 aria-expanded={open}
                 aria-controls="account-menu"
@@ -155,7 +135,11 @@ export function Navbar({
                   {user.nickname.slice(0, 1).toUpperCase()}
                 </span>
                 <span className="hidden lg:inline">{user.nickname}</span>
-                {open ? <X size={17} /> : <Menu size={17} />}
+                {open ? (
+                  <X size={17} className="hidden lg:inline" />
+                ) : (
+                  <Menu size={17} className="hidden lg:inline" />
+                )}
               </button>
             ) : (
               <Link className="text-link" href="/login">
@@ -274,20 +258,6 @@ export function Navbar({
               </Link>
             );
           })}
-          <button
-            onClick={toggle}
-            aria-expanded={open}
-            aria-controls="account-menu"
-            aria-label="Профиль и меню"
-            className="flex flex-col items-center justify-center cursor-pointer"
-          >
-            <span className="flex items-center justify-center px-2 py-1">
-              <span className="w-5 h-5 rounded-full bg-[var(--surface-active)] border border-[var(--border)] flex items-center justify-center text-[10px] font-bold text-[var(--ink)]">
-                {user.nickname.slice(0, 1).toUpperCase()}
-              </span>
-            </span>
-            <span className="text-[10px] mt-0.5 text-[var(--ink-muted)]">Профиль</span>
-          </button>
         </nav>
       )}
     </>

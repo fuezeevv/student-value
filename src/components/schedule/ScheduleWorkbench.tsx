@@ -235,78 +235,78 @@ export function ScheduleWorkbench({
 
   const completedCount = tasks.filter((t) => t.completed).length;
   const totalCount = tasks.length;
+  const cleanGroup = (groupCode || "").replace(/^Группа\s+/i, "");
 
   return (
-    <div className="w-full flex flex-col space-y-4">
-      {/* ==================== 1. ПОЛИК-СТИЛЬ: ШАПКА НЕДЕЛИ И МЕСЯЦА (Image 1) ==================== */}
-      <div className="flex flex-col items-center justify-center text-center pt-1 pb-1">
-        <div className="flex items-center justify-between w-full max-w-xs px-2">
-          <button
-            type="button"
-            onClick={() => {
-              const curIdx = days.findIndex((d) => d.date === selectedDate);
-              if (curIdx > 0) {
-                setSelectedDate(days[curIdx - 1].date);
-              } else if (days[0]) {
-                setSelectedDate(days[0].date);
-              }
-            }}
-            className="w-9 h-9 rounded-full hover:bg-black/5 dark:hover:bg-white/10 flex items-center justify-center text-lg text-[var(--ink-secondary)] hover:text-[var(--ink)] cursor-pointer transition-colors"
-            aria-label="Предыдущий день"
-          >
-            ←
-          </button>
+    <div className="w-full flex flex-col space-y-2.5 sm:space-y-4">
+      {/* ==================== 1. ПОЛИК-СТИЛЬ: ШАПКА НЕДЕЛИ И МЕСЯЦА ==================== */}
+      <div className="flex items-center justify-between w-full max-w-xs mx-auto px-1 py-0.5">
+        <button
+          type="button"
+          onClick={() => {
+            const curIdx = days.findIndex((d) => d.date === selectedDate);
+            if (curIdx > 0) {
+              setSelectedDate(days[curIdx - 1].date);
+            } else if (days[0]) {
+              setSelectedDate(days[0].date);
+            }
+          }}
+          className="w-8 h-8 rounded-full hover:bg-black/5 dark:hover:bg-white/10 flex items-center justify-center text-base text-[var(--ink-secondary)] hover:text-[var(--ink)] cursor-pointer transition-colors"
+          aria-label="Предыдущий день"
+        >
+          ←
+        </button>
 
-          <div className="flex flex-col items-center">
-            <span className="text-base sm:text-lg font-bold text-[var(--ink)] tracking-tight">
-              {monthYearLabel}
-            </span>
-            <span className="text-xs font-medium text-[var(--ink-muted)]">
-              {weekParityLabel}
-            </span>
+        <div className="flex flex-col items-center text-center">
+          <span className="text-base sm:text-lg font-bold text-[var(--ink)] tracking-tight">
+            {monthYearLabel}
+          </span>
+          <div className="text-xs font-medium text-[var(--ink-muted)] flex items-center gap-1.5 -mt-0.5">
+            <span>{weekParityLabel}</span>
+            <span>·</span>
+            {isGuest ? (
+              <select
+                aria-label="Выбор группы"
+                value={groupCode}
+                onChange={(e) => {
+                  const target = e.target.value;
+                  const path = `/browse/${target.replace("/", "-")}`;
+                  window.location.href = path;
+                }}
+                className="bg-transparent text-[var(--ink)] font-semibold font-mono focus:outline-none cursor-pointer text-xs underline"
+              >
+                {!publicGroups.some((g) => g.code === groupCode) && (
+                  <option value={groupCode} className="dark:bg-slate-900 dark:text-slate-100">
+                    {groupCode}
+                  </option>
+                )}
+                {publicGroups.map((g) => (
+                  <option key={g.code} value={g.code} className="dark:bg-slate-900 dark:text-slate-100">
+                    {g.track} · {g.code}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <span className="font-semibold text-[var(--ink)] font-mono">{cleanGroup}</span>
+            )}
           </div>
-
-          <button
-            type="button"
-            onClick={() => {
-              const curIdx = days.findIndex((d) => d.date === selectedDate);
-              if (curIdx >= 0 && curIdx < days.length - 1) {
-                setSelectedDate(days[curIdx + 1].date);
-              } else if (days[days.length - 1]) {
-                setSelectedDate(days[days.length - 1].date);
-              }
-            }}
-            className="w-9 h-9 rounded-full hover:bg-black/5 dark:hover:bg-white/10 flex items-center justify-center text-lg text-[var(--ink-secondary)] hover:text-[var(--ink)] cursor-pointer transition-colors"
-            aria-label="Следующий день"
-          >
-            →
-          </button>
         </div>
 
-        {/* Компактный переключатель группы */}
-        <div className="inline-flex items-center gap-1.5 px-3 py-0.5 mt-1 rounded-full bg-[var(--surface-active)] border border-[var(--border)] text-xs text-[var(--ink-secondary)] shadow-xs">
-          <span className="text-[11px] opacity-75">Группа:</span>
-          {isGuest ? (
-            <select
-              aria-label="Выбор группы"
-              value={groupCode}
-              onChange={(e) => {
-                const target = e.target.value;
-                const path = `/browse/${target.replace("/", "-")}`;
-                window.location.href = path;
-              }}
-              className="bg-transparent text-[var(--ink)] font-bold font-mono focus:outline-none cursor-pointer text-xs"
-            >
-              {publicGroups.map((g) => (
-                <option key={g.code} value={g.code} className="dark:bg-slate-900 dark:text-slate-100">
-                  {g.track} · {g.code}
-                </option>
-              ))}
-            </select>
-          ) : (
-            <span className="font-bold text-[var(--ink)] text-xs font-mono">{groupCode}</span>
-          )}
-        </div>
+        <button
+          type="button"
+          onClick={() => {
+            const curIdx = days.findIndex((d) => d.date === selectedDate);
+            if (curIdx >= 0 && curIdx < days.length - 1) {
+              setSelectedDate(days[curIdx + 1].date);
+            } else if (days[days.length - 1]) {
+              setSelectedDate(days[days.length - 1].date);
+            }
+          }}
+          className="w-8 h-8 rounded-full hover:bg-black/5 dark:hover:bg-white/10 flex items-center justify-center text-base text-[var(--ink-secondary)] hover:text-[var(--ink)] cursor-pointer transition-colors"
+          aria-label="Следующий день"
+        >
+          →
+        </button>
       </div>
 
       {scheduleState === "STALE" && (
@@ -316,7 +316,7 @@ export function ScheduleWorkbench({
       )}
 
       {/* ==================== 2. ПОЛИК-СТИЛЬ: ПЛАШКИ ДНЕЙ НЕДЕЛИ (Image 1) ==================== */}
-      <div className="grid grid-cols-6 gap-1 sm:gap-2 w-full pt-1 pb-1">
+      <div className="grid grid-cols-6 gap-1 sm:gap-2 w-full py-0">
         {days.slice(0, 6).map((day) => {
           const isActive = day.date === selectedDate;
           const pairCount = day.lessons.length;
@@ -358,7 +358,7 @@ export function ScheduleWorkbench({
       </div>
 
       {/* ==================== 3. ПОЛИК-СТИЛЬ: СПИСОК ПАР СРАЗУ НА ЭКРАНЕ (Image 1) ==================== */}
-      <div className="space-y-3.5 pt-1">
+      <div className="space-y-2.5 sm:space-y-3.5 pt-0">
         <div className="flex items-center justify-between px-1 text-xs font-mono text-[var(--ink-muted)]">
           <span>Пары и аудитории</span>
           {currentDay && (
