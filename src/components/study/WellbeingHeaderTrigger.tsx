@@ -29,10 +29,11 @@ export function WellbeingHeaderTrigger({
     <>
       <button
         type="button"
-        onClick={() => setOpen(true)}
-        className="relative flex items-center justify-center w-9 h-9 rounded-full bg-[var(--surface-active)] hover:bg-black/5 dark:hover:bg-white/10 border border-[var(--border)] transition-all cursor-pointer shadow-xs active:scale-95 group"
-        aria-label="Дневной минимум и фокус занятий"
-        title="Дневной минимум и фокус занятий (Samsung Style)"
+        onClick={() => setOpen((prev) => !prev)}
+        className="relative flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-[var(--surface-active)] hover:bg-black/5 dark:hover:bg-white/10 border border-[var(--border)] transition-all cursor-pointer shadow-xs active:scale-95 group"
+        aria-label="Дневной минимум и правила допуска"
+        aria-expanded={open}
+        aria-controls="wellbeing-modal"
       >
         <svg className="w-6 h-6 -rotate-90" viewBox="0 0 24 24">
           <circle
