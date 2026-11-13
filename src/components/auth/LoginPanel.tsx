@@ -208,7 +208,7 @@ export async function LoginPanel({ error }: { error?: string }) {
             Приложение для Android (.apk)
           </span>
           <span className="font-mono text-[11px] text-[var(--ink-muted)]">
-            v1.984.1 ↓
+            v1.984.2 ↓
           </span>
         </a>
       </div>

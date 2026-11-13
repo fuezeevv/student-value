@@ -99,11 +99,22 @@ class MainActivity : AppCompatActivity() {
 
         // Custom User-Agent tag to identify Android app wrapper
         val defaultUa = settings.userAgentString
-        settings.userAgentString = "$defaultUa StudentValueApp/1.984"
+        settings.userAgentString = "$defaultUa StudentValueApp/1.984.2"
 
         val cookieManager = CookieManager.getInstance()
         cookieManager.setAcceptCookie(true)
         cookieManager.setAcceptThirdPartyCookies(binding.webView, true)
+
+        // WebView does not download attachments on its own. Delegate to the system browser.
+        binding.webView.setDownloadListener { url, _, _, _, _ ->
+            val uri = Uri.parse(url)
+            if (uri.scheme == "https" || uri.scheme == "http") {
+                try { startActivity(Intent(Intent.ACTION_VIEW, uri)) }
+                catch (_: android.content.ActivityNotFoundException) {
+                    Toast.makeText(this, "Нет приложения для скачивания файла", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
 
         binding.webView.webChromeClient = object : WebChromeClient() {
             override fun onProgressChanged(view: WebView?, newProgress: Int) {
@@ -128,7 +139,12 @@ class MainActivity : AppCompatActivity() {
                     type = "*/*"
                     addCategory(Intent.CATEGORY_OPENABLE)
                 }
-                filePickerLauncher.launch(intent)
+                try { filePickerLauncher.launch(intent) }
+                catch (_: android.content.ActivityNotFoundException) {
+                    fileChooserCallback?.onReceiveValue(null)
+                    fileChooserCallback = null
+                    Toast.makeText(this@MainActivity, "Выбор файла недоступен на устройстве", Toast.LENGTH_SHORT).show()
+                }
                 return true
             }
         }
