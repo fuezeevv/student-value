@@ -1,4 +1,5 @@
 "use client";
+import {ThemeToggle} from "@/components/ui/ThemeToggle";
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import {
@@ -38,7 +39,7 @@ export function SettingsClient({
   const inputClass =
     "block w-full min-h-12 mt-2 bg-white border border-[rgba(11,26,45,0.15)] rounded-xl px-4 text-base text-[#0b1a2d] focus:outline-none focus:border-[#962640]";
   return (
-    <div className="space-y-9">
+    <div className="space-y-9"><section className="flex items-center justify-between"><span>Оформление</span><ThemeToggle/></section>
       <form
         onSubmit={(e) => {
           e.preventDefault();

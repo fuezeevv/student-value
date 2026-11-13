@@ -6,16 +6,13 @@ import { usePathname } from "next/navigation";
 import type { SessionUser } from "@/lib/auth/session";
 import { switchDevUserAction } from "@/server/actions/task-actions";
 import { Logo } from "@/components/ui/Logo";
-import { ThemeToggle } from "@/components/ui/ThemeToggle";
+import { ConnectionStatus } from "@/components/offline/ConnectionStatus";
+import type { DailyTask } from "@/components/study/WellbeingHeaderTrigger";
 import { PreviewNavbar } from "@/components/preview/PreviewNavbar";
 import { GroupSwitcher } from "@/components/workspace/GroupSwitcher";
 import { TodayIcon, SubjectsIcon, DeadlinesIcon } from "@/components/ui/Icons";
 import { WellbeingHeaderTrigger } from "@/components/study/WellbeingHeaderTrigger";
-import {
-  Menu,
-  X,
-  ArrowUpRight,
-} from "lucide-react";
+import { Menu, X, ArrowUpRight } from "lucide-react";
 
 const primary = [
   { href: "/", label: "Сегодня", icon: TodayIcon },
@@ -35,15 +32,25 @@ const secondary = [
 
 export function Navbar({
   user,
+  dailyTasks = [],
   unreadCount = 0,
   devAuthEnabled = false,
 }: {
   user: SessionUser | null;
+  dailyTasks?: DailyTask[];
   unreadCount?: number;
   devAuthEnabled?: boolean;
 }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const [mobile, setMobile] = useState(false);
+  useEffect(() => {
+    const media = matchMedia("(max-width: 767px)");
+    const update = () => setMobile(media.matches);
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
   const [pending, startTransition] = useTransition();
   const menu = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
@@ -121,8 +128,20 @@ export function Navbar({
             </nav>
           )}
           <div className="nav-actions">
-            {user && <WellbeingHeaderTrigger />}
-            {user ? (
+            <ConnectionStatus
+              groupCode={
+                user?.groups?.find((g) => g.id === user.groupId)?.code ||
+                user?.groupName?.match(/\d{7}\/\d{5}/)?.[0]
+              }
+            />
+            {user && (
+              <WellbeingHeaderTrigger
+                key={user.id}
+                userId={user.id}
+                tasks={dailyTasks}
+              />
+            )}
+            {user && !mobile ? (
               <button
                 ref={trigger}
                 onClick={toggle}
@@ -141,17 +160,16 @@ export function Navbar({
                   <Menu size={17} className="hidden lg:inline" />
                 )}
               </button>
-            ) : (
+            ) : !user ? (
               <Link className="text-link" href="/login">
                 Войти
               </Link>
-            )}
+            ) : null}
           </div>
           {open && (
             <div id="account-menu" ref={menu} className="account-menu">
               <div className="flex items-center justify-between pb-3 mb-2 border-b border-[var(--border)]">
                 <p className="eyebrow !mb-0">{user?.nickname}</p>
-                <ThemeToggle />
               </div>
               {user?.groups && (
                 <GroupSwitcher groups={user.groups} current={user.groupId} />
@@ -250,7 +268,9 @@ export function Navbar({
                 </span>
                 <span
                   className={`text-[10px] mt-0.5 ${
-                    isTabActive ? "font-bold text-[var(--ink)]" : "text-[var(--ink-muted)]"
+                    isTabActive
+                      ? "font-bold text-[var(--ink)]"
+                      : "text-[var(--ink-muted)]"
                   }`}
                 >
                   {label}
@@ -258,6 +278,21 @@ export function Navbar({
               </Link>
             );
           })}
+          {mobile && (
+            <button
+              ref={trigger}
+              onClick={toggle}
+              aria-label="Открыть меню"
+              aria-expanded={open}
+              aria-controls="account-menu"
+              className="mobile-profile"
+            >
+              <span className="account-initial">
+                {user.nickname.slice(0, 1).toUpperCase()}
+              </span>
+              <span>Профиль</span>
+            </button>
+          )}
         </nav>
       )}
     </>

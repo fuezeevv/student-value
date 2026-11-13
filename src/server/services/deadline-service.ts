@@ -1,3 +1,4 @@
+import {ru} from "date-fns/locale";
 import { formatInTimeZone } from "date-fns-tz";
 import { effectiveDeadline, moscowDate } from "@/server/domain/deadline-date";
 
@@ -56,7 +57,7 @@ export function calculateDeadlineStatus(
   const diffMs = targetDate.getTime() - now.getTime();
   const diffDays = Math.round((Date.parse(moscowDate(targetDate)) - Date.parse(moscowDate(now))) / 86400000);
   const diffHours = Math.floor(diffMs / 3600000);
-  const formatted = formatInTimeZone(targetDate, MOSCOW_TZ, strict ? "dd.MM.yyyy, HH:mm" : "dd.MM.yyyy");
+  const formatted = formatInTimeZone(targetDate, MOSCOW_TZ, strict ? "d MMMM yyyy, HH:mm (МСК)" : "d MMMM yyyy",{locale:ru});
 
   if (diffMs < 0) {
     const overdueDays = Math.abs(diffDays);

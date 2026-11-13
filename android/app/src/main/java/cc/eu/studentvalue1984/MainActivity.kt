@@ -65,7 +65,7 @@ class MainActivity : AppCompatActivity() {
         if (savedInstanceState == null) {
             loadApp()
         } else {
-            binding.webView.restoreState(savedInstanceState)
+            if (!isNetworkAvailable() || binding.webView.restoreState(savedInstanceState) == null) loadApp()
         }
     }
 
@@ -93,7 +93,7 @@ class MainActivity : AppCompatActivity() {
         settings.databaseEnabled = true
         settings.useWideViewPort = true
         settings.loadWithOverviewMode = true
-        settings.allowFileAccess = true
+        settings.allowFileAccess = false
         settings.cacheMode = WebSettings.LOAD_DEFAULT
         settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
 
@@ -149,8 +149,12 @@ class MainActivity : AppCompatActivity() {
                 error: WebResourceError?
             ) {
                 // Only show offline view if the main frame failed to load
-                if (request?.isForMainFrame == true && !isNetworkAvailable()) {
-                    binding.offlineView.visibility = View.VISIBLE
+                if (request?.isForMainFrame == true) {
+                    if (request.url.path != "/offline.html") {
+                        view?.loadUrl("https://studentvalue1984.eu.cc/offline.html")
+                    } else {
+                        binding.offlineView.visibility = View.VISIBLE
+                    }
                 }
             }
 
@@ -162,15 +166,17 @@ class MainActivity : AppCompatActivity() {
                 val host = request.url.host ?: return false
 
                 // Keep app domains inside WebView
-                return if (host.contains("studentvalue1984.eu.cc") ||
-                    host.contains("accounts.google.com") ||
-                    host.contains("vercel.app")
+                return if (host == "studentvalue1984.eu.cc" ||
+                    host == "accounts.google.com" ||
+                    host.endsWith(".vercel.app")
                 ) {
                     false
                 } else {
                     // External link: open in system browser
                     val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-                    startActivity(intent)
+                    try { startActivity(intent) } catch (_: android.content.ActivityNotFoundException) {
+                        Toast.makeText(this@MainActivity, "Нет приложения для открытия ссылки", Toast.LENGTH_SHORT).show()
+                    }
                     true
                 }
             }
@@ -215,7 +221,8 @@ class MainActivity : AppCompatActivity() {
             binding.offlineView.visibility = View.GONE
             binding.webView.loadUrl(appUrl)
         } else {
-            binding.offlineView.visibility = View.VISIBLE
+            binding.offlineView.visibility = View.GONE
+            binding.webView.loadUrl("https://studentvalue1984.eu.cc/offline.html")
         }
     }
 
@@ -223,7 +230,7 @@ class MainActivity : AppCompatActivity() {
         val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
         val network = cm.activeNetwork ?: return false
         val caps = cm.getNetworkCapabilities(network) ?: return false
-        return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+        return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) && caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
     }
 
     override fun onSaveInstanceState(outState: Bundle) {

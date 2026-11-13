@@ -1,3 +1,4 @@
+import { ConnectionStatus } from "@/components/offline/ConnectionStatus";
 import Link from "next/link";
 import { Grid2X2 } from "lucide-react";
 import { Logo } from "@/components/ui/Logo";
@@ -43,6 +44,7 @@ export function PreviewNavbar({
             ))}
           </nav>
           <div className="flex items-center gap-3">
+            <ConnectionStatus groupCode={group?.code} />
             <Link
               className="text-link preview-login"
               href={signedIn ? "/" : "/login"}

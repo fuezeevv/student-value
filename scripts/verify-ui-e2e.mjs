@@ -202,8 +202,18 @@ try {
   const setUser = async (id) => {
     await page.setCookie({ name: "study_dev_user_id", value: id, url: base });
   };
-  const go = async (route) =>
-    page.goto(base + route, { waitUntil: "networkidle2", timeout: 30000 });
+  const go = async (route) => {
+    const response = await page.goto(base + route, {
+      waitUntil: "networkidle2",
+      timeout: 60000,
+    });
+    if (!route.startsWith("/api/"))
+      await page.waitForFunction(
+        () => document.documentElement.dataset.appReady === "true",
+        { timeout: 30000 },
+      );
+    return response;
+  };
   const body = () => page.evaluate(() => document.body.innerText);
   const clickText = async (text) => {
     const buttons = await page.$$("button");
@@ -235,15 +245,18 @@ try {
     assert(page.url().endsWith("/login"));
     assert.equal(await page.$(".account-button"), null);
     assert(await page.$('[aria-label="Вход в аккаунт"]'));
-    assert.equal((await page.$$(".preview-group")).length, 8);
-    assert(
-      await page.evaluate(
-        () =>
-          document
-            .querySelector('[aria-label="Вход в аккаунт"]')
-            .getBoundingClientRect().bottom <
-          document.querySelector("#groups").getBoundingClientRect().top,
-      ),
+    assert.equal(
+      (
+        await page.$$(
+          'select[aria-label="Выбрать группу без регистрации"] option',
+        )
+      ).length,
+      9,
+    );
+    assert.equal(
+      (await page.$$('select[aria-label="Выбрать группу без регистрации"]'))
+        .length,
+      1,
     );
   });
   await scenario(
@@ -262,8 +275,13 @@ try {
       for (const width of [390, 1440]) {
         await page.setViewport({ width, height: 900 });
         await go("/browse");
-        assert.equal((await page.$$(".preview-group")).length, 8);
-        await page.click('a.preview-group[href="/browse/5130901-40102"]');
+        await page.waitForSelector(
+          'select[aria-label="Выбрать группу без регистрации"]:not([disabled])',
+        );
+        await page.select(
+          'select[aria-label="Выбрать группу без регистрации"]',
+          "5130901/40102",
+        );
         await page.waitForSelector(".preview-work");
         assert((await body()).includes("[TEST] Открытая лабораторная"));
         assert(!(await body()).includes("Отметить выполненным"));
@@ -843,7 +861,7 @@ try {
       assert(next.sourceReferenceId);
       await setUser("user-dev-student");
       await go(`/tasks/${taskId}`);
-      assert((await body()).includes("20.11.2026"));
+      assert((await body()).includes("20 ноября 2026"));
       assert(!(await body()).includes("03:00"));
       assert(
         await test.notification.findFirst({

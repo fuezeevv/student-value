@@ -4,6 +4,7 @@ import "./globals.css";
 import { getCurrentUser } from "@/lib/auth/session";
 import { Navbar } from "@/components/layout/Navbar";
 import { prisma } from "@/lib/db/prisma";
+import { loadStudyWorkspace } from "@/server/queries/study-workspace";
 import { LegalLinks } from "@/components/layout/LegalLinks";
 
 export const viewport: Viewport = {
@@ -13,8 +14,7 @@ export const viewport: Viewport = {
   ],
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
+
   viewportFit: "cover",
 };
 
@@ -74,6 +74,17 @@ export default async function RootLayout({
       })
     : 0;
 
+  const workspace = user?.groupId ? await loadStudyWorkspace(user) : null;
+  const dailyTasks =
+    workspace?.tasks
+      .filter((t) => !t.completed)
+      .map((t) => ({
+        id: t.id,
+        title: t.title,
+        course: t.courseShortTitle || t.courseTitle,
+        type: t.type,
+        deadline: t.deadline?.date.toISOString() ?? null,
+      })) ?? [];
   return (
     <html lang="ru" suppressHydrationWarning>
       <head>
@@ -83,6 +94,7 @@ export default async function RootLayout({
       <body className="min-h-screen flex flex-col antialiased">
         <Navbar
           user={user}
+          dailyTasks={dailyTasks}
           unreadCount={unreadCount}
           devAuthEnabled={isDevAuthEnabled()}
         />
@@ -91,7 +103,8 @@ export default async function RootLayout({
         </main>
         <footer className="site-footer flex-wrap gap-x-6 gap-y-4">
           <span>
-            Student Value <span className="font-bold text-[var(--wine)]">1.984</span>
+            Student Value{" "}
+            <span className="font-bold text-[var(--wine)]">1.984</span>
           </span>
           <span>Учёба в своём ритме.</span>
           <a

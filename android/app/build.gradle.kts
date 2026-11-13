@@ -11,8 +11,8 @@ android {
         applicationId = "cc.eu.studentvalue1984"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.984.0"
+        versionCode = 2
+        versionName = "1.984.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

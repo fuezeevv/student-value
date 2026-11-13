@@ -46,15 +46,15 @@
 :root[data-theme="dark"],
 :root.dark {
   /* Midnight Sleek Dark Palette */
-  --canvas: #0b0f14;
+  --canvas: #0b1422;
   --canvas-subtle: #131922;
-  --surface: #161f2c;
-  --surface-active: #1e293b;
+  --surface: #152235;
+  --surface-active: #1d2d43;
 
   /* Vivid Wine / Ruby Accent for Dark Mode */
-  --wine: #ff4d6d;
-  --wine-soft: rgba(255, 77, 109, 0.15);
-  --wine-hover: #ff3355;
+  --wine: #d9859f;
+  --wine-soft: rgba(217, 133, 159, 0.12);
+  --wine-hover: #e59db3;
 
   /* Crisp Light Typography */
   --ink: #f8fafc;
@@ -63,25 +63,25 @@
   --ink-faint: rgba(255, 255, 255, 0.08);
 
   /* Tailwind CSS Token Mapping */
-  --background: #0b0f14;
+  --background: #0b1422;
   --foreground: #f8fafc;
-  --card: #161f2c;
+  --card: #152235;
   --card-foreground: #f8fafc;
-  --popover: #161f2c;
+  --popover: #152235;
   --popover-foreground: #f8fafc;
-  --primary: #ff4d6d;
+  --primary: #d9859f;
   --primary-foreground: #ffffff;
   --secondary: #1c2738;
   --secondary-foreground: #f8fafc;
   --muted: #1c2738;
   --muted-foreground: #94a3b8;
-  --accent: #ff4d6d;
+  --accent: #d9859f;
   --accent-foreground: #ffffff;
-  --destructive: #ff3355;
+  --destructive: #e59db3;
   --destructive-foreground: #ffffff;
   --border: rgba(255, 255, 255, 0.1);
-  --input: #161f2c;
-  --ring: #ff4d6d;
+  --input: #152235;
+  --ring: #d9859f;
 }
 
 @layer base {
@@ -91,9 +91,18 @@
   body {
     background-color: var(--canvas);
     color: var(--foreground);
-    transition: background-color 0.2s ease, color 0.2s ease;
+    transition:
+      background-color 0.2s ease,
+      color 0.2s ease;
     font-family:
-      Inter, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial,
+      Inter,
+      -apple-system,
+      BlinkMacSystemFont,
+      "SF Pro Text",
+      "Segoe UI",
+      Roboto,
+      Helvetica,
+      Arial,
       sans-serif;
     min-height: 100vh;
     overscroll-behavior-y: none;
@@ -612,7 +621,9 @@ a.schedule-subject:hover {
   font-size: 14px;
   font-weight: 500;
   color: var(--ink-secondary);
-  transition: color 0.15s ease, transform 0.15s ease;
+  transition:
+    color 0.15s ease,
+    transform 0.15s ease;
 }
 .account-menu > a:hover {
   color: var(--wine);
@@ -978,7 +989,9 @@ a.schedule-subject:hover {
   background: var(--surface);
   color: var(--ink);
   box-shadow: 0 1px 3px rgba(11, 26, 45, 0.02);
-  transition: background-color 0.15s ease, box-shadow 0.15s ease;
+  transition:
+    background-color 0.15s ease,
+    box-shadow 0.15s ease;
 }
 .work-item:hover {
   background: var(--surface-active);
@@ -1108,7 +1121,9 @@ a.schedule-subject:hover {
   margin: 0;
   border-radius: 0;
   border-top: 1px solid var(--border);
-  transition: background-color 0.16s ease, color 0.16s ease;
+  transition:
+    background-color 0.16s ease,
+    color 0.16s ease;
 }
 .course-list,
 .daily-courses {
@@ -2123,7 +2138,9 @@ a.schedule-subject:hover {
     font-size: 10px;
     color: var(--ink-muted);
     font-weight: 500;
-    transition: transform 0.15s ease, color 0.15s ease;
+    transition:
+      transform 0.15s ease,
+      color 0.15s ease;
   }
   .mobile-nav a:active,
   .mobile-nav button:active {
@@ -2273,4 +2290,315 @@ a.schedule-subject:hover {
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+/* Bounded content and native controls in both themes. */
+.work-item,
+.work-item-body,
+.work-title,
+.work-facts,
+.filter-bar > * {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.work-file {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+select {
+  max-width: 100%;
+  color: var(--ink);
+  background-color: var(--surface);
+  color-scheme: light;
+}
+html.dark select {
+  color-scheme: dark;
+}
+select option {
+  background: var(--surface);
+  color: var(--ink);
+}
+.connection-button {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  color: var(--ink-secondary);
+}
+.connection-detail {
+  position: absolute;
+  right: 0;
+  top: 42px;
+  width: min(300px, 85vw);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 16px;
+  border-radius: 16px;
+  font-size: 12px;
+  line-height: 1.7;
+  z-index: 90;
+  box-shadow: 0 8px 32px #0002;
+}
+.entry-compact {
+  max-width: 480px;
+  margin: auto;
+}
+.entry-compact > div {
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+.entry-compact h1 {
+  font-size: 24px;
+}
+.entry-compact section {
+  margin-bottom: 12px;
+}
+button,
+a {
+  touch-action: manipulation;
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+.daily-sheet {
+  background: var(--surface);
+  color: var(--ink);
+  padding: 24px;
+  border-radius: 28px 28px 0 0;
+  width: min(100%, 480px);
+  max-height: 88dvh;
+  overflow: auto;
+  box-shadow: 0 -12px 80px #609cc922;
+}
+.daily-sheet h2 {
+  font-size: 21px;
+  font-weight: 700;
+}
+.daily-sheet h3 {
+  font-weight: 650;
+  margin: 20px 0 10px;
+}
+.daily-sheet p {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--ink-muted);
+  margin: 12px 0;
+}
+.daily-week {
+  display: flex;
+  justify-content: space-between;
+  margin: 20px 0;
+}
+.daily-week > div {
+  display: grid;
+  text-align: center;
+  gap: 8px;
+  font-size: 11px;
+}
+.daily-week > div > span + span {
+  border-radius: 50%;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+}
+.daily-step {
+  display: flex;
+  gap: 12px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.daily-step span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.daily-step small,
+.daily-step a {
+  display: block;
+  margin-top: 6px;
+  color: var(--ink-muted);
+}
+.daily-start {
+  display: block;
+  width: 100%;
+  padding: 14px;
+  border-radius: 16px;
+  margin-top: 12px;
+  background: linear-gradient(110deg, #407cb4, #586aab);
+  color: white;
+}
+.schedule-compare {
+  font-size: 12px;
+  line-height: 1.8;
+}
+.schedule-compare summary {
+  cursor: pointer;
+  color: var(--ink-muted);
+}
+
+.mobile-profile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  font-size: 10px;
+  color: var(--ink-secondary);
+}
+.mobile-nav {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.schedule-compare input,
+.schedule-compare select {
+  display: block;
+  width: 100%;
+  padding: 10px;
+  margin: 10px 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--ink);
+}
+.schedule-compare section {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.schedule-compare h3,
+.schedule-compare h4 {
+  font-weight: 650;
+}
+.schedule-compare p {
+  margin: 8px 0;
+  overflow-wrap: anywhere;
+}
+.entry-compact .relative.rounded-3xl {
+  border: none;
+  box-shadow: none;
+  background: transparent;
+  padding: 8px;
+}
+.deadline-group h2 {
+  overflow-wrap: anywhere;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.work-facts > * {
+  max-width: 100%;
+  white-space: normal;
+}
+.completion-button {
+  max-width: 100%;
+  white-space: normal;
+}
+
+html[data-offline="true"] .site-header::after {
+  content: "Нет сети · сохранённая копия";
+  display: block;
+  background: #304c62;
+  color: #fff;
+  text-align: center;
+  font-size: 11px;
+  padding: 3px;
+}
+.work-item {
+  align-items: flex-start;
+}
+.work-item-body {
+  flex: 1;
+}
+.entry-compact {
+  max-width: 460px;
+}
+
+@font-face {
+  font-family: Inter;
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url(/fonts/InterVariable.woff2) format("woff2");
+}
+
+.work-item.preview-work {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  border-bottom: 1px solid var(--border);
+  padding: 16px 0;
+}
+.daily-sheet {
+  background:
+    radial-gradient(ellipse at top right, #609cc912, transparent 65%),
+    var(--surface);
+}
+.daily-step input {
+  accent-color: #609cc9;
+  min-width: 18px;
+  min-height: 18px;
+}
+.daily-sheet header button {
+  width: 40px;
+  height: 40px;
+}
+.connection-button {
+  min-height: 40px;
+  min-width: 40px;
+}
+
+html.dark {
+  --canvas: #0b1422;
+  --surface: #152235;
+  --surface-active: #1d2d43;
+  --wine: #d9859f;
+  --wine-hover: #e59db3;
+}
+.schedule-compare {
+  padding: 8px 0;
+}
+.entry-compact .inline-flex.rounded-full {
+  border: 0;
+  background: transparent;
+  padding-left: 0;
+}
+
+html[data-offline="true"] .site-header {
+  height: auto;
+}
+
+.daily-sheet > header {
+  position: sticky;
+  top: 0;
+  background: var(--surface);
+  z-index: 2;
+  padding: 8px 0;
+}
+.schedule-compare nav {
+  display: grid;
+  grid-template-columns: 60px minmax(0, 1fr) 60px;
+  gap: 6px;
+  align-items: center;
+}
+.schedule-compare nav input {
+  min-width: 0;
+  max-width: 100%;
+  font-size: 12px;
+}
+.schedule-compare button {
+  overflow-wrap: anywhere;
+}
+.schedule-compare > button {
+  padding: 8px 10px;
+  margin: 4px 4px 4px 0;
+  border-radius: 12px;
+  background: var(--surface-active);
+  font-size: 12px;
 }

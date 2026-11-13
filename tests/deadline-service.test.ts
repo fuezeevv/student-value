@@ -74,11 +74,11 @@ describe("Moscow boundaries independent of host timezone",()=>{
  it("keeps a date-only deadline active until end of the Moscow day",()=>{
   const date="2026-10-16T00:00:00+03:00";
   const result=calculateDeadlineStatus(date,new Date("2026-10-16T23:59:59+03:00"),false,false);
-  expect(result.urgency).toBe("DUE_TODAY");expect(result.formattedDate).toBe("16.10.2026");
+  expect(result.urgency).toBe("DUE_TODAY");expect(result.formattedDate).toBe("16 октября 2026");
   expect(calculateDeadlineStatus(date,new Date("2026-10-17T00:00:00+03:00"),false,false).urgency).toBe("OVERDUE");
  });
 });
 
 it("treats a date-only input string as a Moscow calendar date",()=>{
- const result=calculateDeadlineStatus("2026-10-16",new Date("2026-10-16T23:59:59+03:00"));expect(result.urgency).toBe("DUE_TODAY");expect(result.formattedDate).toBe("16.10.2026");
+ const result=calculateDeadlineStatus("2026-10-16",new Date("2026-10-16T23:59:59+03:00"));expect(result.urgency).toBe("DUE_TODAY");expect(result.formattedDate).toBe("16 октября 2026");
 });

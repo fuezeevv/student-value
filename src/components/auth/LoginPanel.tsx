@@ -1,7 +1,4 @@
-import {
-  ArrowRight,
-  Lock,
-} from "lucide-react";
+import { ArrowRight, Lock } from "lucide-react";
 import { isDevAuthEnabled } from "@/lib/auth/dev-policy";
 import { prisma } from "@/lib/db/prisma";
 import { switchDevUserAction } from "@/server/actions/task-actions";
@@ -34,8 +31,8 @@ export async function LoginPanel({ error }: { error?: string }) {
       <div className="relative rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-6 sm:p-7 shadow-xs">
         {/* Academic cohort badge */}
         <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[rgba(150,38,64,0.08)] dark:bg-[rgba(255,77,109,0.12)] border border-[rgba(150,38,64,0.2)] dark:border-[rgba(255,77,109,0.3)] text-[#962640] dark:text-[#ff4d6d] text-xs font-semibold tracking-wide">
-            <span className="w-2 h-2 rounded-full bg-[#962640] dark:bg-[#ff4d6d]" />
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[rgba(150,38,64,0.08)] dark:bg-[rgba(217,133,159,0.12)] border border-[rgba(150,38,64,0.2)] dark:border-[rgba(217,133,159,0.3)] text-[#962640] dark:text-[#d9859f] text-xs font-semibold tracking-wide">
+            <span className="w-2 h-2 rounded-full bg-[#962640] dark:bg-[#d9859f]" />
             СПбПУ · учебные группы
           </div>
           <span className="text-xs text-[var(--ink-muted)] font-mono font-bold tracking-wider">
@@ -81,7 +78,9 @@ export async function LoginPanel({ error }: { error?: string }) {
                       className="w-full flex justify-between items-center gap-3 bg-[var(--surface-active)] hover:border-[#962640] border border-[var(--border)] rounded-xl px-4 py-2.5 text-left transition-all active:scale-[0.98] shadow-xs cursor-pointer"
                     >
                       <div className="flex items-center gap-2.5">
-                        <span className="text-base">{isOwner ? "👑" : "🎓"}</span>
+                        <span className="text-base">
+                          {isOwner ? "👑" : "🎓"}
+                        </span>
                         <div>
                           <span className="text-xs font-bold text-[var(--ink)] block">
                             {isOwner ? "Староста" : "Студент"}
@@ -91,7 +90,10 @@ export async function LoginPanel({ error }: { error?: string }) {
                           </span>
                         </div>
                       </div>
-                      <ArrowRight size={15} className="text-[var(--ink-muted)]" />
+                      <ArrowRight
+                        size={15}
+                        className="text-[var(--ink-muted)]"
+                      />
                     </button>
                   </form>
                 );
@@ -114,10 +116,13 @@ export async function LoginPanel({ error }: { error?: string }) {
               <details className="group rounded-xl border border-[var(--border)] bg-[var(--surface-active)] p-3 text-xs transition-colors hover:border-[#962640]">
                 <summary className="cursor-pointer font-bold text-[var(--ink)] flex items-center justify-between list-none">
                   <span className="flex items-center gap-2">
-                    <Lock size={13} className="text-[#962640] dark:text-[#ff4d6d]" />
+                    <Lock
+                      size={13}
+                      className="text-[#962640] dark:text-[#d9859f]"
+                    />
                     Первый вход · ввести код старосты
                   </span>
-                  <span className="text-[11px] text-[#962640] dark:text-[#ff4d6d] group-open:rotate-90 transition-transform">
+                  <span className="text-[11px] text-[#962640] dark:text-[#d9859f] group-open:rotate-90 transition-transform">
                     →
                   </span>
                 </summary>
@@ -173,9 +178,12 @@ export async function LoginPanel({ error }: { error?: string }) {
           </section>
         ) : (
           <section className="p-3.5 rounded-xl bg-[var(--surface-active)] border border-[var(--border)] mb-4 text-xs">
-            <h2 className="font-bold text-[var(--ink)] mb-0.5">Вход готовится к запуску</h2>
+            <h2 className="font-bold text-[var(--ink)] mb-0.5">
+              Вход готовится к запуску
+            </h2>
             <p className="text-[var(--ink-muted)]">
-              Подключаем вход через Google. Расписание доступно без авторизации ниже:
+              Подключаем вход через Google. Расписание доступно без авторизации
+              ниже:
             </p>
           </section>
         )}
@@ -200,7 +208,7 @@ export async function LoginPanel({ error }: { error?: string }) {
             Приложение для Android (.apk)
           </span>
           <span className="font-mono text-[11px] text-[var(--ink-muted)]">
-            v1.984 · 12 МБ ↓
+            v1.984.1 ↓
           </span>
         </a>
       </div>

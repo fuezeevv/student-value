@@ -21,16 +21,44 @@ export function TodayIcon({ size = 20, width, height, ...props }: IconProps) {
       aria-hidden="true"
       {...props}
     >
-      <rect x="3.5" y="4.5" width="17" height="16" rx="4" />
-      <line x1="3.5" y1="9.5" x2="20.5" y2="9.5" />
-      <line x1="8" y1="2.5" x2="8" y2="5" />
-      <line x1="16" y1="2.5" x2="16" y2="5" />
-      <circle cx="12" cy="14.5" r="1.5" fill="currentColor" stroke="none" />
+      <path d="M10 5h10M10 12h7M10 19h10" />
+      <rect
+        x="3"
+        y="3"
+        width="3"
+        height="4"
+        rx="1.5"
+        fill="currentColor"
+        stroke="none"
+      />
+      <rect
+        x="3"
+        y="9"
+        width="3"
+        height="6"
+        rx="1.5"
+        fill="currentColor"
+        stroke="none"
+      />
+      <rect
+        x="3"
+        y="17"
+        width="3"
+        height="4"
+        rx="1.5"
+        fill="currentColor"
+        stroke="none"
+      />
     </svg>
   );
 }
 
-export function SubjectsIcon({ size = 20, width, height, ...props }: IconProps) {
+export function SubjectsIcon({
+  size = 20,
+  width,
+  height,
+  ...props
+}: IconProps) {
   return (
     <svg
       viewBox="0 0 24 24"
@@ -44,15 +72,18 @@ export function SubjectsIcon({ size = 20, width, height, ...props }: IconProps) 
       aria-hidden="true"
       {...props}
     >
-      <path d="M4 19.5v-13A2.5 2.5 0 0 1 6.5 4H19a1 1 0 0 1 1 1v14.5" />
-      <path d="M6.5 4v15.5A2.5 2.5 0 0 1 4 22h15a1 1 0 0 0 1-1v-1.5" />
-      <path d="M9 8h7" />
-      <path d="M9 12h5" />
+      <path d="M3 5.5c3-1.2 6-.6 9 1.4v14c-3-2-6-2.6-9-1.4zM21 5.5c-3-1.2-6-.6-9 1.4v14c3-2 6-2.6 9-1.4z" />
+      <path d="M6 9l3 1M15 10l3-1M6 13l3 1" />
     </svg>
   );
 }
 
-export function DeadlinesIcon({ size = 20, width, height, ...props }: IconProps) {
+export function DeadlinesIcon({
+  size = 20,
+  width,
+  height,
+  ...props
+}: IconProps) {
   return (
     <svg
       viewBox="0 0 24 24"
@@ -66,14 +97,19 @@ export function DeadlinesIcon({ size = 20, width, height, ...props }: IconProps)
       aria-hidden="true"
       {...props}
     >
-      <circle cx="12" cy="12" r="8.5" />
-      <polyline points="12 7.5 12 12 15 14" />
-      <line x1="12" y1="1.5" x2="12" y2="3.5" />
+      <path d="M19.8 8A8.5 8.5 0 1 0 20 15.5" />
+      <path d="M12 6.5V12l3 2M17 3.5l2 2M19 19l2 2" />
+      <circle cx="20.5" cy="12" r="1.5" fill="currentColor" stroke="none" />
     </svg>
   );
 }
 
-export function SafetyShieldIcon({ size = 20, width, height, ...props }: IconProps) {
+export function SafetyShieldIcon({
+  size = 20,
+  width,
+  height,
+  ...props
+}: IconProps) {
   return (
     <svg
       viewBox="0 0 24 24"

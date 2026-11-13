@@ -79,7 +79,7 @@ export default async function PublicGroupPage({
   const todayDateStr = formatInTimeZone(now, "Europe/Moscow", "yyyy-MM-dd");
 
   // Academic week calculation
-  const moscowDate = new Date(todayDateStr + "T12:00:00+03:00");
+  const moscowDate = new Date((ruzResult.weekStart || todayDateStr) + "T12:00:00+03:00");
   const sept1 = new Date("2026-09-01T12:00:00+03:00");
   const dayOfWeek = (sept1.getDay() + 6) % 7;
   const firstMonday = new Date(sept1);
@@ -382,7 +382,6 @@ export default async function PublicGroupPage({
               base={base}
               courses={courses}
               week={week}
-              showSchedule
             />
           </Suspense>
 

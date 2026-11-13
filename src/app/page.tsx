@@ -2,7 +2,10 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
 import { getCurrentUser } from "@/lib/auth/session";
 import { hasPermission } from "@/lib/permissions/checker";
-import { loadStudyWorkspace, type StudyTask } from "@/server/queries/study-workspace";
+import {
+  loadStudyWorkspace,
+  type StudyTask,
+} from "@/server/queries/study-workspace";
 import { loadRuzSchedule } from "@/server/schedule/ruz";
 import { CreateTaskModal } from "@/components/task/CreateTaskModal";
 import { CalendarNotice } from "@/components/workspace/CalendarNotice";
@@ -21,14 +24,19 @@ import {
   type RuzLesson,
 } from "@/lib/schedule/ruz";
 
-export default async function TodayPage() {
+export default async function TodayPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ week?: string }>;
+}) {
+  const params = await searchParams;
   const user = await getCurrentUser();
   if (!user || !user.groupId) redirect("/login");
 
   const [workspace, ruzResult, gamification, announcements, changes] =
     await Promise.all([
       loadStudyWorkspace(user),
-      loadRuzSchedule(user),
+      loadRuzSchedule(user, params.week),
       prisma.userGamificationProfile.findUnique({
         where: { userId: user.id },
         select: { totalXp: true },
@@ -56,7 +64,7 @@ export default async function TodayPage() {
   const todayDateStr = formatInTimeZone(now, "Europe/Moscow", "yyyy-MM-dd");
 
   // Academic week calculation
-  const moscowDate = new Date(todayDateStr + "T12:00:00+03:00");
+  const moscowDate = new Date((ruzResult.weekStart || todayDateStr) + "T12:00:00+03:00");
   const sept1 = new Date("2026-09-01T12:00:00+03:00");
   const dayOfWeek = (sept1.getDay() + 6) % 7;
   const firstMonday = new Date(sept1);
@@ -101,7 +109,9 @@ export default async function TodayPage() {
             rooms: l.rooms,
             lmsUrl: l.lmsUrl,
             courseId: matchedCourse?.id,
-            courseHref: matchedCourse ? `/courses/${matchedCourse.id}` : undefined,
+            courseHref: matchedCourse
+              ? `/courses/${matchedCourse.id}`
+              : undefined,
           };
         });
 
@@ -122,10 +132,13 @@ export default async function TodayPage() {
     courseShortTitle: t.courseShortTitle,
     courseId: t.courseId,
     deadlineDate: t.deadline?.date,
-    deadlineFormatted: t.deadline
-      ? t.timing.formattedDate
-      : undefined,
-    urgency: t.timing.urgency as any,
+    deadlineFormatted: t.deadline ? t.timing.formattedDate : undefined,
+    urgency:
+      t.timing.urgency === "OVERDUE"
+        ? "OVERDUE"
+        : ["DUE_TODAY", "DUE_TOMORROW", "DUE_URGENT"].includes(t.timing.urgency)
+          ? "SOON"
+          : "NORMAL",
     completed: t.completed,
     accepted: t.accepted,
     materials: t.materials.map((m) => ({
@@ -135,7 +148,7 @@ export default async function TodayPage() {
     })),
   }));
 
-  const groupCode = user.groupName || "5130901/40102";
+  const groupCode = ruzResult.data?.groupCode || user.groupName || "Учебная группа";
 
   return (
     <div className="space-y-2.5 sm:space-y-4">
@@ -169,7 +182,7 @@ export default async function TodayPage() {
         weekLabel={weekLabel}
         days={days}
         tasks={workbenchTasks}
-        totalXp={gamification?.totalXp ?? 45}
+        totalXp={gamification?.totalXp ?? 0}
         isGuest={false}
         fetchedAt={ruzResult.fetchedAt}
         scheduleState={ruzResult.state}
@@ -193,7 +206,9 @@ export default async function TodayPage() {
                     className="p-3.5 rounded-xl bg-white/60 dark:bg-slate-900/60 border border-[var(--ink-faint)] text-xs"
                   >
                     <p className="font-bold text-[var(--ink)]">{a.title}</p>
-                    <p className="text-[var(--ink-secondary)] mt-1">{a.content}</p>
+                    <p className="text-[var(--ink-secondary)] mt-1">
+                      {a.content}
+                    </p>
                   </div>
                 ))}
               </div>

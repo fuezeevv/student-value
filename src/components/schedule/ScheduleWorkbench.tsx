@@ -1,12 +1,22 @@
 "use client";
 
-import { useState, useTransition, useMemo } from "react";
+import { useRouter } from "next/navigation";
+import { addDays } from "@/lib/schedule/ruz";
+import { CompareSchedule } from "./CompareSchedule";
+import { useState, useTransition, useMemo, useEffect } from "react";
 import Link from "next/link";
 import { formatInTimeZone } from "date-fns-tz";
 import { ru } from "date-fns/locale";
 import { publicGroups } from "@/lib/groups/public-groups";
 import { updateStudentProgressAction } from "@/server/actions/task-actions";
-import { ArrowUpRight, Check, ChevronDown, ExternalLink, FileDown, Sparkles } from "lucide-react";
+import {
+  ArrowUpRight,
+  Check,
+  ChevronDown,
+  ExternalLink,
+  FileDown,
+  Sparkles,
+} from "lucide-react";
 
 export type WorkbenchLesson = {
   subject: string;
@@ -98,7 +108,7 @@ export function ScheduleWorkbench({
   weekLabel = "11-я неделя · Нечётная",
   days,
   tasks: initialTasks,
-  totalXp: initialXp = 45,
+  totalXp: initialXp = 0,
   isGuest = false,
   publicBase,
   fetchedAt,
@@ -107,11 +117,26 @@ export function ScheduleWorkbench({
   nowMoscowTime = "12:00",
   todayDateStr,
 }: ScheduleWorkbenchProps) {
+  const router = useRouter();
+  const [clock, setClock] = useState(nowMoscowTime);
+  useEffect(() => {
+    const update = () =>
+      setClock(
+        new Intl.DateTimeFormat("en-GB", {
+          timeZone: "Europe/Moscow",
+          hour: "2-digit",
+          minute: "2-digit",
+        }).format(new Date()),
+      );
+    const id = setInterval(update, 30000);
+    return () => clearInterval(id);
+  }, []);
+  nowMoscowTime = clock;
   // Determine initial selected day: today if present, or next day with lessons, or first day
   const defaultDate = useMemo(() => {
     if (!days.length) return "";
     const today = days.find((d) => d.isToday || d.date === todayDateStr);
-    if (today && today.lessons.length > 0) return today.date;
+    if (today) return today.date;
 
     const futureWithLessons = days.find(
       (d) => d.date >= (todayDateStr ?? "") && d.lessons.length > 0,
@@ -125,10 +150,15 @@ export function ScheduleWorkbench({
   }, [days, todayDateStr]);
 
   const [selectedDate, setSelectedDate] = useState<string>(defaultDate);
+  useEffect(() => setSelectedDate(defaultDate), [defaultDate]);
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
   const [tasks, setTasks] = useState<WorkbenchTask[]>(initialTasks);
   const [xp, setXp] = useState<number>(initialXp);
-  const [xpFloat, setXpFloat] = useState<{ id: string; delta: number } | null>(null);
+  const [saveError, setSaveError] = useState("");
+  useEffect(() => {
+    setTasks(initialTasks);
+    setXp(initialXp);
+  }, [initialTasks, initialXp]);
   const [isPending, startTransition] = useTransition();
 
   const selectedDateObj = useMemo(() => {
@@ -137,7 +167,9 @@ export function ScheduleWorkbench({
   }, [selectedDate, todayDateStr, days]);
 
   const monthYearLabel = useMemo(() => {
-    const s = formatInTimeZone(selectedDateObj, "Europe/Moscow", "LLLL yyyy", { locale: ru });
+    const s = formatInTimeZone(selectedDateObj, "Europe/Moscow", "LLLL yyyy", {
+      locale: ru,
+    });
     return s.charAt(0).toUpperCase() + s.slice(1);
   }, [selectedDateObj]);
 
@@ -153,7 +185,8 @@ export function ScheduleWorkbench({
   }, [days, selectedDate]);
 
   // Active / next lesson calculations for hero callout
-  const isSelectedToday = currentDay?.isToday || currentDay?.date === todayDateStr;
+  const isSelectedToday =
+    currentDay?.isToday || currentDay?.date === todayDateStr;
 
   const { activeLesson, nextLesson, heroLesson } = useMemo(() => {
     if (!currentDay || !currentDay.lessons.length) {
@@ -161,7 +194,7 @@ export function ScheduleWorkbench({
     }
     if (isSelectedToday) {
       const active = currentDay.lessons.find(
-        (l) => l.start <= nowMoscowTime && nowMoscowTime <= l.end,
+        (l) => l.start <= nowMoscowTime && nowMoscowTime < l.end,
       );
       const next = currentDay.lessons.find((l) => nowMoscowTime < l.start);
       return {
@@ -195,21 +228,22 @@ export function ScheduleWorkbench({
 
   // Task completion toggle with dopamine trigger
   const toggleTask = (taskId: string) => {
+    if (!navigator.onLine) {
+      setSaveError("Нет соединения. Отметка не сохранена.");
+      return;
+    }
+    setSaveError("");
     const task = tasks.find((t) => t.id === taskId);
     if (!task) return;
 
     const willBeCompleted = !task.completed;
-    const xpDelta = willBeCompleted ? 20 : -20;
-
-    // Trigger dopamine float animation
-    if (willBeCompleted) {
-      setXpFloat({ id: taskId, delta: 20 });
-      setTimeout(() => setXpFloat(null), 1800);
-    }
+    const xpDelta = 0;
 
     // Optimistic client update
     setTasks((prev) =>
-      prev.map((t) => (t.id === taskId ? { ...t, completed: willBeCompleted } : t)),
+      prev.map((t) =>
+        t.id === taskId ? { ...t, completed: willBeCompleted } : t,
+      ),
     );
     setXp((prev) => Math.max(0, prev + xpDelta));
 
@@ -221,6 +255,9 @@ export function ScheduleWorkbench({
             willBeCompleted ? "READY" : "IN_PROGRESS",
           );
         } catch {
+          setSaveError(
+            "Не удалось сохранить отметку. Проверьте соединение и попробуйте ещё раз.",
+          );
           // Revert on error
           setTasks((prev) =>
             prev.map((t) =>
@@ -235,24 +272,45 @@ export function ScheduleWorkbench({
 
   const completedCount = tasks.filter((t) => t.completed).length;
   const totalCount = tasks.length;
+  const orderedTasks = useMemo(() => {
+    const tier = (t: WorkbenchTask) =>
+      t.completed
+        ? 3
+        : t.deadlineDate && t.urgency !== "OVERDUE"
+          ? 0
+          : !t.deadlineDate
+            ? 1
+            : 2;
+    const date = (t: WorkbenchTask) =>
+      t.deadlineDate ? new Date(t.deadlineDate).getTime() : Infinity;
+    return [...tasks].sort(
+      (a, b) =>
+        tier(a) - tier(b) ||
+        (tier(a) === 2 ? date(b) - date(a) : date(a) - date(b)) ||
+        a.title.localeCompare(b.title, "ru"),
+    );
+  }, [tasks]);
   const cleanGroup = (groupCode || "").replace(/^Группа\s+/i, "");
 
   return (
-    <div className="w-full flex flex-col space-y-2.5 sm:space-y-4">
+    <div
+      data-schedule-updated={
+        fetchedAt ? new Date(fetchedAt).toISOString() : undefined
+      }
+      className="w-full flex flex-col space-y-2.5 sm:space-y-4"
+    >
       {/* ==================== 1. ПОЛИК-СТИЛЬ: ШАПКА НЕДЕЛИ И МЕСЯЦА ==================== */}
       <div className="flex items-center justify-between w-full max-w-xs mx-auto px-1 py-0.5">
         <button
           type="button"
           onClick={() => {
-            const curIdx = days.findIndex((d) => d.date === selectedDate);
-            if (curIdx > 0) {
-              setSelectedDate(days[curIdx - 1].date);
-            } else if (days[0]) {
-              setSelectedDate(days[0].date);
-            }
+            if (days[0])
+              router.push(
+                `${isGuest ? publicBase : "/"}?week=${addDays(days[0].date, -7)}`,
+              );
           }}
           className="w-8 h-8 rounded-full hover:bg-black/5 dark:hover:bg-white/10 flex items-center justify-center text-base text-[var(--ink-secondary)] hover:text-[var(--ink)] cursor-pointer transition-colors"
-          aria-label="Предыдущий день"
+          aria-label="Предыдущая неделя"
         >
           ←
         </button>
@@ -276,18 +334,27 @@ export function ScheduleWorkbench({
                 className="bg-transparent text-[var(--ink)] font-semibold font-mono focus:outline-none cursor-pointer text-xs underline"
               >
                 {!publicGroups.some((g) => g.code === groupCode) && (
-                  <option value={groupCode} className="dark:bg-slate-900 dark:text-slate-100">
+                  <option
+                    value={groupCode}
+                    className="dark:bg-slate-900 dark:text-slate-100"
+                  >
                     {groupCode}
                   </option>
                 )}
                 {publicGroups.map((g) => (
-                  <option key={g.code} value={g.code} className="dark:bg-slate-900 dark:text-slate-100">
+                  <option
+                    key={g.code}
+                    value={g.code}
+                    className="dark:bg-slate-900 dark:text-slate-100"
+                  >
                     {g.track} · {g.code}
                   </option>
                 ))}
               </select>
             ) : (
-              <span className="font-semibold text-[var(--ink)] font-mono">{cleanGroup}</span>
+              <span className="font-semibold text-[var(--ink)] font-mono">
+                {cleanGroup}
+              </span>
             )}
           </div>
         </div>
@@ -295,15 +362,13 @@ export function ScheduleWorkbench({
         <button
           type="button"
           onClick={() => {
-            const curIdx = days.findIndex((d) => d.date === selectedDate);
-            if (curIdx >= 0 && curIdx < days.length - 1) {
-              setSelectedDate(days[curIdx + 1].date);
-            } else if (days[days.length - 1]) {
-              setSelectedDate(days[days.length - 1].date);
-            }
+            if (days[0])
+              router.push(
+                `${isGuest ? publicBase : "/"}?week=${addDays(days[0].date, 7)}`,
+              );
           }}
           className="w-8 h-8 rounded-full hover:bg-black/5 dark:hover:bg-white/10 flex items-center justify-center text-base text-[var(--ink-secondary)] hover:text-[var(--ink)] cursor-pointer transition-colors"
-          aria-label="Следующий день"
+          aria-label="Следующая неделя"
         >
           →
         </button>
@@ -316,8 +381,8 @@ export function ScheduleWorkbench({
       )}
 
       {/* ==================== 2. ПОЛИК-СТИЛЬ: ПЛАШКИ ДНЕЙ НЕДЕЛИ (Image 1) ==================== */}
-      <div className="grid grid-cols-6 gap-1 sm:gap-2 w-full py-0">
-        {days.slice(0, 6).map((day) => {
+      <div className="grid grid-cols-7 gap-1 sm:gap-2 w-full py-0">
+        {days.slice(0, 7).map((day) => {
           const isActive = day.date === selectedDate;
           const pairCount = day.lessons.length;
           const dayNumber = day.dateLabel.split(" ")[0]; // "9", "10", "11", etc.
@@ -333,10 +398,14 @@ export function ScheduleWorkbench({
                   : "bg-transparent text-[var(--ink)] hover:bg-black/5 dark:hover:bg-white/5"
               }`}
             >
-              <span className={`text-base sm:text-lg font-mono font-extrabold leading-none ${isActive ? "text-[#0b1a2d]" : "text-[var(--ink)]"}`}>
+              <span
+                className={`text-base sm:text-lg font-mono font-extrabold leading-none ${isActive ? "text-[#0b1a2d]" : "text-[var(--ink)]"}`}
+              >
                 {dayNumber}
               </span>
-              <span className={`text-[10px] sm:text-[11px] font-mono uppercase font-bold tracking-wider mt-1 sm:mt-1.5 ${isActive ? "text-[#0b1a2d]/90 font-black" : "text-[var(--ink-muted)]"}`}>
+              <span
+                className={`text-[10px] sm:text-[11px] font-mono uppercase font-bold tracking-wider mt-1 sm:mt-1.5 ${isActive ? "text-[#0b1a2d]/90 font-black" : "text-[var(--ink-muted)]"}`}
+              >
                 {day.dayLabel}
               </span>
 
@@ -345,7 +414,9 @@ export function ScheduleWorkbench({
                 {pairCount > 0 ? (
                   <span
                     className={`w-1.5 h-1.5 rounded-full ${
-                      isActive ? "bg-[#0b1a2d]" : "bg-[var(--wine)] dark:bg-[#a5b4fc]"
+                      isActive
+                        ? "bg-[#0b1a2d]"
+                        : "bg-[var(--wine)] dark:bg-[#a5b4fc]"
                     }`}
                   />
                 ) : (
@@ -366,7 +437,8 @@ export function ScheduleWorkbench({
               {currentDay.lessons.length}{" "}
               {currentDay.lessons.length === 1
                 ? "пара"
-                : currentDay.lessons.length >= 2 && currentDay.lessons.length <= 4
+                : currentDay.lessons.length >= 2 &&
+                    currentDay.lessons.length <= 4
                   ? "пары"
                   : "пар"}
             </span>
@@ -379,11 +451,15 @@ export function ScheduleWorkbench({
             const isCurrent =
               isSelectedToday &&
               lesson.start <= nowMoscowTime &&
-              nowMoscowTime <= lesson.end;
-            const isNext = isSelectedToday && nextLesson?.start === lesson.start;
+              nowMoscowTime < lesson.end;
+            const isNext =
+              isSelectedToday && nextLesson?.start === lesson.start;
 
             const remainingMin = isCurrent
-              ? Math.max(1, parseMinutes(lesson.end) - parseMinutes(nowMoscowTime))
+              ? Math.max(
+                  1,
+                  parseMinutes(lesson.end) - parseMinutes(nowMoscowTime),
+                )
               : 0;
 
             // Check break
@@ -401,20 +477,13 @@ export function ScheduleWorkbench({
                       <span>⏱</span>
                       <span>Перерыв {breakMin} минут</span>
                     </span>
-                    <span className="text-[11px]">{prev.end} — {lesson.start}</span>
+                    <span className="text-[11px]">
+                      {prev.end} — {lesson.start}
+                    </span>
                   </div>
                 );
               }
             }
-
-            // Task related to this subject
-            const matchedTask = tasks.find(
-              (t) =>
-                t.courseTitle &&
-                lesson.subject &&
-                (t.courseTitle.toLowerCase().includes(lesson.subject.toLowerCase()) ||
-                  lesson.subject.toLowerCase().includes(t.courseTitle.toLowerCase())),
-            );
 
             return (
               <div key={`${lesson.start}-${idx}`} className="space-y-1.5">
@@ -480,7 +549,8 @@ export function ScheduleWorkbench({
                       {lesson.type}
                     </p>
                     <p className="text-[var(--ink-muted)]">
-                      {lesson.building || "3-й учебный корпус"}, {lesson.rooms.map(formatPolytechRoom).join(" / ")}
+                      {lesson.rooms.map(formatPolytechRoom).join(" / ") ||
+                        "Аудитория не указана"}
                     </p>
                     {lesson.teachers.length > 0 && (
                       <p className="font-medium text-[var(--ink-secondary)]">
@@ -523,50 +593,45 @@ export function ScheduleWorkbench({
                       )}
                     </div>
                   )}
-
-                  {/* Contextual deadline pill if a lab or assignment is active for this subject */}
-                  {matchedTask && (
-                    <div className="mt-3 pt-2.5 border-t border-[var(--border)] flex items-center justify-between text-xs flex-wrap gap-2">
-                      <span className="text-[var(--wine)] font-semibold flex items-center gap-1.5">
-                        <Sparkles size={12} />
-                        <span>Дедлайн: {matchedTask.title}</span>
-                        {matchedTask.deadlineFormatted && (
-                          <span className="text-[var(--ink-muted)]">({matchedTask.deadlineFormatted})</span>
-                        )}
-                      </span>
-                      {matchedTask.materials?.[0]?.url && (
-                        <a
-                          href={matchedTask.materials[0].url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="underline text-blue-600 dark:text-blue-400 font-semibold hover:text-[var(--wine)] inline-flex items-center gap-1"
-                        >
-                          <span>Файлы</span>
-                          <ArrowUpRight size={12} />
-                        </a>
-                      )}
-                    </div>
-                  )}
                 </div>
               </div>
             );
           })
         ) : (
           <div className="p-8 rounded-2xl bg-[var(--surface)] border border-[var(--border)] text-center text-xs text-[var(--ink-muted)] font-mono">
-            В этот день пар нет · Свободный день
+            {scheduleState === "UNAVAILABLE" || scheduleState === "UNCONFIGURED"
+              ? "Расписание недоступно. Это не означает, что занятий нет."
+              : "В этот день в расписании нет пар"}
           </div>
         )}
       </div>
 
+      <CompareSchedule />
+      {fetchedAt && (
+        <p className="text-xs text-[var(--ink-muted)]">
+          Обновлено{" "}
+          {new Date(fetchedAt).toLocaleString("ru-RU", {
+            timeZone: "Europe/Moscow",
+          })}{" "}
+          МСК{" "}
+          {sourceUrl && (
+            <a href={sourceUrl} target="_blank" rel="noopener noreferrer">
+              {" "}
+              · РУЗ ↗
+            </a>
+          )}
+        </p>
+      )}
       {/* ==================== 4. БЛИЖАЙШИЕ ДЕДЛАЙНЫ (Things 3 / Linear style) ==================== */}
       <div className="pt-8 border-t border-[var(--ink-faint)] space-y-5">
         <div className="flex items-baseline justify-between gap-4 flex-wrap">
           <div>
             <h3 className="text-lg font-bold text-[var(--ink)] tracking-tight">
-              Ближайшие дедлайны по предметам
+              Работы и ближайшие сроки
             </h3>
             <p className="text-xs text-[var(--ink-muted)] mt-0.5">
-              Синхронизируются со старостой и твоим расписанием
+              Сначала — предстоящие сроки. Все задания доступны в разделе
+              «Сроки».
             </p>
           </div>
 
@@ -582,13 +647,23 @@ export function ScheduleWorkbench({
           )}
         </div>
 
+        {saveError && (
+          <p role="alert" className="text-sm text-[var(--wine)]">
+            {saveError}
+          </p>
+        )}
+        <Link
+          className="text-link text-sm"
+          href={isGuest ? `${publicBase}/deadlines` : "/deadlines"}
+        >
+          Все работы · {totalCount} →
+        </Link>
         {/* Список задач */}
         <div className="space-y-2.5">
           {tasks.length > 0 ? (
-            tasks.map((task) => {
+            orderedTasks.slice(0, 6).map((task) => {
               const isOverdue = task.urgency === "OVERDUE";
               const isSoon = task.urgency === "SOON";
-              const isFloating = xpFloat?.id === task.id;
 
               return (
                 <div
@@ -600,6 +675,7 @@ export function ScheduleWorkbench({
                   {!isGuest && (
                     <button
                       type="button"
+                      disabled={isPending || task.accepted}
                       onClick={() => toggleTask(task.id)}
                       className={`custom-check mt-1 shrink-0 ${
                         task.completed ? "is-checked" : ""
@@ -610,15 +686,14 @@ export function ScheduleWorkbench({
                           : "Отметить выполненным"
                       }
                     >
-                      {task.completed && <Check size={12} strokeWidth={3} className="text-white" />}
+                      {task.completed && (
+                        <Check
+                          size={12}
+                          strokeWidth={3}
+                          className="text-white"
+                        />
+                      )}
                     </button>
-                  )}
-
-                  {/* Дофаминовый бейдж +20 XP при клике */}
-                  {isFloating && (
-                    <span className="absolute left-10 -top-2 px-2 py-0.5 rounded-full bg-emerald-500 text-white font-mono text-[11px] font-bold shadow-md animate-bounce pointer-events-none">
-                      +20 XP ✨
-                    </span>
                   )}
 
                   <div className="flex-1 min-w-0">
@@ -631,7 +706,9 @@ export function ScheduleWorkbench({
                         }`}
                       >
                         {task.courseShortTitle || task.courseTitle}
-                        {task.deadlineFormatted ? ` · ${task.deadlineFormatted}` : ""}
+                        {task.deadlineFormatted
+                          ? ` · ${task.deadlineFormatted}`
+                          : ""}
                       </span>
 
                       {task.accepted && (
@@ -643,17 +720,30 @@ export function ScheduleWorkbench({
 
                     <p
                       className={`text-sm font-bold text-[var(--ink)] mt-1 leading-snug ${
-                        task.completed ? "line-through text-[var(--ink-muted)]" : ""
+                        task.completed
+                          ? "line-through text-[var(--ink-muted)]"
+                          : ""
                       }`}
                     >
-                      {task.title}
+                      <Link
+                        href={
+                          isGuest
+                            ? `${publicBase}/tasks/${task.id}`
+                            : `/tasks/${task.id}`
+                        }
+                      >
+                        {task.title}
+                      </Link>
                     </p>
 
                     <div className="flex items-center gap-3 text-xs text-[var(--ink-muted)] mt-2 font-mono flex-wrap">
                       {task.teacher && <span>{task.teacher}</span>}
                       {task.materials &&
                         task.materials.map((m, i) => (
-                          <span key={i} className="inline-flex items-center gap-1">
+                          <span
+                            key={i}
+                            className="inline-flex items-center gap-1"
+                          >
                             {m.url ? (
                               <a
                                 href={m.url}
@@ -676,7 +766,8 @@ export function ScheduleWorkbench({
             })
           ) : (
             <div className="p-6 rounded-xl bg-white/40 dark:bg-slate-800/40 border border-[var(--border)] text-center text-xs text-[var(--ink-muted)] font-mono">
-              Опубликованных дедлайнов пока нет.
+              В сервисе пока нет опубликованных работ. Это не означает, что их
+              не задавали.
             </div>
           )}
         </div>
