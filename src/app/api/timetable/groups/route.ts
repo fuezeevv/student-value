@@ -1,36 +1,17 @@
-import { NextResponse } from "next/server";
-import { publicGroups } from "@/lib/groups/public-groups";
-export async function GET() {
-  if (process.env.SV_TEST_ISOLATED === "1")
-    return NextResponse.json(
-      publicGroups.map((g) => ({ id: g.ruzId, name: g.code })),
-    );
+import { NextRequest, NextResponse } from "next/server";
+import { loadFacultyGroups } from "@/server/schedule/ruz-catalog";
+export async function GET(req: NextRequest) {
+  const value = req.nextUrl.searchParams.get("faculty") || "125";
+  if (!/^\d{1,5}$/.test(value))
+    return NextResponse.json({ error: "Институт недоступен" }, { status: 400 });
   try {
-    const r = await fetch(
-      "https://ruz.spbstu.ru/api/v1/ruz/faculties/125/groups",
-      {
-        next: { revalidate: 3600 },
-        signal: AbortSignal.timeout(6000),
-        redirect: "error",
-      },
-    );
-    if (!r.ok) throw Error();
-    const text = await r.text();
-    if (text.length > 512000) throw Error();
-    const raw = JSON.parse(text);
-    const groups = raw.groups
-      .filter(
-        (g: { id: number; name: string }) =>
-          Number.isSafeInteger(g.id) &&
-          typeof g.name === "string" &&
-          g.name.length < 100,
-      )
-      .slice(0, 1500)
-      .map((g: { id: number; name: string }) => ({ id: g.id, name: g.name }));
-    return NextResponse.json(groups);
+    return NextResponse.json(await loadFacultyGroups(Number(value)), {
+      headers: { "Cache-Control": "public, max-age=300" },
+    });
   } catch {
     return NextResponse.json(
-      publicGroups.map((g) => ({ id: g.ruzId, name: g.code })),
+      { error: "Каталог РУЗ временно недоступен" },
+      { status: 503 },
     );
   }
 }

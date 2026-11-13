@@ -2,6 +2,11 @@
 
 import { useRouter } from "next/navigation";
 import { addDays } from "@/lib/schedule/ruz";
+import {
+  lessonActivity,
+  lessonType,
+  teachingRoom,
+} from "@/lib/schedule/presentation";
 import { CompareSchedule } from "./CompareSchedule";
 import { useState, useTransition, useMemo, useEffect } from "react";
 import Link from "next/link";
@@ -71,37 +76,6 @@ export type ScheduleWorkbenchProps = {
   todayDateStr?: string; // "YYYY-MM-DD"
 };
 
-function parseMinutes(t: string): number {
-  if (!t || !t.includes(":")) return 0;
-  const [h, m] = t.split(":").map(Number);
-  return (h || 0) * 60 + (m || 0);
-}
-
-function formatCountdown(targetTimeStr: string, nowTimeStr: string): string {
-  const targetMin = parseMinutes(targetTimeStr);
-  const nowMin = parseMinutes(nowTimeStr);
-  const diff = targetMin - nowMin;
-  if (diff <= 0) return "прямо сейчас";
-  const hours = Math.floor(diff / 60);
-  const mins = diff % 60;
-  if (hours > 0 && mins > 0) return `${hours} ч ${mins} мин`;
-  if (hours > 0) return `${hours} ч`;
-  return `${mins} мин`;
-}
-
-function getBreakMinutes(prevEnd: string, nextStart: string): number {
-  return parseMinutes(nextStart) - parseMinutes(prevEnd);
-}
-
-function formatPolytechRoom(room: string): string {
-  if (!room) return "";
-  const match = room.match(/^(\d+)\s*к\.?\s*(?:[•·-]\s*)?(\d+.*)$/i);
-  if (match) {
-    return `${match[1]}-${match[2]}`;
-  }
-  return room;
-}
-
 export function ScheduleWorkbench({
   groupCode,
   groupLabel,
@@ -128,6 +102,7 @@ export function ScheduleWorkbench({
           minute: "2-digit",
         }).format(new Date()),
       );
+    update();
     const id = setInterval(update, 30000);
     return () => clearInterval(id);
   }, []);
@@ -194,7 +169,7 @@ export function ScheduleWorkbench({
     }
     if (isSelectedToday) {
       const active = currentDay.lessons.find(
-        (l) => l.start <= nowMoscowTime && nowMoscowTime < l.end,
+        (l) => lessonActivity(l.start, nowMoscowTime).active,
       );
       const next = currentDay.lessons.find((l) => nowMoscowTime < l.start);
       return {
@@ -448,47 +423,10 @@ export function ScheduleWorkbench({
         {currentDay && currentDay.lessons.length > 0 ? (
           currentDay.lessons.map((lesson, idx) => {
             const isExpanded = expandedIndex === idx;
-            const isCurrent =
-              isSelectedToday &&
-              lesson.start <= nowMoscowTime &&
-              nowMoscowTime < lesson.end;
-            const isNext =
-              isSelectedToday && nextLesson?.start === lesson.start;
-
-            const remainingMin = isCurrent
-              ? Math.max(
-                  1,
-                  parseMinutes(lesson.end) - parseMinutes(nowMoscowTime),
-                )
-              : 0;
-
-            // Check break
-            let breakElement = null;
-            if (idx > 0) {
-              const prev = currentDay.lessons[idx - 1];
-              const breakMin = getBreakMinutes(prev.end, lesson.start);
-              if (breakMin > 0) {
-                breakElement = (
-                  <div
-                    key={`break-${idx}`}
-                    className="my-1.5 py-1 px-3 text-xs font-mono text-[var(--ink-muted)] flex items-center justify-between opacity-80"
-                  >
-                    <span className="flex items-center gap-1.5">
-                      <span>⏱</span>
-                      <span>Перерыв {breakMin} минут</span>
-                    </span>
-                    <span className="text-[11px]">
-                      {prev.end} — {lesson.start}
-                    </span>
-                  </div>
-                );
-              }
-            }
-
+            const activity = lessonActivity(lesson.start, nowMoscowTime);
+            const isCurrent = isSelectedToday && activity.active;
             return (
               <div key={`${lesson.start}-${idx}`} className="space-y-1.5">
-                {breakElement}
-
                 {/* Time row */}
                 <div className="flex items-center justify-between px-1 text-xs font-mono">
                   <div className="flex items-center gap-2">
@@ -499,30 +437,31 @@ export function ScheduleWorkbench({
                           : "text-[var(--ink)]"
                       }`}
                     >
-                      {lesson.start} — {lesson.end}
+                      {lesson.start} — {activity.end}
                     </span>
-                    {isCurrent && (
-                      <span className="px-2 py-0.5 rounded-full bg-[var(--wine)] text-[#0b1a2d] text-[10px] font-bold uppercase tracking-wider flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-white" />
-                        Идёт сейчас · {remainingMin} мин
-                      </span>
-                    )}
-                    {isNext && (
-                      <span className="px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 text-[10px] font-bold uppercase tracking-wider">
-                        Следующая пара
-                      </span>
-                    )}
                   </div>
                 </div>
 
                 {/* Card matching Image 1 PolyK */}
                 <div
-                  className={`p-4 sm:p-5 rounded-2xl bg-[var(--surface)] border transition-all ${
+                  className={`relative overflow-hidden p-4 sm:p-5 rounded-2xl bg-[var(--surface)] border transition-all ${
                     isCurrent
-                      ? "border-l-4 border-l-[var(--wine)] border-[var(--border)] shadow-xs"
+                      ? "border-[var(--border)] shadow-xs"
                       : "border-[var(--border)] hover:border-black/20 dark:hover:border-white/20"
                   }`}
                 >
+                  {isCurrent && (
+                    <span
+                      className="lesson-progress-track"
+                      role="progressbar"
+                      aria-label="Прогресс пары"
+                      aria-valuenow={Math.round(activity.progress)}
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                    >
+                      <span style={{ height: `${activity.progress}%` }} />
+                    </span>
+                  )}
                   <div
                     className="flex items-start justify-between gap-3 cursor-pointer select-none"
                     onClick={() => setExpandedIndex(isExpanded ? null : idx)}
@@ -546,10 +485,10 @@ export function ScheduleWorkbench({
 
                   <div className="mt-2 text-xs space-y-0.5">
                     <p className="font-medium text-[var(--ink-secondary)]">
-                      {lesson.type}
+                      {lessonType(lesson.type)}
                     </p>
                     <p className="text-[var(--ink-muted)]">
-                      {lesson.rooms.map(formatPolytechRoom).join(" / ") ||
+                      {lesson.rooms.map(teachingRoom).join(" / ") ||
                         "Аудитория не указана"}
                     </p>
                     {lesson.teachers.length > 0 && (
@@ -562,6 +501,11 @@ export function ScheduleWorkbench({
                   {/* Expandable details: link to course, DL link, notes */}
                   {isExpanded && (
                     <div className="mt-3 pt-3 border-t border-[var(--border)] text-xs space-y-2">
+                      {lesson.end !== activity.end && (
+                        <p className="text-[var(--ink-muted)]">
+                          Интервал в РУЗ: {lesson.start}–{lesson.end}
+                        </p>
+                      )}
                       {lesson.courseHref && (
                         <div>
                           <Link

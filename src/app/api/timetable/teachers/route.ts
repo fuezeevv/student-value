@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { publicRuzJson } from "@/server/schedule/ruz-public-json";
-import { requestedWeek, addDays, validDay } from "@/lib/schedule/ruz";
+import { comparisonWeek } from "@/lib/schedule/catalog";
+import { addDays, validDay } from "@/lib/schedule/ruz";
 import { z } from "zod";
 const str = z.string().max(1000),
   time = z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/);
@@ -67,7 +68,7 @@ export async function GET(req: NextRequest) {
         { error: "Преподаватель недоступен" },
         { status: 400 },
       );
-    const week = requestedWeek(
+    const week = comparisonWeek(
         req.nextUrl.searchParams.get("week") || undefined,
       ),
       raw = schema.parse(
@@ -96,7 +97,7 @@ export async function GET(req: NextRequest) {
             type: l.typeObj?.abbr || "Занятие",
             teachers: l.teachers.map((t) => t.full_name),
             rooms: l.auditories.map((a) =>
-              [a.building?.abbr || a.building?.name, a.name]
+              [a.building?.name || a.building?.abbr, a.name]
                 .filter(Boolean)
                 .join(" · "),
             ),

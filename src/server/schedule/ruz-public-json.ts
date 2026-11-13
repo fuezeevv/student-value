@@ -2,6 +2,7 @@ export async function publicRuzJson(path: string) {
   if (process.env.NODE_ENV === "test" || process.env.SV_TEST_ISOLATED === "1")
     throw Error("Real RUZ forbidden in tests");
   if (
+    !/^(?:faculties|faculties\/\d{1,5}\/groups)$/.test(path) &&
     !/^teachers\/\d{1,7}\/scheduler\?date=\d{4}-\d{2}-\d{2}$/.test(path) &&
     !/^search\/teachers\?q=[^\s]{1,600}$/.test(path)
   )

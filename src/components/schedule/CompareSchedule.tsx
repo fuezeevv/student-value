@@ -1,14 +1,17 @@
 "use client";
 import { useEffect, useState } from "react";
+import { GroupSchedulePicker } from "./GroupSchedulePicker";
+import { groupParts, type CatalogGroup } from "@/lib/schedule/catalog";
+import { teachingRoom, lessonType } from "@/lib/schedule/presentation";
 import {
+  validDay,
   addDays,
   weekStartFor,
   moscowDay,
   type RuzWeek,
 } from "@/lib/schedule/ruz";
 export function CompareSchedule() {
-  const [groups, setGroups] = useState<{ id: number; name: string }[]>([]),
-    [selected, setSelected] = useState<string[]>([]),
+  const [selected, setSelected] = useState<CatalogGroup[]>([]),
     [week, setWeek] = useState(weekStartFor(moscowDay())),
     [results, setResults] = useState<
       {
@@ -20,7 +23,6 @@ export function CompareSchedule() {
     >([]),
     [teacher, setTeacher] = useState(""),
     [busy, setBusy] = useState(false),
-    [query, setQuery] = useState(""),
     [searchName, setSearchName] = useState(""),
     [foundTeachers, setFoundTeachers] = useState<
       { id: number; full_name: string }[]
@@ -36,29 +38,59 @@ export function CompareSchedule() {
     } | null>(null),
     [searchError, setSearchError] = useState("");
   useEffect(() => {
+    let active = true;
     try {
-      const old = JSON.parse(
-        localStorage.getItem("sv-compared-groups") || "[]",
+      const saved = JSON.parse(
+        localStorage.getItem("sv-compared-groups-v2") || "null",
       );
-      if (Array.isArray(old))
-        setSelected(old.filter((x) => typeof x === "string").slice(0, 3));
+      if (Array.isArray(saved)) {
+        setSelected(
+          saved
+            .filter(
+              (g) =>
+                Number.isSafeInteger(g?.id) &&
+                Number.isSafeInteger(g?.facultyId) &&
+                typeof g?.name === "string" &&
+                !!groupParts(g.name),
+            )
+            .slice(0, 3),
+        );
+      } else {
+        const old = JSON.parse(
+          localStorage.getItem("sv-compared-groups") || "[]",
+        );
+        if (Array.isArray(old) && old.length)
+          fetch("/api/timetable/groups")
+            .then((r) => r.json())
+            .then((groups: CatalogGroup[]) => {
+              if (active && Array.isArray(groups))
+                setSelected(
+                  groups.filter((g) => old.includes(g.name)).slice(0, 3),
+                );
+            })
+            .catch(() => {});
+      }
     } catch {}
-    fetch("/api/timetable/groups")
-      .then((r) => r.json())
-      .then(setGroups)
-      .catch(() => {});
+    return () => {
+      active = false;
+    };
   }, []);
+  const saveSelected = (next: CatalogGroup[]) => {
+    setSelected(next);
+    try {
+      localStorage.setItem("sv-compared-groups-v2", JSON.stringify(next));
+    } catch {}
+  };
   useEffect(() => {
     let active = true;
     setBusy(true);
     Promise.all(
-      selected.map(async (name) => {
-        const g = groups.find((g) => g.name === name);
-        if (!g) return { group: name, data: null, state: "UNAVAILABLE" };
-        const slug = name.replace("/", "-");
+      selected.map(async (g) => {
+        const name = g.name;
+        const slug = name;
         try {
           const r = await fetch(
-            `/api/timetable?group=${encodeURIComponent(slug)}&id=${g.id}&week=${week}`,
+            `/api/timetable?group=${encodeURIComponent(slug)}&id=${g.id}&faculty=${g.facultyId}&week=${week}`,
           );
           const result = await r.json();
           return { ...result, group: name };
@@ -75,7 +107,7 @@ export function CompareSchedule() {
     return () => {
       active = false;
     };
-  }, [selected, week, groups]);
+  }, [selected, week]);
   useEffect(() => {
     if (!selectedTeacher) {
       setTeacherResult(null);
@@ -95,8 +127,6 @@ export function CompareSchedule() {
       active = false;
     };
   }, [selectedTeacher, week]);
-  const room = (value: string) =>
-    value.replace(/^(\d+)\s*к\.?\s*[·•-]?\s*(\d+.*)$/i, "$1-$2");
   const dateLabel = (value: string) =>
     new Date(value + "T12:00:00+03:00").toLocaleDateString("ru-RU", {
       weekday: "short",
@@ -116,6 +146,47 @@ export function CompareSchedule() {
   return (
     <details className="schedule-compare">
       <summary>Сравнить группы и расписание преподавателя</summary>
+      <p>
+        До трёх групп одновременно и полное расписание одного преподавателя.
+        Учебные результаты других групп не открываются.
+      </p>
+      <GroupSchedulePicker
+        onSelect={(g) => {
+          if (selected.some((x) => x.id === g.id)) return;
+          if (!selected.length) {
+            const archive = groupParts(g.name)?.archive;
+            if (archive) {
+              const day = archive + moscowDay().slice(4);
+              setWeek(weekStartFor(validDay(day) ? day : archive + "-03-01"));
+            }
+          }
+          saveSelected([...selected, g].slice(-3));
+        }}
+      />
+      <div className="flex flex-wrap gap-2">
+        {selected.map((g) => (
+          <button
+            key={g.id}
+            onClick={() => saveSelected(selected.filter((x) => x.id !== g.id))}
+          >
+            {g.name} ×
+          </button>
+        ))}
+      </div>
+      <nav className="flex justify-between">
+        <button onClick={() => setWeek(addDays(week, -7))}>← Неделя</button>
+        <input
+          type="date"
+          aria-label="Неделя сравнения"
+          min={addDays(moscowDay(), -1823)}
+          max={addDays(moscowDay(), 176)}
+          value={week}
+          onChange={(e) => {
+            if (e.target.value) setWeek(weekStartFor(e.target.value));
+          }}
+        />
+        <button onClick={() => setWeek(addDays(week, 7))}>Неделя →</button>
+      </nav>
       <label>
         Найти преподавателя в РУЗ
         <input
@@ -175,7 +246,8 @@ export function CompareSchedule() {
                   <p key={i}>
                     {l.start}–{l.end} · {l.subject}
                     <br />
-                    {l.type} · {l.rooms.map(room).join(" / ")}
+                    {lessonType(l.type)} ·{" "}
+                    {l.rooms.map(teachingRoom).join(" / ")}
                     <br />
                     {l.note}
                   </p>
@@ -189,75 +261,6 @@ export function CompareSchedule() {
           )}
         </section>
       )}
-      <p>
-        До трёх групп института одновременно и полное расписание одного
-        преподавателя. Учебные результаты других групп не открываются.
-      </p>
-      <input
-        aria-label="Поиск группы"
-        placeholder="Номер нынешней или прежней группы"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-      />
-      <select
-        aria-label="Добавить расписание группы"
-        value=""
-        onChange={(e) =>
-          setSelected((v) => {
-            const next = v.includes(e.target.value)
-              ? v
-              : [...v, e.target.value].slice(-3);
-            try {
-              localStorage.setItem("sv-compared-groups", JSON.stringify(next));
-            } catch {}
-            return next;
-          })
-        }
-      >
-        <option value="">Выберите группу</option>
-        {groups
-          .filter((g) => g.name.includes(query))
-          .map((g) => (
-            <option value={g.name} key={g.id}>
-              {g.name}
-            </option>
-          ))}
-      </select>
-      <div className="flex flex-wrap gap-2">
-        {selected.map((g) => (
-          <button
-            key={g}
-            onClick={() =>
-              setSelected((v) => {
-                const next = v.filter((x) => x !== g);
-                try {
-                  localStorage.setItem(
-                    "sv-compared-groups",
-                    JSON.stringify(next),
-                  );
-                } catch {}
-                return next;
-              })
-            }
-          >
-            {g} ×
-          </button>
-        ))}
-      </div>
-      <nav className="flex justify-between">
-        <button onClick={() => setWeek(addDays(week, -7))}>← Неделя</button>
-        <input
-          type="date"
-          aria-label="Неделя сравнения"
-          min={addDays(moscowDay(), -176)}
-          max={addDays(moscowDay(), 176)}
-          value={week}
-          onChange={(e) => {
-            if (e.target.value) setWeek(weekStartFor(e.target.value));
-          }}
-        />
-        <button onClick={() => setWeek(addDays(week, 7))}>Неделя →</button>
-      </nav>
       <select
         aria-label="Преподаватель выбранных групп"
         value={teacher}
@@ -277,6 +280,9 @@ export function CompareSchedule() {
           ) : (
             <>
               {r.state === "STALE" && <p>Сохранённая копия · {r.fetchedAt}</p>}
+              {r.data.days.every((d) => !d.lessons.length) && (
+                <p>В РУЗ нет занятий на эту неделю. Выберите другую дату.</p>
+              )}
               {r.data.days.map((d) => {
                 const lessons = d.lessons.filter(
                   (l) => !teacher || l.teachers.includes(teacher),
@@ -298,7 +304,8 @@ export function CompareSchedule() {
                       <p key={i}>
                         {l.start}–{l.end} · {l.subject}
                         <br />
-                        {l.type} · {l.rooms.map(room).join(" / ")}
+                        {lessonType(l.type)} ·{" "}
+                        {l.rooms.map(teachingRoom).join(" / ")}
                         <br />
                         {l.teachers.join(", ")}
                       </p>

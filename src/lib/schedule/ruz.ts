@@ -167,7 +167,7 @@ export function parseRuzWeek(
             note: l.additional_info ?? "",
             teachers: l.teachers.map((t) => t.full_name),
             rooms: l.auditories.map((a) =>
-              [a.building?.abbr || a.building?.name, a.name]
+              [a.building?.name || a.building?.abbr, a.name]
                 .filter(Boolean)
                 .join(" · "),
             ),

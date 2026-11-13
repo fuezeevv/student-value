@@ -76,6 +76,7 @@ self.addEventListener("fetch", (e) => {
   const publicApi = [
     "/api/timetable",
     "/api/timetable/groups",
+    "/api/timetable/institutes",
     "/api/timetable/teachers",
   ].includes(u.pathname);
   if (publicApi) {

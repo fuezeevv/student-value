@@ -66,6 +66,7 @@ export function ConnectionStatus({ groupCode }: { groupCode?: string }) {
       navigator.serviceWorker?.removeEventListener("message", message);
     };
   }, [groupCode]);
+  if (online) return null;
   return (
     <div className="relative">
       <button
@@ -84,7 +85,7 @@ export function ConnectionStatus({ groupCode }: { groupCode?: string }) {
         >
           <path d="M3 8q9-7 18 0M6 12q6-5 12 0M9 16q3-2 6 0" />
           <circle cx="12" cy="20" r="1" />
-          {!online && <path d="M3 3l18 18" />}
+          <path d="M3 3l18 18" />
         </svg>
       </button>
       {open && (

@@ -89,7 +89,7 @@ describe("official timetable parsing", () => {
       type: "Лаб",
       note: "Подгруппа 2",
       teachers: ["Преподаватель лекции", "Преподаватель практики"],
-      rooms: ["3 к. · 402"],
+      rooms: ["3-й корпус · 402"],
       lmsUrl: "https://dl.spbstu.ru/course/view.php?id=8192",
     });
   });
