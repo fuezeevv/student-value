@@ -5,6 +5,21 @@ import {
   type CatalogGroup,
   type Institute,
 } from "@/lib/schedule/catalog";
+async function readCatalog(path: string) {
+  let failure: unknown;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const r = await fetch(path);
+      if (!r.ok) throw Error("Catalog unavailable");
+      const data = await r.json();
+      if (!Array.isArray(data)) throw Error("Invalid catalog");
+      return data;
+    } catch (error) {
+      failure = error;
+    }
+  }
+  throw failure;
+}
 export function GroupSchedulePicker({
   onSelect,
 }: {
@@ -18,14 +33,11 @@ export function GroupSchedulePicker({
     [level, setLevel] = useState(""),
     [archive, setArchive] = useState(""),
     [error, setError] = useState(""),
-    [busy, setBusy] = useState(false);
+    [busy, setBusy] = useState(false),
+    [retry, setRetry] = useState(0);
   useEffect(() => {
     let active = true;
-    fetch("/api/timetable/institutes")
-      .then(async (r) => {
-        if (!r.ok) throw Error();
-        return r.json();
-      })
+    readCatalog("/api/timetable/institutes")
       .then((v) => {
         if (active) setInstitutes(v);
       })
@@ -35,17 +47,13 @@ export function GroupSchedulePicker({
     return () => {
       active = false;
     };
-  }, []);
+  }, [retry]);
   useEffect(() => {
     let active = true;
     setBusy(true);
     setError("");
     setGroups([]);
-    fetch("/api/timetable/groups?faculty=" + faculty)
-      .then(async (r) => {
-        if (!r.ok) throw Error();
-        return r.json();
-      })
+    readCatalog("/api/timetable/groups?faculty=" + faculty)
       .then((v) => {
         if (active) setGroups(v);
       })
@@ -59,7 +67,7 @@ export function GroupSchedulePicker({
     return () => {
       active = false;
     };
-  }, [faculty]);
+  }, [faculty, retry]);
   const parts = groups
     .map((g) => ({ ...g, parts: groupParts(g.name) }))
     .filter((g) => g.parts);
@@ -176,7 +184,12 @@ export function GroupSchedulePicker({
         </div>
       </label>
       {busy && <p role="status">Получаем группы…</p>}
-      {error && <p role="status">{error}</p>}
+      {error && (
+        <p role="status">
+          {error}{" "}
+          <button onClick={() => setRetry((v) => v + 1)}>Повторить</button>
+        </p>
+      )}
       <select
         aria-label="Добавить расписание группы"
         value=""
