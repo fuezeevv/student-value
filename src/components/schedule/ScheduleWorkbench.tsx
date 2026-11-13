@@ -502,7 +502,7 @@ export function ScheduleWorkbench({
                       {lesson.start} — {lesson.end}
                     </span>
                     {isCurrent && (
-                      <span className="px-2 py-0.5 rounded-full bg-[var(--wine)] text-white text-[10px] font-bold uppercase tracking-wider animate-pulse flex items-center gap-1">
+                      <span className="px-2 py-0.5 rounded-full bg-[var(--wine)] text-[#0b1a2d] text-[10px] font-bold uppercase tracking-wider flex items-center gap-1">
                         <span className="w-1.5 h-1.5 rounded-full bg-white" />
                         Идёт сейчас · {remainingMin} мин
                       </span>

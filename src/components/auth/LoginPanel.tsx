@@ -146,7 +146,7 @@ export async function LoginPanel({ error }: { error?: string }) {
 
               <button
                 type="submit"
-                className="w-full min-h-12 flex items-center justify-center gap-3 rounded-xl bg-[#0b1a2d] dark:bg-slate-800 hover:bg-[#15273e] dark:hover:bg-slate-700 text-white font-semibold text-sm shadow-xs active:scale-[0.98] transition-all cursor-pointer"
+                className="w-full min-h-12 px-4 flex items-center justify-center gap-3 rounded-xl bg-[#0b1a2d] dark:bg-slate-800 hover:bg-[#15273e] dark:hover:bg-slate-700 text-white font-semibold text-sm shadow-xs active:scale-[0.98] transition-all cursor-pointer"
               >
                 {/* Authentic 4-color Google G icon */}
                 <svg
