@@ -284,17 +284,17 @@ export function ScheduleWorkbench({
                 `${isGuest ? publicBase : "/"}?week=${addDays(days[0].date, -7)}`,
               );
           }}
-          className="w-8 h-8 rounded-full hover:bg-black/5 dark:hover:bg-white/10 flex items-center justify-center text-base text-[var(--ink-secondary)] hover:text-[var(--ink)] cursor-pointer transition-colors"
+          className="w-8 h-8 shrink-0 rounded-full hover:bg-black/5 dark:hover:bg-white/10 flex items-center justify-center text-base text-[var(--ink-secondary)] hover:text-[var(--ink)] cursor-pointer transition-colors"
           aria-label="Предыдущая неделя"
         >
           ←
         </button>
 
-        <div className="flex flex-col items-center text-center">
+        <div className="flex min-w-0 flex-1 flex-col items-center text-center">
           <span className="text-base sm:text-lg font-bold text-[var(--ink)] tracking-tight">
             {monthYearLabel}
           </span>
-          <div className="text-xs font-medium text-[var(--ink-muted)] flex items-center gap-1.5 -mt-0.5">
+          <div className="text-xs font-medium text-[var(--ink-muted)] flex flex-wrap items-center justify-center gap-1.5 -mt-0.5">
             <span>{weekParityLabel}</span>
             <span>·</span>
             {isGuest ? (
@@ -306,7 +306,7 @@ export function ScheduleWorkbench({
                   const path = `/browse/${target.replace("/", "-")}`;
                   window.location.href = path;
                 }}
-                className="bg-transparent text-[var(--ink)] font-semibold font-mono focus:outline-none cursor-pointer text-xs underline"
+                className="min-w-0 max-w-full bg-transparent text-[var(--ink)] font-semibold font-mono focus:outline-none cursor-pointer text-xs underline"
               >
                 {!publicGroups.some((g) => g.code === groupCode) && (
                   <option
@@ -342,7 +342,7 @@ export function ScheduleWorkbench({
                 `${isGuest ? publicBase : "/"}?week=${addDays(days[0].date, 7)}`,
               );
           }}
-          className="w-8 h-8 rounded-full hover:bg-black/5 dark:hover:bg-white/10 flex items-center justify-center text-base text-[var(--ink-secondary)] hover:text-[var(--ink)] cursor-pointer transition-colors"
+          className="w-8 h-8 shrink-0 rounded-full hover:bg-black/5 dark:hover:bg-white/10 flex items-center justify-center text-base text-[var(--ink-secondary)] hover:text-[var(--ink)] cursor-pointer transition-colors"
           aria-label="Следующая неделя"
         >
           →
