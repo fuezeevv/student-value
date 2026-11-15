@@ -55,3 +55,27 @@ android/.gradle/
 android/app/build/
 android/local.properties
 /studentvalue1984.apk
+
+# Mobile app build artifacts & dependencies
+apps/mobile/node_modules/
+apps/mobile/.expo/
+apps/mobile/dist/
+apps/mobile/android/.gradle/
+apps/mobile/android/.kotlin/
+apps/mobile/android/.cxx/
+apps/mobile/android/build/
+apps/mobile/android/app/build/
+apps/mobile/android/local.properties
+*.apk
+*.aab
+
+# Local personal study calculation scripts & docs (academic integrity)
+*.docx
+*.doc
+raschet*.py
+fig*.png
+variant_*.txt
+
+# Internal handoff / review notes
+docs/handoff/
+docs/UNPERSON_CANON.md

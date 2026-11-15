@@ -1,0 +1,28 @@
+{
+  "expo": {
+    "name": "Student Value",
+    "slug": "student-value",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "platforms": ["android", "ios"],
+    "backgroundColor": "#0b1424",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "cc.eu.studentvalue1984.dev"
+    },
+    "android": {
+      "package": "cc.eu.studentvalue1984.dev",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "backgroundColor": "#0b1424",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "plugins": ["expo-sqlite"]
+  }
+}

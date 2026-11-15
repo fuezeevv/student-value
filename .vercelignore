@@ -32,6 +32,7 @@ fig*.png
 variant_*.txt
 assets/
 android/
+apps/
 /studentvalue1984.apk
 !public/studentvalue1984.apk
 
