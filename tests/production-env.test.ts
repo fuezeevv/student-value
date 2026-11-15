@@ -4,6 +4,7 @@ import {
   assertVercelEnvironment,
   assertNeonMigrationEnvironment,
   configureVercelRuntime,
+  configureContainerRuntime,
 } from "../scripts/lib/production-env.mjs";
 const valid = {
   NODE_ENV: "production",
@@ -14,6 +15,30 @@ const valid = {
   NEXT_SERVER_ACTIONS_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString("base64"),
 };
 describe("production deployment safety", () => {
+  it("requires the private TLS database, bounded pool and an unprivileged role in standalone", () => {
+    const env = {
+      ...valid,
+      DATABASE_URL:
+        "postgresql://studentvalue_app:test-only@db/studentvalue1984?sslcert=/run/tls/ca.crt",
+    };
+    configureContainerRuntime(env);
+    expect(new URL(env.DATABASE_URL).searchParams.get("sslaccept")).toBe(
+      "strict",
+    );
+    for (const value of [
+      env.DATABASE_URL.replace("studentvalue_app:", "postgres:"),
+      env.DATABASE_URL.replace("@db/", "@public.example.invalid/"),
+      env.DATABASE_URL.replace("studentvalue1984?", "other?"),
+      env.DATABASE_URL.replace("sslcert=", "host=/tmp&sslcert="),
+      env.DATABASE_URL.replace(
+        "%2Frun%2Ftls%2Fca.crt",
+        "%2Ftmp%2Funtrusted.crt",
+      ),
+    ])
+      expect(() =>
+        configureContainerRuntime({ ...env, DATABASE_URL: value }),
+      ).toThrow();
+  });
   it("requires explicit production mode and rejects a dev opt-in", () => {
     expect(() =>
       assertProductionEnvironment({ ...valid, NODE_ENV: "development" }),

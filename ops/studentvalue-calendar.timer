@@ -1,0 +1,9 @@
+[Unit]
+Description=Reconcile pending personal calendars every five minutes
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=5min
+Persistent=true
+RandomizedDelaySec=20
+[Install]
+WantedBy=timers.target

@@ -1,5 +1,11 @@
 # Student Value 1.984
 
+## Companion phase, authorized 15 November 2026
+
+The owner now requests the frameless mobile Flow concept, university personal-service integrations and preparation for Russian hosting. This supersedes the older Vercel/Neon-only target; it does not authorize payment. Do not claim a server migration or background university sync from code readiness or the owner's browser login. Paid resources still require separate explicit approval. Google Calendar/login and academic permissions remain intact.
+
+The authenticated my.spbstu.ru portal was inspected through the owner's browser: recordbook, study plan, directory and messenger exist. Do not extract/reuse the browser cookie jar or store the owner's master university password. The current companion implementation supports user-selected local recordbook/study-plan copies, not an authenticated university API connection. Keep these private, device-local, separated by Student Value user, excluded from XP/teacher acceptance, and clear the current copy through the profile logout control. General institutional links are not completed integrations. Do not publish personal portal data or use real marks as fixtures.
+
 Work in this existing repository. Preserve functioning architecture. Product requirements and direct user instructions take precedence over older reports and design proposals.
 
 ## Academic truth

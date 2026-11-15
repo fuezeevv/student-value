@@ -6,10 +6,12 @@ export function LegalPage({
   title,
   intro,
   children,
+  updatedAt = "2026-11-04",
 }: {
   title: string;
   intro: string;
   children: ReactNode;
+  updatedAt?: string;
 }) {
   return (
     <article className="max-w-3xl mx-auto py-4 sm:py-8">
@@ -24,7 +26,18 @@ export function LegalPage({
         <h1 className="page-title">{title}</h1>
         <p className="page-intro mt-4">{intro}</p>
         <p className="text-xs text-slate-400 mt-5">
-          Обновлено <time dateTime="2026-11-04">4 ноября 2026</time>
+          Обновлено{" "}
+          <time dateTime={updatedAt}>
+            {new Date(updatedAt + "T12:00:00+03:00").toLocaleDateString(
+              "ru-RU",
+              {
+                timeZone: "Europe/Moscow",
+                day: "numeric",
+                month: "long",
+                year: "numeric",
+              },
+            )}
+          </time>
         </p>
       </header>
       <div className="space-y-9 text-sm sm:text-base leading-relaxed text-slate-300 [&_h2]:text-lg [&_h2]:sm:text-xl [&_h2]:font-semibold [&_h2]:text-slate-100 [&_h2]:mb-3 [&_p+p]:mt-3 [&_ul]:list-disc [&_ul]:pl-5 [&_li]:mt-2 [&_a]:text-blue-300 [&_a]:underline [&_a]:underline-offset-4 [&_code]:break-all [&_code]:text-sm">

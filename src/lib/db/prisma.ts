@@ -9,7 +9,7 @@ if (
   throw new Error("Test runtime cannot connect to the working database");
 }
 import { PrismaClient } from "@prisma/client";
-import { configureVercelRuntime } from "../../../scripts/lib/production-env.mjs";
+import { configureVercelRuntime, configureContainerRuntime } from "../../../scripts/lib/production-env.mjs";
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
@@ -20,6 +20,7 @@ const globalForPrisma = globalThis as unknown as {
 let client: PrismaClient | undefined;
 function getClient() {
   if (client) return client;
+  if (process.env.SV_DEPLOYMENT_TARGET === "container") configureContainerRuntime(process.env);
   configureVercelRuntime(
     process.env,
     process.env.SV_DEPLOYMENT_TARGET === "vercel",

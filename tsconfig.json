@@ -28,11 +28,13 @@
     ".next-e2e/types/**/*.ts",
     ".next-production-check/types/**/*.ts",
     ".next-qa-actionable/types/**/*.ts",
+    ".next-qa-companion/types/**/*.ts",
+    ".next-qa-ruz/types/**/*.ts",
     ".next-ux/types/**/*.ts",
     ".next-vercel-check/types/**/*.ts",
     ".next/types/**/*.ts",
     "next-env.d.ts",
-    ".next-qa-ruz/types/**/*.ts"
+    ".next-container-check/types/**/*.ts"
   ],
   "exclude": ["node_modules"]
 }

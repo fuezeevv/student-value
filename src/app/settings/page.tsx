@@ -28,6 +28,7 @@ export default async function SettingsPage() {
         </div>
       </div>
       <SettingsClient
+        userId={user.id}
         nickname={profile.nickname}
         bio={profile.bio}
         leaderboardOptIn={
@@ -35,6 +36,11 @@ export default async function SettingsPage() {
         }
       />
       <section className="border-t border-slate-700 mt-9 pt-7 text-sm text-slate-400 space-y-4">
+        <p>
+          <Link href="/university" className="text-link">
+            Мой Политех · зачётка, учебный план и университетские сервисы ↗
+          </Link>
+        </p>
         <p>
           <a
             href="https://t.me/studentvalue"

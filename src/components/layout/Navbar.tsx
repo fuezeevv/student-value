@@ -15,7 +15,7 @@ import { WellbeingHeaderTrigger } from "@/components/study/WellbeingHeaderTrigge
 import { Menu, X, ArrowUpRight } from "lucide-react";
 
 const primary = [
-  { href: "/", label: "Сегодня", icon: TodayIcon },
+  { href: "/", label: "Поток", icon: TodayIcon },
   { href: "/courses", label: "Предметы", icon: SubjectsIcon },
   { href: "/deadlines", label: "Сроки", icon: DeadlinesIcon },
 ];
@@ -24,6 +24,7 @@ const secondary = [
   { href: "/lessons", label: "Занятия и записи" },
   { href: "/proposals", label: "Предложения и уточнения" },
   { href: "/group", label: "Моя группа и приглашения" },
+  { href: "/university", label: "Мой Политех" },
   { href: "/calendar", label: "Личный календарь" },
   { href: "/analytics", label: "Мой прогресс" },
   { href: "/leaderboard", label: "Рейтинг и достижения" },

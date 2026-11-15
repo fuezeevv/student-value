@@ -1,0 +1,13 @@
+[Unit]
+Description=Student Value encrypted PostgreSQL backup
+After=docker.service
+Requires=docker.service
+[Service]
+Type=oneshot
+User=root
+ExecStart=/usr/local/bin/node /srv/studentvalue/current/ops/backup.mjs
+TimeoutStartSec=600
+UMask=0077
+NoNewPrivileges=true
+ProtectHome=true
+PrivateTmp=true

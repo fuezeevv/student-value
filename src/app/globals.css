@@ -2,6 +2,79 @@
 @tailwind components;
 @tailwind utilities;
 
+/* The flow uses the screen itself as its surface; the full timetable remains one gesture away. */
+.schedule-flow { position: relative; padding: 1.2rem 0 1.5rem; }
+.flow-source { color: var(--ink-muted); font-size: .65rem; text-align: center; margin-top: .6rem; }
+.flow-group { font-size: .7rem; color: var(--ink-muted); letter-spacing: .08em; }
+.flow-focus { padding: 1.5rem 0; overflow-wrap: anywhere; }
+.flow-date { color: var(--ink-muted); font-size: .85rem; text-transform: none; }
+.flow-date::first-letter { text-transform: uppercase; }
+.flow-time { font-size: clamp(3rem, 14vw, 5.4rem); line-height: 1.1; letter-spacing: -.07em; font-weight: 300; margin: .75rem 0 1rem; font-variant-numeric: tabular-nums; }
+.flow-focus h2 { font-size: clamp(1.4rem, min(7.5vw, 4.8svh), 3.2rem); line-height: 1.13; font-weight: 650; letter-spacing: -.035em; text-transform: uppercase; text-wrap: balance; }
+.flow-format { margin-top: 1.1rem; color: var(--wine); font-size: .85rem; }
+.flow-room { margin-top: .3rem; font-size: .95rem; color: var(--ink-secondary); }
+.flow-teacher { margin-top: .4rem; font-size: .8rem; line-height: 1.5; color: var(--ink-muted); }
+.flow-course { display: inline-block; margin-top: 1rem; font-size: .8rem; color: var(--ink-secondary); }
+.flow-current { margin: .5rem 0 1.6rem; color: var(--ink-muted); font-size: .7rem; }
+.flow-current [role="progressbar"] { height: 3px; margin-top: .6rem; border-radius: 3px; background: var(--ink-faint); overflow: hidden; }
+.flow-current [role="progressbar"] > span { display: block; height: 100%; background: var(--wine); transition: width 1s linear; }
+.flow-stack { display: grid; gap: .45rem; }
+.flow-stack button { width: 100%; text-align: left; padding: .85rem 1rem; border-radius: 1.1rem; background: color-mix(in srgb, var(--ink) 5%, transparent); overflow-wrap: anywhere; }
+.flow-stack button + button { width: calc(100% - 1.2rem); margin: 0 auto; background: color-mix(in srgb, var(--ink) 3%, transparent); }
+.flow-stack span { color: var(--wine); font-size: .75rem; }
+.flow-stack strong { display: block; margin-top: .2rem; font-size: .85rem; font-weight: 550; }
+.flow-stack small { display: block; margin-top: .3rem; color: var(--ink-muted); font-size: .72rem; }
+.flow-reveal { display: flex; align-items: center; justify-content: center; gap: .6rem; min-height: 48px; margin: 1rem auto 0; color: var(--ink-muted); font-size: .8rem; }
+.flow-collapse { display: none; }
+.schedule-details { scroll-margin-top: 64px; }
+.university-workspace { max-width: 960px; margin: auto; }
+.university-services { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 2rem; }
+.university-services a { display: flex; justify-content: space-between; gap: 1rem; padding: 1rem 0; border-bottom: 1px solid var(--border); }
+.university-services strong, .university-services small { display: block; }
+.university-services small { color: var(--ink-muted); margin-top: .3rem; font-size: .8rem; }
+.university-upload, .university-save { display: inline-flex; align-items: center; justify-content: center; min-height: 46px; padding: .65rem 1.1rem; border-radius: .8rem; background: var(--ink); color: var(--canvas); font-size: .85rem; font-weight: 600; cursor: pointer; }
+.university-upload:focus-within, .university-save:focus-visible { outline: 2px solid var(--wine); outline-offset: 3px; }
+.university-copy [aria-pressed="true"] { border-bottom: 2px solid var(--wine); }
+.university-copy { margin-top: 1.6rem; }
+.university-copy h2 { font-size: 1.5rem; margin: .7rem 0; }
+.university-copy > p, .university-copy details { max-width: 75ch; line-height: 1.65; }
+.university-copy details { margin-top: 1rem; font-size: .85rem; }
+.university-copy summary { cursor: pointer; padding: .5rem 0; color: var(--ink-secondary); }
+.university-copy ol { list-style: decimal; padding-left: 1.5rem; margin: .7rem 0; }
+.university-copy li { padding: .4rem 0; }
+.university-table-scroll { overflow-x: auto; max-width: 100%; }
+.university-table-scroll table { width: 100%; font-size: .8rem; text-align: left; border-collapse: collapse; }
+.university-table-scroll th, .university-table-scroll td { padding: .8rem; border-bottom: 1px solid var(--border); min-width: 110px; max-width: 260px; overflow-wrap: anywhere; vertical-align: top; }
+.university-table-scroll th { color: var(--ink-muted); font-weight: 500; }
+@media (min-width: 768px) {
+  .schedule-flow { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem 1.5rem; padding: .7rem 0; border-bottom: 1px solid var(--border); }
+  .flow-group { display: none; }
+  .flow-source { flex-basis: 100%; text-align: left; margin: 0; font-size: .63rem; }
+  .flow-focus { flex: 1; min-width: 0; display: grid; grid-template-columns: 90px minmax(0, 1fr) minmax(180px, .7fr); gap: .2rem 1.2rem; padding: .2rem 0; }
+  .flow-date { grid-column: 1; grid-row: 1; margin: 0; font-size: .65rem; }
+  .flow-time { font-size: 2rem; margin: 0; grid-column: 1; grid-row: 2 / 5; }
+  .flow-focus h2 { grid-column: 2; grid-row: 1 / 3; align-self: center; font-size: 1.1rem; text-transform: none; text-wrap: wrap; }
+  .flow-format { grid-column: 2; grid-row: 3; margin: 0; font-size: .75rem; }
+  .flow-room { grid-column: 3; grid-row: 1; margin: 0; font-size: .75rem; }
+  .flow-teacher { grid-column: 3; margin: 0; font-size: .7rem; }
+  .flow-course { grid-column: 2; grid-row: 4; margin: 0; font-size: .75rem; }
+  .flow-current { flex-basis: 190px; margin: .5rem 0; }
+  .flow-stack, .flow-reveal { display: none; }
+  .schedule-details { display: flex; flex-direction: column; gap: 1rem; }
+}
+@media (max-width: 767px) {
+  .university-services { grid-template-columns: 1fr; }
+  .schedule-flow { min-height: calc(100svh - 128px); display: flex; flex-direction: column; padding: .7rem 6px 0; }
+  .flow-focus { flex: 1; display: flex; flex-direction: column; justify-content: center; text-align: center; padding: 1.4rem 0 2rem; }
+  .flow-group { text-align: center; }
+  .flow-focus h2 { max-width: 100%; }
+  .flow-current { margin-top: 0; }
+  .schedule-details:not(.is-open), .flow-work:not(.is-open) { display: none; }
+  .schedule-details.is-open { display: flex; flex-direction: column; gap: .8rem; }
+  .flow-collapse { display: block; min-height: 44px; margin: .5rem auto; color: var(--ink-muted); font-size: .8rem; }
+}
+@media (prefers-reduced-motion: reduce) { .flow-current [role="progressbar"] > span { transition: none; } }
+
 :root {
   /* Clean Editorial Light Palette */
   --canvas: #f1f5f9;

@@ -283,6 +283,10 @@ try {
           "5130901/40102",
         );
         await page.waitForSelector(".preview-work");
+        if (width < 768) {
+          await page.click(".flow-reveal");
+          await page.waitForSelector("#full-day-schedule.is-open", {visible:true});
+        }
         assert((await body()).includes("[TEST] Открытая лабораторная"));
         assert(!(await body()).includes("Отметить выполненным"));
         assert.equal(await page.$(".completion-button"), null);
@@ -629,6 +633,8 @@ try {
         assert((await body()).includes("Показана сохранённая версия"));
         assert((await body()).includes("[TEST] Пара из РУЗ"));
         await go("/");
+        await page.click(".flow-reveal");
+        await page.waitForSelector("#full-day-schedule.is-open", { visible: true });
         assert((await body()).includes("Пары и аудитории"));
         assert((await body()).includes("[TEST] Пара из РУЗ"));
       } finally {
@@ -640,9 +646,55 @@ try {
       }
     },
   );
+  await scenario("private university copies preview safely, stay local, and are separated by account", async () => {
+    await setUser("user-dev-student");
+    await go("/university");
+    const snapshot = {
+      version: 1, kind: "recordbook", sourceUrl: "https://my.spbstu.ru/science-and-education/recordbook/",
+      capturedAt: new Date().toISOString(), context: "[TEST] Selected semester only",
+      columns: ["Дисциплина", "Оценка"], rows: [["<img src=x onerror=alert(1)>", "[TEST] PRIVATE RESULT"]],
+    };
+    const file = ".test-work/university-snapshot.json";
+    fs.writeFileSync(file, JSON.stringify(snapshot));
+    const input = await page.$('input[type="file"]');
+    await input.uploadFile(file);
+    await page.waitForFunction(() => document.body.innerText.includes("Предпросмотр"));
+    assert.equal(await page.$("main table img"), null, "Imported strings must remain text");
+    await clickText("Сохранить только на этом устройстве");
+    await page.waitForFunction(() => document.body.innerText.includes("Сохранено на этом устройстве"));
+    await go("/university");
+    assert((await body()).includes("[TEST] PRIVATE RESULT"));
+    for (const width of [320, 390, 1280]) {
+      await page.setViewport({width, height:900});
+      assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+    }
+    await page.screenshot({ path: ".test-work/university-desktop.png" });
+    await setUser("user-dev-owner"); await go("/university");
+    assert(!(await body()).includes("[TEST] PRIVATE RESULT"));
+    await setUser("guest"); await go("/university");
+    assert(new URL(page.url()).pathname === "/login");
+    await setUser("user-dev-student"); await go("/settings");
+    await clickText("Выйти");
+    await page.waitForFunction(() => location.pathname === "/login");
+    await setUser("user-dev-student"); await go("/university");
+    assert(!(await body()).includes("[TEST] PRIVATE RESULT"), "Logout removes the current user's local copy");
+    await page.setViewport({width:1280,height:900});
+  });
+  await scenario("mobile flow opens next-week schedule through the same accessible control", async () => {
+    await setUser("guest");
+    await page.setViewport({width:390,height:844});
+    await go("/browse/5130901-40102");
+    assert(await page.$(".schedule-flow"));
+    await page.click(".flow-reveal");
+    await page.waitForSelector("#full-day-schedule.is-open", {visible:true});
+    assert((await body()).includes("Пары и аудитории"));
+    await page.screenshot({path:".test-work/flow-mobile-schedule.png"});
+    await setUser("user-dev-student");
+    await page.setViewport({width:1280,height:900});
+  });
   await scenario("student cannot access admin or private roster", async () => {
     await go("/admin");
-    assert((await body()).includes("403 Доступ ограничен"));
+    assert((await body()).includes("403 Доступ ограничен"), `Student admin response at ${page.url()}: ${(await body()).slice(0, 1200)}`);
     await go("/members");
     assert(!(await body()).includes("PRIVATE user-dev-owner"));
   });

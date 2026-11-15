@@ -17,6 +17,7 @@ import {
 import { formatInTimeZone } from "date-fns-tz";
 import { ru } from "date-fns/locale";
 import {
+  addDays,
   appliesToSubgroup,
   showScheduleSubject,
   subjectKey,
@@ -64,7 +65,9 @@ export default async function TodayPage({
   const todayDateStr = formatInTimeZone(now, "Europe/Moscow", "yyyy-MM-dd");
 
   // Academic week calculation
-  const moscowDate = new Date((ruzResult.weekStart || todayDateStr) + "T12:00:00+03:00");
+  const moscowDate = new Date(
+    (ruzResult.weekStart || todayDateStr) + "T12:00:00+03:00",
+  );
   const sept1 = new Date("2026-09-01T12:00:00+03:00");
   const dayOfWeek = (sept1.getDay() + 6) % 7;
   const firstMonday = new Date(sept1);
@@ -77,8 +80,8 @@ export default async function TodayPage({
   const weekLabel = `${weekNumber}-я неделя · ${isEven ? "Чётная" : "Нечётная"}`;
 
   // Filter lessons for user's subgroup & valid subjects
-  const days: WorkbenchDay[] =
-    ruzResult.data?.days.map((d: { date: string; lessons: RuzLesson[] }) => {
+  const toDays = (result: typeof ruzResult): WorkbenchDay[] =>
+    result.data?.days.map((d: { date: string; lessons: RuzLesson[] }) => {
       const dDate = new Date(d.date + "T12:00:00+03:00");
       const short = formatInTimeZone(dDate, "Europe/Moscow", "EEEEEE", {
         locale: ru,
@@ -92,7 +95,7 @@ export default async function TodayPage({
         .filter(
           (l: RuzLesson) =>
             showScheduleSubject(l.subject) &&
-            appliesToSubgroup(l, ruzResult.data!.groupCode, ruzResult.subgroup),
+            appliesToSubgroup(l, result.data!.groupCode, result.subgroup),
         )
         .map((l: RuzLesson) => {
           const matchedCourse = offerings.find(
@@ -124,6 +127,20 @@ export default async function TodayPage({
       };
     }) ?? [];
 
+  const days = toDays(ruzResult);
+  // At the end of a teaching week the next event may already belong to the next one.
+  const futureInWeek = days.some(
+    (day) =>
+      (day.date > todayDateStr && day.lessons.length) ||
+      (day.date === todayDateStr &&
+        day.lessons.some((lesson) => lesson.start > nowMoscowTime)),
+  );
+  const nextWeek =
+    !params.week && ruzResult.data && !futureInWeek
+      ? await loadRuzSchedule(user, addDays(ruzResult.weekStart, 7))
+      : null;
+  const flowDays = nextWeek ? [...days, ...toDays(nextWeek)] : days;
+
   // Map workspace tasks to WorkbenchTask
   const workbenchTasks: WorkbenchTask[] = tasks.map((t: StudyTask) => ({
     id: t.id,
@@ -148,7 +165,8 @@ export default async function TodayPage({
     })),
   }));
 
-  const groupCode = ruzResult.data?.groupCode || user.groupName || "Учебная группа";
+  const groupCode =
+    ruzResult.data?.groupCode || user.groupName || "Учебная группа";
 
   return (
     <div className="space-y-2.5 sm:space-y-4">
@@ -161,7 +179,7 @@ export default async function TodayPage({
             })}
             {user.groupName ? ` · ${user.groupName}` : ""}
           </p>
-          <h1 className="page-title !mt-1">Сегодня</h1>
+          <h1 className="page-title !mt-1">Поток</h1>
         </div>
         {hasPermission(user, "manage_tasks") && offerings.length > 0 && (
           <CreateTaskModal
@@ -181,6 +199,13 @@ export default async function TodayPage({
         groupCode={groupCode}
         weekLabel={weekLabel}
         days={days}
+        flowDays={flowDays}
+        flowState={
+          nextWeek?.data ? nextWeek.state : nextWeek ? "STALE" : ruzResult.state
+        }
+        flowFetchedAt={
+          nextWeek?.data ? nextWeek.fetchedAt : ruzResult.fetchedAt
+        }
         tasks={workbenchTasks}
         totalXp={gamification?.totalXp ?? 0}
         isGuest={false}

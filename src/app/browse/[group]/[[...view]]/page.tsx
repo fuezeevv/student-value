@@ -12,6 +12,7 @@ import {
   PublicCourseSchedule,
 } from "@/components/preview/PublicSubjects";
 import {
+  addDays,
   requestedWeek,
   showScheduleSubject,
   subjectKey,
@@ -79,7 +80,9 @@ export default async function PublicGroupPage({
   const todayDateStr = formatInTimeZone(now, "Europe/Moscow", "yyyy-MM-dd");
 
   // Academic week calculation
-  const moscowDate = new Date((ruzResult.weekStart || todayDateStr) + "T12:00:00+03:00");
+  const moscowDate = new Date(
+    (ruzResult.weekStart || todayDateStr) + "T12:00:00+03:00",
+  );
   const sept1 = new Date("2026-09-01T12:00:00+03:00");
   const dayOfWeek = (sept1.getDay() + 6) % 7;
   const firstMonday = new Date(sept1);
@@ -91,8 +94,8 @@ export default async function PublicGroupPage({
   const isEven = weekNumber % 2 === 0;
   const weekLabel = `${weekNumber}-я неделя · ${isEven ? "Чётная" : "Нечётная"}`;
 
-  const days: WorkbenchDay[] =
-    ruzResult.data?.days.map((d) => {
+  const toDays = (result: typeof ruzResult): WorkbenchDay[] =>
+    result.data?.days.map((d) => {
       const dDate = new Date(d.date + "T12:00:00+03:00");
       const short = formatInTimeZone(dDate, "Europe/Moscow", "EEEEEE", {
         locale: ru,
@@ -132,6 +135,18 @@ export default async function PublicGroupPage({
         lessons,
       };
     }) ?? [];
+
+  const days = toDays(ruzResult);
+  const futureInWeek = days.some(
+    (day) =>
+      (day.date > todayDateStr && day.lessons.length) ||
+      (day.date === todayDateStr &&
+        day.lessons.some((lesson) => lesson.start > nowMoscowTime)),
+  );
+  const nextWeek =
+    !view.length && !query.week && ruzResult.data && !futureInWeek
+      ? await loadPublicRuzSchedule(slug, addDays(ruzResult.weekStart, 7))
+      : null;
 
   const workbenchTasks: WorkbenchTask[] = tasks.map((t) => {
     const d = t.deadlines[0];
@@ -208,7 +223,9 @@ export default async function PublicGroupPage({
             <p className="eyebrow">
               {courses[0]?.semester ?? "Учебное пространство группы"}
             </p>
-            <h1 className={task ? "page-title preview-task-title" : "page-title"}>
+            <h1
+              className={task ? "page-title preview-task-title" : "page-title"}
+            >
               {title}
             </h1>
             <p className="page-intro">
@@ -358,8 +375,18 @@ export default async function PublicGroupPage({
             groupCode={group.code}
             weekLabel={weekLabel}
             days={days}
+            flowDays={nextWeek ? [...days, ...toDays(nextWeek)] : days}
+            flowState={
+              nextWeek?.data
+                ? nextWeek.state
+                : nextWeek
+                  ? "STALE"
+                  : ruzResult.state
+            }
+            flowFetchedAt={
+              nextWeek?.data ? nextWeek.fetchedAt : ruzResult.fetchedAt
+            }
             tasks={workbenchTasks}
-            totalXp={45}
             isGuest={true}
             publicBase={base}
             fetchedAt={ruzResult.fetchedAt}

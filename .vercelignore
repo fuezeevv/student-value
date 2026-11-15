@@ -34,3 +34,9 @@ assets/
 android/
 /studentvalue1984.apk
 !public/studentvalue1984.apk
+
+ops/
+integrations/
+Dockerfile
+.dockerignore
+scripts/container-start.mjs

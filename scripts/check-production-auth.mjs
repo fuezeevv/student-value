@@ -81,6 +81,7 @@ try {
       "/transcripts",
       "/analytics",
       "/settings",
+      "/university",
       "/notifications",
       "/leaderboard",
       "/group",

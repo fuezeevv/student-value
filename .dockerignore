@@ -1,0 +1,25 @@
+# An explicit allowlist keeps the local corpus, browser exports, envs and backups out of build context.
+*
+!Dockerfile
+!package.json
+!package-lock.json
+!next.config.ts
+!next-env.d.ts
+!tsconfig.json
+!postcss.config.mjs
+!tailwind.config.ts
+!src
+!src/**
+!public
+!public/**
+!prisma
+!prisma/schema.prisma
+!prisma/migrations
+!prisma/migrations/**
+!scripts
+!scripts/production-build.mjs
+!scripts/lib
+!scripts/lib/production-env.mjs
+!scripts/container-start.mjs
+!ops
+!ops/migrate.mjs

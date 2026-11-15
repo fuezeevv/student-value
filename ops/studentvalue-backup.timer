@@ -1,0 +1,8 @@
+[Unit]
+Description=Back up Student Value daily
+[Timer]
+OnCalendar=*-*-* 03:20:00 Europe/Moscow
+Persistent=true
+RandomizedDelaySec=10min
+[Install]
+WantedBy=timers.target

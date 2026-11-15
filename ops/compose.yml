@@ -1,0 +1,126 @@
+name: studentvalue
+services:
+  db:
+    image: postgres:17.12-bookworm@sha256:40865bc877a289da75963d97d72b59633f639fc5af7a4e856bfa3714cae5b536
+    restart: unless-stopped
+    env_file: /srv/studentvalue/secrets/db.env
+    command:
+      [
+        "postgres",
+        "-c",
+        "ssl=on",
+        "-c",
+        "ssl_cert_file=/run/tls/server.crt",
+        "-c",
+        "ssl_key_file=/run/tls/server.key",
+        "-c",
+        "hba_file=/etc/postgresql/pg_hba.conf",
+        "-c",
+        "password_encryption=scram-sha-256",
+        "-c",
+        "max_connections=40",
+        "-c",
+        "shared_buffers=128MB",
+      ]
+    volumes:
+      - database:/var/lib/postgresql/data
+      - /srv/studentvalue/tls/db:/run/tls:ro
+      - ./pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
+      - ./init-db.sh:/docker-entrypoint-initdb.d/10-app-role.sh:ro
+    networks: [database]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d studentvalue1984"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+    shm_size: 128mb
+    mem_limit: 768m
+    logging: &logging
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+  app:
+    image: ${APP_IMAGE:?Set an immutable checked release image}
+    restart: unless-stopped
+    env_file: /srv/studentvalue/secrets/app.env
+    environment:
+      NODE_ENV: production
+      SV_DEPLOYMENT_TARGET: container
+      HOSTNAME: 0.0.0.0
+      PORT: "3000"
+    read_only: true
+    tmpfs:
+      [
+        "/tmp:mode=1777,size=32m",
+        "/app/.next/cache:uid=10001,gid=10001,size=64m",
+      ]
+    volumes: ["/srv/studentvalue/tls/db/ca.crt:/run/tls/ca.crt:ro"]
+    networks: [database, web]
+    depends_on:
+      db: { condition: service_healthy }
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+      start_period: 45s
+    mem_limit: 1g
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    logging: *logging
+  proxy:
+    image: caddy:2.11.9-alpine@sha256:003a97808e781aa9f7e75cc2f43d34d461099031faf5e20faefb9f61126836f0
+    restart: unless-stopped
+    environment: { ACME_EMAIL: "${ACME_EMAIL:?Set an ACME contact email}" }
+    ports: ["80:80", "443:443", "443:443/udp"]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    read_only: true
+    tmpfs: ["/tmp:mode=1777,size=16m"]
+    networks: [web]
+    depends_on:
+      app: { condition: service_healthy }
+    mem_limit: 128m
+    logging: *logging
+  migrate:
+    image: ${MIGRATION_IMAGE:?Set a checked migration image}
+    profiles: [maintenance]
+    env_file: /srv/studentvalue/secrets/migration.env
+    volumes: ["/srv/studentvalue/tls/db/ca.crt:/run/tls/ca.crt:ro"]
+    networks: [database]
+    depends_on:
+      db: { condition: service_healthy }
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    logging: *logging
+  backup:
+    image: postgres:17.12-bookworm@sha256:40865bc877a289da75963d97d72b59633f639fc5af7a4e856bfa3714cae5b536
+    profiles: [maintenance]
+    env_file: /srv/studentvalue/secrets/backup.env
+    entrypoint: ["pg_dump"]
+    command:
+      [
+        "--format=custom",
+        "--no-owner",
+        "--no-acl",
+        "--dbname=studentvalue1984",
+        "--host=db",
+        "--username=postgres",
+      ]
+    volumes: ["/srv/studentvalue/tls/db/ca.crt:/run/tls/ca.crt:ro"]
+    networks: [database]
+    logging: *logging
+networks:
+  database: { internal: true }
+  web: {}
+volumes:
+  database: {}
+  caddy_data: {}
+  caddy_config: {}

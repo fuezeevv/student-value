@@ -91,6 +91,7 @@ export function assertProductionEnvironment(env, { database = true } = {}) {
         "DATABASE_URL must target a remote, non-test PostgreSQL database with credentials",
       );
     url.searchParams.set("sslmode", "require");
+    url.searchParams.set("sslaccept", "strict");
     url.searchParams.set("connection_limit", "5");
     url.searchParams.set("connect_timeout", "3");
     url.searchParams.set("pool_timeout", "3");
@@ -185,6 +186,44 @@ export function configureVercelRuntime(env, required = false) {
   if (!required && env.VERCEL !== "1") return;
   const configured = assertVercelEnvironment(env);
   // Only publish normalized runtime settings; never copy arbitrary secrets into logs.
+  env.DATABASE_URL = configured.DATABASE_URL;
+  env.APP_ORIGIN = configured.APP_ORIGIN;
+  env.TZ = configured.TZ;
+}
+
+/** Standalone has no npm-start hook either. Fail closed before any DB access. */
+export function configureContainerRuntime(env) {
+  const configured = assertProductionEnvironment(env);
+  if (configured.APP_ORIGIN !== "https://studentvalue1984.eu.cc")
+    throw new Error(
+      "Production configuration: container requires the canonical origin",
+    );
+  const url = new URL(configured.DATABASE_URL);
+  if (
+    (url.port && url.port !== "5432") ||
+    url.hash ||
+    url.hostname !== "db" ||
+    url.pathname !== "/studentvalue1984" ||
+    url.username !== "studentvalue_app" ||
+    url.searchParams.get("sslcert") !== "/run/tls/ca.crt" ||
+    [...url.searchParams.keys()].some(
+      (key) =>
+        ![
+          "sslcert",
+          "sslmode",
+          "sslaccept",
+          "schema",
+          "connection_limit",
+          "connect_timeout",
+          "pool_timeout",
+        ].includes(key),
+    ) ||
+    (url.searchParams.has("schema") &&
+      url.searchParams.get("schema") !== "public")
+  )
+    throw new Error(
+      "Production configuration: container requires its private TLS database and app role",
+    );
   env.DATABASE_URL = configured.DATABASE_URL;
   env.APP_ORIGIN = configured.APP_ORIGIN;
   env.TZ = configured.TZ;

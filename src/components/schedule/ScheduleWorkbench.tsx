@@ -1,5 +1,6 @@
 "use client";
 
+import { scheduleFlow } from "@/lib/schedule/flow";
 import { useRouter } from "next/navigation";
 import { addDays } from "@/lib/schedule/ruz";
 import {
@@ -7,6 +8,7 @@ import {
   lessonType,
   teachingRoom,
 } from "@/lib/schedule/presentation";
+import { ScheduleFlow } from "./ScheduleFlow";
 import { CompareSchedule } from "./CompareSchedule";
 import { useState, useTransition, useMemo, useEffect } from "react";
 import Link from "next/link";
@@ -65,6 +67,9 @@ export type ScheduleWorkbenchProps = {
   groupLabel?: string;
   weekLabel?: string;
   days: WorkbenchDay[];
+  flowDays?: WorkbenchDay[];
+  flowState?: ScheduleWorkbenchProps["scheduleState"];
+  flowFetchedAt?: Date | string | null;
   tasks: WorkbenchTask[];
   totalXp?: number;
   isGuest?: boolean;
@@ -79,8 +84,11 @@ export type ScheduleWorkbenchProps = {
 export function ScheduleWorkbench({
   groupCode,
   groupLabel,
-  weekLabel = "11-я неделя · Нечётная",
+  weekLabel = "",
   days,
+  flowDays,
+  flowState,
+  flowFetchedAt,
   tasks: initialTasks,
   totalXp: initialXp = 0,
   isGuest = false,
@@ -92,9 +100,26 @@ export function ScheduleWorkbench({
   todayDateStr,
 }: ScheduleWorkbenchProps) {
   const router = useRouter();
+  const [fullSchedule, setFullSchedule] = useState(false);
   const [clock, setClock] = useState(nowMoscowTime);
+  const [liveDate, setLiveDate] = useState(todayDateStr);
   useEffect(() => {
-    const update = () =>
+    const refresh = () => {
+      if (document.visibilityState === "visible" && navigator.onLine)
+        router.refresh();
+    };
+    const interval = setInterval(refresh, 10 * 60 * 1000);
+    document.addEventListener("visibilitychange", refresh);
+    window.addEventListener("online", refresh);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", refresh);
+      window.removeEventListener("online", refresh);
+    };
+  }, [router]);
+  useEffect(() => {
+    const update = () => {
+      setLiveDate(formatInTimeZone(new Date(), "Europe/Moscow", "yyyy-MM-dd"));
       setClock(
         new Intl.DateTimeFormat("en-GB", {
           timeZone: "Europe/Moscow",
@@ -102,15 +127,19 @@ export function ScheduleWorkbench({
           minute: "2-digit",
         }).format(new Date()),
       );
+    };
     update();
     const id = setInterval(update, 30000);
     return () => clearInterval(id);
   }, []);
   nowMoscowTime = clock;
+  todayDateStr = liveDate;
   // Determine initial selected day: today if present, or next day with lessons, or first day
   const defaultDate = useMemo(() => {
     if (!days.length) return "";
-    const today = days.find((d) => d.isToday || d.date === todayDateStr);
+    const today = days.find((d) =>
+      todayDateStr ? d.date === todayDateStr : d.isToday,
+    );
     if (today) return today.date;
 
     const futureWithLessons = days.find(
@@ -126,6 +155,48 @@ export function ScheduleWorkbench({
 
   const [selectedDate, setSelectedDate] = useState<string>(defaultDate);
   useEffect(() => setSelectedDate(defaultDate), [defaultDate]);
+  const openSchedule = () => {
+    const focus = scheduleFlow(
+      flowDays ?? days,
+      todayDateStr || "",
+      clock,
+    ).focus;
+    setFullSchedule(true);
+    if (focus && !days.some((day) => day.date === focus.date)) {
+      router.push(
+        `${isGuest ? publicBase : "/"}?week=${focus.date}#full-day-schedule`,
+      );
+      return;
+    }
+    if (focus) setSelectedDate(focus.date);
+    requestAnimationFrame(() =>
+      document
+        .getElementById("full-day-schedule")
+        ?.scrollIntoView({ block: "start", behavior: "smooth" }),
+    );
+  };
+  const closeSchedule = () => {
+    setFullSchedule(false);
+    router.replace(`${location.pathname}${location.search}`, { scroll: false });
+    requestAnimationFrame(() => {
+      document
+        .querySelector<HTMLButtonElement>(".flow-reveal")
+        ?.focus({ preventScroll: true });
+      document
+        .querySelector(".schedule-flow")
+        ?.scrollIntoView({ block: "start", behavior: "smooth" });
+    });
+  };
+  useEffect(() => {
+    if (location.hash === "#full-day-schedule") {
+      setFullSchedule(true);
+      requestAnimationFrame(() =>
+        document
+          .getElementById("full-day-schedule")
+          ?.scrollIntoView({ block: "start" }),
+      );
+    }
+  }, [days]);
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
   const [tasks, setTasks] = useState<WorkbenchTask[]>(initialTasks);
   const [xp, setXp] = useState<number>(initialXp);
@@ -137,7 +208,11 @@ export function ScheduleWorkbench({
   const [isPending, startTransition] = useTransition();
 
   const selectedDateObj = useMemo(() => {
-    const raw = selectedDate || todayDateStr || days[0]?.date || "2026-11-11";
+    const raw =
+      selectedDate ||
+      todayDateStr ||
+      days[0]?.date ||
+      formatInTimeZone(new Date(), "Europe/Moscow", "yyyy-MM-dd");
     return new Date(raw + "T12:00:00+03:00");
   }, [selectedDate, todayDateStr, days]);
 
@@ -152,7 +227,7 @@ export function ScheduleWorkbench({
     if (weekLabel.includes("·")) {
       return weekLabel.split("·")[1].trim().toLowerCase();
     }
-    return "нечётная";
+    return weekLabel;
   }, [weekLabel]);
 
   const currentDay = useMemo(() => {
@@ -160,8 +235,9 @@ export function ScheduleWorkbench({
   }, [days, selectedDate]);
 
   // Active / next lesson calculations for hero callout
-  const isSelectedToday =
-    currentDay?.isToday || currentDay?.date === todayDateStr;
+  const isSelectedToday = todayDateStr
+    ? currentDay?.date === todayDateStr
+    : currentDay?.isToday;
 
   const { activeLesson, nextLesson, heroLesson } = useMemo(() => {
     if (!currentDay || !currentDay.lessons.length) {
@@ -274,446 +350,469 @@ export function ScheduleWorkbench({
       }
       className="w-full flex flex-col space-y-2.5 sm:space-y-4"
     >
-      {/* ==================== 1. ПОЛИК-СТИЛЬ: ШАПКА НЕДЕЛИ И МЕСЯЦА ==================== */}
-      <div className="flex items-center justify-between w-full max-w-xs mx-auto px-1 py-0.5">
-        <button
-          type="button"
-          onClick={() => {
-            if (days[0])
-              router.push(
-                `${isGuest ? publicBase : "/"}?week=${addDays(days[0].date, -7)}`,
-              );
-          }}
-          className="w-8 h-8 shrink-0 rounded-full hover:bg-black/5 dark:hover:bg-white/10 flex items-center justify-center text-base text-[var(--ink-secondary)] hover:text-[var(--ink)] cursor-pointer transition-colors"
-          aria-label="Предыдущая неделя"
-        >
-          ←
+      <ScheduleFlow
+        days={flowDays ?? days}
+        fetchedAt={flowFetchedAt ?? fetchedAt}
+        date={
+          todayDateStr ||
+          formatInTimeZone(new Date(), "Europe/Moscow", "yyyy-MM-dd")
+        }
+        time={clock}
+        group={cleanGroup}
+        state={flowState ?? scheduleState}
+        openSchedule={openSchedule}
+      />
+      <div
+        id="full-day-schedule"
+        className={`schedule-details ${fullSchedule ? "is-open" : ""}`}
+      >
+        <button type="button" className="flow-collapse" onClick={closeSchedule}>
+          Вернуться в поток ↓
         </button>
+        {/* ==================== 1. ПОЛИК-СТИЛЬ: ШАПКА НЕДЕЛИ И МЕСЯЦА ==================== */}
+        <div className="flex items-center justify-between w-full max-w-xs mx-auto px-1 py-0.5">
+          <button
+            type="button"
+            onClick={() => {
+              if (days[0])
+                router.push(
+                  `${isGuest ? publicBase : "/"}?week=${addDays(days[0].date, -7)}`,
+                );
+            }}
+            className="w-8 h-8 shrink-0 rounded-full hover:bg-black/5 dark:hover:bg-white/10 flex items-center justify-center text-base text-[var(--ink-secondary)] hover:text-[var(--ink)] cursor-pointer transition-colors"
+            aria-label="Предыдущая неделя"
+          >
+            ←
+          </button>
 
-        <div className="flex min-w-0 flex-1 flex-col items-center text-center">
-          <span className="text-base sm:text-lg font-bold text-[var(--ink)] tracking-tight">
-            {monthYearLabel}
-          </span>
-          <div className="text-xs font-medium text-[var(--ink-muted)] flex flex-wrap items-center justify-center gap-1.5 -mt-0.5">
-            <span>{weekParityLabel}</span>
-            <span>·</span>
-            {isGuest ? (
-              <select
-                aria-label="Выбор группы"
-                value={groupCode}
-                onChange={(e) => {
-                  const target = e.target.value;
-                  const path = `/browse/${target.replace("/", "-")}`;
-                  window.location.href = path;
-                }}
-                className="min-w-0 max-w-full bg-transparent text-[var(--ink)] font-semibold font-mono focus:outline-none cursor-pointer text-xs underline"
+          <div className="flex min-w-0 flex-1 flex-col items-center text-center">
+            <span className="text-base sm:text-lg font-bold text-[var(--ink)] tracking-tight">
+              {monthYearLabel}
+            </span>
+            <div className="text-xs font-medium text-[var(--ink-muted)] flex flex-wrap items-center justify-center gap-1.5 -mt-0.5">
+              <span>{weekParityLabel}</span>
+              <span>·</span>
+              {isGuest ? (
+                <select
+                  aria-label="Выбор группы"
+                  value={groupCode}
+                  onChange={(e) => {
+                    const target = e.target.value;
+                    const path = `/browse/${target.replace("/", "-")}`;
+                    window.location.href = path;
+                  }}
+                  className="min-w-0 max-w-full bg-transparent text-[var(--ink)] font-semibold font-mono focus:outline-none cursor-pointer text-xs underline"
+                >
+                  {!publicGroups.some((g) => g.code === groupCode) && (
+                    <option
+                      value={groupCode}
+                      className="dark:bg-slate-900 dark:text-slate-100"
+                    >
+                      {groupCode}
+                    </option>
+                  )}
+                  {publicGroups.map((g) => (
+                    <option
+                      key={g.code}
+                      value={g.code}
+                      className="dark:bg-slate-900 dark:text-slate-100"
+                    >
+                      {g.track} · {g.code}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <span className="font-semibold text-[var(--ink)] font-mono">
+                  {cleanGroup}
+                </span>
+              )}
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              if (days[0])
+                router.push(
+                  `${isGuest ? publicBase : "/"}?week=${addDays(days[0].date, 7)}`,
+                );
+            }}
+            className="w-8 h-8 shrink-0 rounded-full hover:bg-black/5 dark:hover:bg-white/10 flex items-center justify-center text-base text-[var(--ink-secondary)] hover:text-[var(--ink)] cursor-pointer transition-colors"
+            aria-label="Следующая неделя"
+          >
+            →
+          </button>
+        </div>
+
+        {scheduleState === "STALE" && (
+          <div className="p-3 rounded-lg bg-[var(--wine-soft)] border-l-4 border-l-[var(--wine)] text-xs text-[#6b1d30] dark:text-[#ff99ac]">
+            Расписание РУЗ временно не ответило, показана сохранённая копия.
+          </div>
+        )}
+
+        {/* ==================== 2. ПОЛИК-СТИЛЬ: ПЛАШКИ ДНЕЙ НЕДЕЛИ (Image 1) ==================== */}
+        <div className="grid grid-cols-7 gap-1 sm:gap-2 w-full py-0">
+          {days.slice(0, 7).map((day) => {
+            const isActive = day.date === selectedDate;
+            const pairCount = day.lessons.length;
+            const dayNumber = day.dateLabel.split(" ")[0]; // "9", "10", "11", etc.
+
+            return (
+              <button
+                key={day.date}
+                type="button"
+                onClick={() => setSelectedDate(day.date)}
+                className={`flex flex-col items-center justify-center py-2 sm:py-2.5 px-0.5 rounded-2xl transition-all cursor-pointer ${
+                  isActive
+                    ? "bg-[#cfc6ff] text-[#0b1a2d] dark:bg-[#cfc6ff] dark:text-[#0b1a2d] font-bold shadow-xs ring-1 ring-[#cfc6ff]"
+                    : "bg-transparent text-[var(--ink)] hover:bg-black/5 dark:hover:bg-white/5"
+                }`}
               >
-                {!publicGroups.some((g) => g.code === groupCode) && (
-                  <option
-                    value={groupCode}
-                    className="dark:bg-slate-900 dark:text-slate-100"
-                  >
-                    {groupCode}
-                  </option>
-                )}
-                {publicGroups.map((g) => (
-                  <option
-                    key={g.code}
-                    value={g.code}
-                    className="dark:bg-slate-900 dark:text-slate-100"
-                  >
-                    {g.track} · {g.code}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <span className="font-semibold text-[var(--ink)] font-mono">
-                {cleanGroup}
+                <span
+                  className={`text-base sm:text-lg font-mono font-extrabold leading-none ${isActive ? "text-[#0b1a2d]" : "text-[var(--ink)]"}`}
+                >
+                  {dayNumber}
+                </span>
+                <span
+                  className={`text-[10px] sm:text-[11px] font-mono uppercase font-bold tracking-wider mt-1 sm:mt-1.5 ${isActive ? "text-[#0b1a2d]/90 font-black" : "text-[var(--ink-muted)]"}`}
+                >
+                  {day.dayLabel}
+                </span>
+
+                {/* Индикатор пар */}
+                <div className="flex items-center justify-center gap-0.5 mt-1 sm:mt-1.5 h-1.5">
+                  {pairCount > 0 ? (
+                    <span
+                      className={`w-1.5 h-1.5 rounded-full ${
+                        isActive
+                          ? "bg-[#0b1a2d]"
+                          : "bg-[var(--wine)] dark:bg-[#a5b4fc]"
+                      }`}
+                    />
+                  ) : (
+                    <span className="w-1.5 h-1.5" />
+                  )}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* ==================== 3. ПОЛИК-СТИЛЬ: СПИСОК ПАР СРАЗУ НА ЭКРАНЕ (Image 1) ==================== */}
+        <div className="space-y-2.5 sm:space-y-3.5 pt-0">
+          <div className="flex items-center justify-between px-1 text-xs font-mono text-[var(--ink-muted)]">
+            <span>Пары и аудитории</span>
+            {currentDay && (
+              <span>
+                {currentDay.lessons.length}{" "}
+                {currentDay.lessons.length === 1
+                  ? "пара"
+                  : currentDay.lessons.length >= 2 &&
+                      currentDay.lessons.length <= 4
+                    ? "пары"
+                    : "пар"}
               </span>
             )}
           </div>
-        </div>
 
-        <button
-          type="button"
-          onClick={() => {
-            if (days[0])
-              router.push(
-                `${isGuest ? publicBase : "/"}?week=${addDays(days[0].date, 7)}`,
-              );
-          }}
-          className="w-8 h-8 shrink-0 rounded-full hover:bg-black/5 dark:hover:bg-white/10 flex items-center justify-center text-base text-[var(--ink-secondary)] hover:text-[var(--ink)] cursor-pointer transition-colors"
-          aria-label="Следующая неделя"
-        >
-          →
-        </button>
-      </div>
-
-      {scheduleState === "STALE" && (
-        <div className="p-3 rounded-lg bg-[var(--wine-soft)] border-l-4 border-l-[var(--wine)] text-xs text-[#6b1d30] dark:text-[#ff99ac]">
-          Расписание РУЗ временно не ответило, показана сохранённая копия.
-        </div>
-      )}
-
-      {/* ==================== 2. ПОЛИК-СТИЛЬ: ПЛАШКИ ДНЕЙ НЕДЕЛИ (Image 1) ==================== */}
-      <div className="grid grid-cols-7 gap-1 sm:gap-2 w-full py-0">
-        {days.slice(0, 7).map((day) => {
-          const isActive = day.date === selectedDate;
-          const pairCount = day.lessons.length;
-          const dayNumber = day.dateLabel.split(" ")[0]; // "9", "10", "11", etc.
-
-          return (
-            <button
-              key={day.date}
-              type="button"
-              onClick={() => setSelectedDate(day.date)}
-              className={`flex flex-col items-center justify-center py-2 sm:py-2.5 px-0.5 rounded-2xl transition-all cursor-pointer ${
-                isActive
-                  ? "bg-[#cfc6ff] text-[#0b1a2d] dark:bg-[#cfc6ff] dark:text-[#0b1a2d] font-bold shadow-xs ring-1 ring-[#cfc6ff]"
-                  : "bg-transparent text-[var(--ink)] hover:bg-black/5 dark:hover:bg-white/5"
-              }`}
-            >
-              <span
-                className={`text-base sm:text-lg font-mono font-extrabold leading-none ${isActive ? "text-[#0b1a2d]" : "text-[var(--ink)]"}`}
-              >
-                {dayNumber}
-              </span>
-              <span
-                className={`text-[10px] sm:text-[11px] font-mono uppercase font-bold tracking-wider mt-1 sm:mt-1.5 ${isActive ? "text-[#0b1a2d]/90 font-black" : "text-[var(--ink-muted)]"}`}
-              >
-                {day.dayLabel}
-              </span>
-
-              {/* Индикатор пар */}
-              <div className="flex items-center justify-center gap-0.5 mt-1 sm:mt-1.5 h-1.5">
-                {pairCount > 0 ? (
-                  <span
-                    className={`w-1.5 h-1.5 rounded-full ${
-                      isActive
-                        ? "bg-[#0b1a2d]"
-                        : "bg-[var(--wine)] dark:bg-[#a5b4fc]"
-                    }`}
-                  />
-                ) : (
-                  <span className="w-1.5 h-1.5" />
-                )}
-              </div>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* ==================== 3. ПОЛИК-СТИЛЬ: СПИСОК ПАР СРАЗУ НА ЭКРАНЕ (Image 1) ==================== */}
-      <div className="space-y-2.5 sm:space-y-3.5 pt-0">
-        <div className="flex items-center justify-between px-1 text-xs font-mono text-[var(--ink-muted)]">
-          <span>Пары и аудитории</span>
-          {currentDay && (
-            <span>
-              {currentDay.lessons.length}{" "}
-              {currentDay.lessons.length === 1
-                ? "пара"
-                : currentDay.lessons.length >= 2 &&
-                    currentDay.lessons.length <= 4
-                  ? "пары"
-                  : "пар"}
-            </span>
-          )}
-        </div>
-
-        {currentDay && currentDay.lessons.length > 0 ? (
-          currentDay.lessons.map((lesson, idx) => {
-            const isExpanded = expandedIndex === idx;
-            const activity = lessonActivity(lesson.start, nowMoscowTime);
-            const isCurrent = isSelectedToday && activity.active;
-            return (
-              <div key={`${lesson.start}-${idx}`} className="space-y-1.5">
-                {/* Time row */}
-                <div className="flex items-center justify-between px-1 text-xs font-mono">
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`font-bold ${
-                        isCurrent
-                          ? "text-[var(--wine)] font-mono text-sm"
-                          : "text-[var(--ink)]"
-                      }`}
-                    >
-                      {lesson.start} — {activity.end}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Card matching Image 1 PolyK */}
-                <div
-                  className={`relative overflow-hidden p-4 sm:p-5 rounded-2xl bg-[var(--surface)] border transition-all ${
-                    isCurrent
-                      ? "border-[var(--border)] shadow-xs"
-                      : "border-[var(--border)] hover:border-black/20 dark:hover:border-white/20"
-                  }`}
-                >
-                  {isCurrent && (
-                    <span
-                      className="lesson-progress-track"
-                      role="progressbar"
-                      aria-label="Прогресс пары"
-                      aria-valuenow={Math.round(activity.progress)}
-                      aria-valuemin={0}
-                      aria-valuemax={100}
-                    >
-                      <span style={{ height: `${activity.progress}%` }} />
-                    </span>
-                  )}
-                  <div
-                    className="flex items-start justify-between gap-3 cursor-pointer select-none"
-                    onClick={() => setExpandedIndex(isExpanded ? null : idx)}
-                  >
-                    <h3 className="font-bold text-sm sm:text-base text-indigo-900 dark:text-[#cfc6ff] leading-snug">
-                      {lesson.subject}
-                    </h3>
-                    <button
-                      type="button"
-                      aria-label={isExpanded ? "Свернуть" : "Развернуть"}
-                      className="text-[var(--ink-muted)] hover:text-[var(--ink)] p-1 -mr-1 shrink-0 transition-transform cursor-pointer"
-                    >
-                      <ChevronDown
-                        size={18}
-                        className={`transition-transform duration-200 ${
-                          isExpanded ? "rotate-180" : ""
-                        }`}
-                      />
-                    </button>
-                  </div>
-
-                  <div className="mt-2 text-xs space-y-0.5">
-                    <p className="font-medium text-[var(--ink-secondary)]">
-                      {lessonType(lesson.type)}
-                    </p>
-                    <p className="text-[var(--ink-muted)]">
-                      {lesson.rooms.map(teachingRoom).join(" / ") ||
-                        "Аудитория не указана"}
-                    </p>
-                    {lesson.teachers.length > 0 && (
-                      <p className="font-medium text-[var(--ink-secondary)]">
-                        {lesson.teachers.join(", ")}
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Expandable details: link to course, DL link, notes */}
-                  {isExpanded && (
-                    <div className="mt-3 pt-3 border-t border-[var(--border)] text-xs space-y-2">
-                      {lesson.end !== activity.end && (
-                        <p className="text-[var(--ink-muted)]">
-                          Интервал в РУЗ: {lesson.start}–{lesson.end}
-                        </p>
-                      )}
-                      {lesson.courseHref && (
-                        <div>
-                          <Link
-                            href={lesson.courseHref}
-                            className="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400 font-semibold hover:underline"
-                          >
-                            <span>Материалы курса и конспекты</span>
-                            <ArrowUpRight size={13} />
-                          </Link>
-                        </div>
-                      )}
-                      {lesson.lmsUrl && (
-                        <div>
-                          <a
-                            href={lesson.lmsUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-[var(--ink-muted)] hover:text-[var(--ink)]"
-                          >
-                            <span>Курс в СДО DL СПбПУ</span>
-                            <ExternalLink size={12} />
-                          </a>
-                        </div>
-                      )}
-                      {lesson.note && (
-                        <p className="text-[11px] text-[var(--ink-muted)] italic">
-                          {lesson.note}
-                        </p>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })
-        ) : (
-          <div className="p-8 rounded-2xl bg-[var(--surface)] border border-[var(--border)] text-center text-xs text-[var(--ink-muted)] font-mono">
-            {scheduleState === "UNAVAILABLE" || scheduleState === "UNCONFIGURED"
-              ? "Расписание недоступно. Это не означает, что занятий нет."
-              : "В этот день в расписании нет пар"}
-          </div>
-        )}
-      </div>
-
-      <CompareSchedule />
-      {fetchedAt && (
-        <p className="text-xs text-[var(--ink-muted)]">
-          Обновлено{" "}
-          {new Date(fetchedAt).toLocaleString("ru-RU", {
-            timeZone: "Europe/Moscow",
-          })}{" "}
-          МСК{" "}
-          {sourceUrl && (
-            <a href={sourceUrl} target="_blank" rel="noopener noreferrer">
-              {" "}
-              · РУЗ ↗
-            </a>
-          )}
-        </p>
-      )}
-      {/* ==================== 4. БЛИЖАЙШИЕ ДЕДЛАЙНЫ (Things 3 / Linear style) ==================== */}
-      <div className="pt-8 border-t border-[var(--ink-faint)] space-y-5">
-        <div className="flex items-baseline justify-between gap-4 flex-wrap">
-          <div>
-            <h3 className="text-lg font-bold text-[var(--ink)] tracking-tight">
-              Работы и ближайшие сроки
-            </h3>
-            <p className="text-xs text-[var(--ink-muted)] mt-0.5">
-              Сначала — предстоящие сроки. Все задания доступны в разделе
-              «Сроки».
-            </p>
-          </div>
-
-          {!isGuest && (
-            <div className="text-xs font-mono">
-              <span className="text-[var(--ink-muted)]">Выполнено: </span>
-              <span className="font-bold text-[var(--ink)]">
-                {completedCount} из {totalCount}
-              </span>
-              <span className="text-[var(--ink-muted)] ml-3">Опыт: </span>
-              <span className="font-bold text-[var(--wine)]">{xp} XP</span>
-            </div>
-          )}
-        </div>
-
-        {saveError && (
-          <p role="alert" className="text-sm text-[var(--wine)]">
-            {saveError}
-          </p>
-        )}
-        <Link
-          className="text-link text-sm"
-          href={isGuest ? `${publicBase}/deadlines` : "/deadlines"}
-        >
-          Все работы · {totalCount} →
-        </Link>
-        {/* Список задач */}
-        <div className="space-y-2.5">
-          {tasks.length > 0 ? (
-            orderedTasks.slice(0, 6).map((task) => {
-              const isOverdue = task.urgency === "OVERDUE";
-              const isSoon = task.urgency === "SOON";
-
+          {currentDay && currentDay.lessons.length > 0 ? (
+            currentDay.lessons.map((lesson, idx) => {
+              const isExpanded = expandedIndex === idx;
+              const activity = lessonActivity(lesson.start, nowMoscowTime);
+              const isCurrent = isSelectedToday && activity.active;
               return (
-                <div
-                  key={task.id}
-                  className={`work-item preview-work p-4 rounded-xl bg-[var(--surface)] hover:bg-[var(--surface-active)] border border-[var(--border)] transition-all flex items-start gap-4 relative ${
-                    task.completed ? "opacity-60" : ""
-                  }`}
-                >
-                  {!isGuest && (
-                    <button
-                      type="button"
-                      disabled={isPending || task.accepted}
-                      onClick={() => toggleTask(task.id)}
-                      className={`custom-check mt-1 shrink-0 ${
-                        task.completed ? "is-checked" : ""
-                      }`}
-                      aria-label={
-                        task.completed
-                          ? "Вернуть к выполнению"
-                          : "Отметить выполненным"
-                      }
-                    >
-                      {task.completed && (
-                        <Check
-                          size={12}
-                          strokeWidth={3}
-                          className="text-white"
-                        />
-                      )}
-                    </button>
-                  )}
-
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-baseline justify-between gap-2 flex-wrap">
+                <div key={`${lesson.start}-${idx}`} className="space-y-1.5">
+                  {/* Time row */}
+                  <div className="flex items-center justify-between px-1 text-xs font-mono">
+                    <div className="flex items-center gap-2">
                       <span
-                        className={`text-xs font-mono font-bold ${
-                          isOverdue || isSoon
-                            ? "text-[var(--wine)]"
-                            : "text-[var(--ink-secondary)]"
+                        className={`font-bold ${
+                          isCurrent
+                            ? "text-[var(--wine)] font-mono text-sm"
+                            : "text-[var(--ink)]"
                         }`}
                       >
-                        {task.courseShortTitle || task.courseTitle}
-                        {task.deadlineFormatted
-                          ? ` · ${task.deadlineFormatted}`
-                          : ""}
+                        {lesson.start} — {activity.end}
                       </span>
+                    </div>
+                  </div>
 
-                      {task.accepted && (
-                        <span className="text-[11px] font-mono font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-100/70 dark:bg-emerald-950/70 px-2 py-0.5 rounded">
-                          ✓ Зачтено
-                        </span>
+                  {/* Card matching Image 1 PolyK */}
+                  <div
+                    className={`relative overflow-hidden p-4 sm:p-5 rounded-2xl bg-[var(--surface)] border transition-all ${
+                      isCurrent
+                        ? "border-[var(--border)] shadow-xs"
+                        : "border-[var(--border)] hover:border-black/20 dark:hover:border-white/20"
+                    }`}
+                  >
+                    {isCurrent && (
+                      <span
+                        className="lesson-progress-track"
+                        role="progressbar"
+                        aria-label="Прогресс пары"
+                        aria-valuenow={Math.round(activity.progress)}
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                      >
+                        <span style={{ height: `${activity.progress}%` }} />
+                      </span>
+                    )}
+                    <div
+                      className="flex items-start justify-between gap-3 cursor-pointer select-none"
+                      onClick={() => setExpandedIndex(isExpanded ? null : idx)}
+                    >
+                      <h3 className="font-bold text-sm sm:text-base text-indigo-900 dark:text-[#cfc6ff] leading-snug">
+                        {lesson.subject}
+                      </h3>
+                      <button
+                        type="button"
+                        aria-label={isExpanded ? "Свернуть" : "Развернуть"}
+                        className="text-[var(--ink-muted)] hover:text-[var(--ink)] p-1 -mr-1 shrink-0 transition-transform cursor-pointer"
+                      >
+                        <ChevronDown
+                          size={18}
+                          className={`transition-transform duration-200 ${
+                            isExpanded ? "rotate-180" : ""
+                          }`}
+                        />
+                      </button>
+                    </div>
+
+                    <div className="mt-2 text-xs space-y-0.5">
+                      <p className="font-medium text-[var(--ink-secondary)]">
+                        {lessonType(lesson.type)}
+                      </p>
+                      <p className="text-[var(--ink-muted)]">
+                        {lesson.rooms.map(teachingRoom).join(" / ") ||
+                          "Аудитория не указана"}
+                      </p>
+                      {lesson.teachers.length > 0 && (
+                        <p className="font-medium text-[var(--ink-secondary)]">
+                          {lesson.teachers.join(", ")}
+                        </p>
                       )}
                     </div>
 
-                    <p
-                      className={`text-sm font-bold text-[var(--ink)] mt-1 leading-snug ${
-                        task.completed
-                          ? "line-through text-[var(--ink-muted)]"
-                          : ""
-                      }`}
-                    >
-                      <Link
-                        href={
-                          isGuest
-                            ? `${publicBase}/tasks/${task.id}`
-                            : `/tasks/${task.id}`
-                        }
-                      >
-                        {task.title}
-                      </Link>
-                    </p>
-
-                    <div className="flex items-center gap-3 text-xs text-[var(--ink-muted)] mt-2 font-mono flex-wrap">
-                      {task.teacher && <span>{task.teacher}</span>}
-                      {task.materials &&
-                        task.materials.map((m, i) => (
-                          <span
-                            key={i}
-                            className="inline-flex items-center gap-1"
-                          >
-                            {m.url ? (
-                              <a
-                                href={m.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-[var(--ink)] font-semibold hover:underline inline-flex items-center gap-1"
-                              >
-                                <FileDown size={14} />
-                                <span>{m.title}</span>
-                              </a>
-                            ) : (
-                              <span>📄 {m.title}</span>
-                            )}
-                          </span>
-                        ))}
-                    </div>
+                    {/* Expandable details: link to course, DL link, notes */}
+                    {isExpanded && (
+                      <div className="mt-3 pt-3 border-t border-[var(--border)] text-xs space-y-2">
+                        {lesson.end !== activity.end && (
+                          <p className="text-[var(--ink-muted)]">
+                            Интервал в РУЗ: {lesson.start}–{lesson.end}
+                          </p>
+                        )}
+                        {lesson.courseHref && (
+                          <div>
+                            <Link
+                              href={lesson.courseHref}
+                              className="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400 font-semibold hover:underline"
+                            >
+                              <span>Материалы курса и конспекты</span>
+                              <ArrowUpRight size={13} />
+                            </Link>
+                          </div>
+                        )}
+                        {lesson.lmsUrl && (
+                          <div>
+                            <a
+                              href={lesson.lmsUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-[var(--ink-muted)] hover:text-[var(--ink)]"
+                            >
+                              <span>Курс в СДО DL СПбПУ</span>
+                              <ExternalLink size={12} />
+                            </a>
+                          </div>
+                        )}
+                        {lesson.note && (
+                          <p className="text-[11px] text-[var(--ink-muted)] italic">
+                            {lesson.note}
+                          </p>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               );
             })
           ) : (
-            <div className="p-6 rounded-xl bg-white/40 dark:bg-slate-800/40 border border-[var(--border)] text-center text-xs text-[var(--ink-muted)] font-mono">
-              В сервисе пока нет опубликованных работ. Это не означает, что их
-              не задавали.
+            <div className="p-8 rounded-2xl bg-[var(--surface)] border border-[var(--border)] text-center text-xs text-[var(--ink-muted)] font-mono">
+              {scheduleState === "UNAVAILABLE" ||
+              scheduleState === "UNCONFIGURED"
+                ? "Расписание недоступно. Это не означает, что занятий нет."
+                : "В этот день в расписании нет пар"}
             </div>
           )}
+        </div>
+
+        <CompareSchedule />
+        {fetchedAt && (
+          <p className="text-xs text-[var(--ink-muted)]">
+            Обновлено{" "}
+            {new Date(fetchedAt).toLocaleString("ru-RU", {
+              timeZone: "Europe/Moscow",
+            })}{" "}
+            МСК{" "}
+            {sourceUrl && (
+              <a href={sourceUrl} target="_blank" rel="noopener noreferrer">
+                {" "}
+                · РУЗ ↗
+              </a>
+            )}
+          </p>
+        )}
+      </div>
+      <div className={`flow-work ${fullSchedule ? "is-open" : ""}`}>
+        {/* ==================== 4. БЛИЖАЙШИЕ ДЕДЛАЙНЫ (Things 3 / Linear style) ==================== */}
+        <div className="pt-8 border-t border-[var(--ink-faint)] space-y-5">
+          <div className="flex items-baseline justify-between gap-4 flex-wrap">
+            <div>
+              <h3 className="text-lg font-bold text-[var(--ink)] tracking-tight">
+                Работы и ближайшие сроки
+              </h3>
+              <p className="text-xs text-[var(--ink-muted)] mt-0.5">
+                Сначала — предстоящие сроки. Все задания доступны в разделе
+                «Сроки».
+              </p>
+            </div>
+
+            {!isGuest && (
+              <div className="text-xs font-mono">
+                <span className="text-[var(--ink-muted)]">Выполнено: </span>
+                <span className="font-bold text-[var(--ink)]">
+                  {completedCount} из {totalCount}
+                </span>
+                <span className="text-[var(--ink-muted)] ml-3">Опыт: </span>
+                <span className="font-bold text-[var(--wine)]">{xp} XP</span>
+              </div>
+            )}
+          </div>
+
+          {saveError && (
+            <p role="alert" className="text-sm text-[var(--wine)]">
+              {saveError}
+            </p>
+          )}
+          <Link
+            className="text-link text-sm"
+            href={isGuest ? `${publicBase}/deadlines` : "/deadlines"}
+          >
+            Все работы · {totalCount} →
+          </Link>
+          {/* Список задач */}
+          <div className="space-y-2.5">
+            {tasks.length > 0 ? (
+              orderedTasks.slice(0, 6).map((task) => {
+                const isOverdue = task.urgency === "OVERDUE";
+                const isSoon = task.urgency === "SOON";
+
+                return (
+                  <div
+                    key={task.id}
+                    className={`work-item preview-work p-4 rounded-xl bg-[var(--surface)] hover:bg-[var(--surface-active)] border border-[var(--border)] transition-all flex items-start gap-4 relative ${
+                      task.completed ? "opacity-60" : ""
+                    }`}
+                  >
+                    {!isGuest && (
+                      <button
+                        type="button"
+                        disabled={isPending || task.accepted}
+                        onClick={() => toggleTask(task.id)}
+                        className={`custom-check mt-1 shrink-0 ${
+                          task.completed ? "is-checked" : ""
+                        }`}
+                        aria-label={
+                          task.completed
+                            ? "Вернуть к выполнению"
+                            : "Отметить выполненным"
+                        }
+                      >
+                        {task.completed && (
+                          <Check
+                            size={12}
+                            strokeWidth={3}
+                            className="text-white"
+                          />
+                        )}
+                      </button>
+                    )}
+
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-baseline justify-between gap-2 flex-wrap">
+                        <span
+                          className={`text-xs font-mono font-bold ${
+                            isOverdue || isSoon
+                              ? "text-[var(--wine)]"
+                              : "text-[var(--ink-secondary)]"
+                          }`}
+                        >
+                          {task.courseShortTitle || task.courseTitle}
+                          {task.deadlineFormatted
+                            ? ` · ${task.deadlineFormatted}`
+                            : ""}
+                        </span>
+
+                        {task.accepted && (
+                          <span className="text-[11px] font-mono font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-100/70 dark:bg-emerald-950/70 px-2 py-0.5 rounded">
+                            ✓ Зачтено
+                          </span>
+                        )}
+                      </div>
+
+                      <p
+                        className={`text-sm font-bold text-[var(--ink)] mt-1 leading-snug ${
+                          task.completed
+                            ? "line-through text-[var(--ink-muted)]"
+                            : ""
+                        }`}
+                      >
+                        <Link
+                          href={
+                            isGuest
+                              ? `${publicBase}/tasks/${task.id}`
+                              : `/tasks/${task.id}`
+                          }
+                        >
+                          {task.title}
+                        </Link>
+                      </p>
+
+                      <div className="flex items-center gap-3 text-xs text-[var(--ink-muted)] mt-2 font-mono flex-wrap">
+                        {task.teacher && <span>{task.teacher}</span>}
+                        {task.materials &&
+                          task.materials.map((m, i) => (
+                            <span
+                              key={i}
+                              className="inline-flex items-center gap-1"
+                            >
+                              {m.url ? (
+                                <a
+                                  href={m.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-[var(--ink)] font-semibold hover:underline inline-flex items-center gap-1"
+                                >
+                                  <FileDown size={14} />
+                                  <span>{m.title}</span>
+                                </a>
+                              ) : (
+                                <span>📄 {m.title}</span>
+                              )}
+                            </span>
+                          ))}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="p-6 rounded-xl bg-white/40 dark:bg-slate-800/40 border border-[var(--border)] text-center text-xs text-[var(--ink-muted)] font-mono">
+                В сервисе пока нет опубликованных работ. Это не означает, что их
+                не задавали.
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

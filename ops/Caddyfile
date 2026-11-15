@@ -1,0 +1,8 @@
+{
+  email {$ACME_EMAIL}
+  admin off
+}
+studentvalue1984.eu.cc {
+  encode zstd gzip
+  reverse_proxy app:3000
+}

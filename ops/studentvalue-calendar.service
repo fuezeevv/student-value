@@ -1,0 +1,13 @@
+[Unit]
+Description=Student Value calendar reconciliation
+After=network-online.target docker.service
+Wants=network-online.target
+[Service]
+Type=oneshot
+User=root
+ExecStart=/usr/local/bin/node /srv/studentvalue/current/ops/calendar-worker.mjs
+TimeoutStartSec=280
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
