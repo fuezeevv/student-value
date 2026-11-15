@@ -1,4 +1,5 @@
 import { expect, it } from "vitest";
+import { ZodError } from "zod";
 import { parseUniversitySnapshot } from "../src/lib/university/snapshot";
 const snapshot = {
   version: 1,
@@ -33,4 +34,19 @@ it("rejects oversized imports before parsing JSON", () => {
   expect(() => parseUniversitySnapshot(" ".repeat(1024 * 1024 + 1))).toThrow(
     "большой",
   );
+});
+it("rejects an oversized invalid collection without allocating an issue per cell", () => {
+  // This fits the 1 MB file boundary, so the collection guard must also be effective.
+  const payload = JSON.stringify({
+    ...snapshot,
+    rows: Array.from({ length: 10000 }, () => [null, null]),
+  });
+  let failure: unknown;
+  try {
+    parseUniversitySnapshot(payload);
+  } catch (error) {
+    failure = error;
+  }
+  expect(failure).toBeInstanceOf(ZodError);
+  expect((failure as ZodError).issues.length).toBeLessThanOrEqual(4);
 });

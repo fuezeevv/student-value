@@ -192,7 +192,7 @@ export function extractRuzPagePayload(html: string, groupId: number): unknown {
         lessons: z.object({
           group: responseSchema.shape.group,
           week: responseSchema.shape.week,
-          data: z.record(z.unknown()),
+          data: z.record(z.string(), z.unknown()),
         }),
       })
       .parse(JSON.parse(match[1]));
