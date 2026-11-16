@@ -41,14 +41,80 @@ export async function requestNotificationPermissions(): Promise<boolean> {
   return finalStatus === "granted";
 }
 
+/**
+ * Parses a deadline string into a UTC Date object representing Europe/Moscow time.
+ * Date-only deadlines end at 23:59:59.999 Moscow time (20:59:59.999 UTC).
+ */
+export function parseMoscowDeadline(deadlineStr: string): Date | null {
+  if (!deadlineStr) return null;
+
+  // ISO string (e.g. 2026-11-20T20:59:59.999Z or with timezone offset)
+  if (deadlineStr.includes("T")) {
+    const d = new Date(deadlineStr);
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  // YYYY-MM-DD
+  const isoMatch = deadlineStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (isoMatch) {
+    const [, y, m, d] = isoMatch;
+    // 23:59:59.999 MSK = 20:59:59.999 UTC
+    return new Date(Date.UTC(Number(y), Number(m) - 1, Number(d), 20, 59, 59, 999));
+  }
+
+  // DD.MM.YYYY
+  const ruMatch = deadlineStr.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+  if (ruMatch) {
+    const [, d, m, y] = ruMatch;
+    return new Date(Date.UTC(Number(y), Number(m) - 1, Number(d), 20, 59, 59, 999));
+  }
+
+  return null;
+}
+
+/**
+ * Computes trigger time in UTC based on Moscow deadline:
+ * 1. Default: 24h before deadline at 10:00 Moscow time (07:00 UTC).
+ * 2. If 10:00 MSK 1-day prior has passed, but deadline is still in the future:
+ *    trigger 2 hours before the deadline.
+ * 3. If deadline is already past, returns null (never schedules reminders for past deadlines).
+ */
+export function calculateReminderTriggerTime(
+  deadlineDate: Date,
+  nowMs = Date.now(),
+): Date | null {
+  const deadlineMs = deadlineDate.getTime();
+  if (deadlineMs <= nowMs) {
+    // Deadline is already in the past; do not schedule
+    return null;
+  }
+
+  // 1 day before at 10:00 MSK (07:00 UTC)
+  const oneDayBefore = new Date(deadlineMs - 24 * 3600 * 1000);
+  oneDayBefore.setUTCHours(7, 0, 0, 0);
+
+  if (oneDayBefore.getTime() > nowMs) {
+    return oneDayBefore;
+  }
+
+  // If 1-day-before has already passed, check 2 hours before deadline
+  const twoHoursBefore = new Date(deadlineMs - 2 * 3600 * 1000);
+  if (twoHoursBefore.getTime() > nowMs) {
+    return twoHoursBefore;
+  }
+
+  // If deadline is less than 2 hours away, notify immediately (within 10 seconds)
+  return new Date(nowMs + 10 * 1000);
+}
+
 export async function scheduleDeadlineReminder(params: {
   userId: string;
   taskId: string;
   deadlineId: string;
   taskTitle: string;
   subjectName: string;
-  deadlineDateStr: string; // e.g. "14.09.2026" or ISO
-  secondsFromNow?: number; // Optional override for instant test verification
+  deadlineDateStr: string; // ISO or DD.MM.YYYY / YYYY-MM-DD
+  testSecondsOverride?: number; // STRICTLY FOR TEST HARNESS ONLY
 }): Promise<ScheduledNotificationRecord | null> {
   await setupNotificationChannels();
   const hasPermission = await requestNotificationPermissions();
@@ -62,23 +128,19 @@ export async function scheduleDeadlineReminder(params: {
   // Cancel any existing notification with this identifier to prevent duplicates
   await Notifications.cancelScheduledNotificationAsync(identifier);
 
-  let triggerDate: Date;
-  if (params.secondsFromNow !== undefined) {
-    triggerDate = new Date(Date.now() + params.secondsFromNow * 1000);
+  let triggerDate: Date | null = null;
+  if (params.testSecondsOverride !== undefined) {
+    triggerDate = new Date(Date.now() + params.testSecondsOverride * 1000);
   } else {
-    // Normal schedule: 1 day before deadline at 10:00 Moscow time
-    // Parse DD.MM.YYYY
-    const parts = params.deadlineDateStr.split(".");
-    let target = new Date();
-    if (parts.length === 3) {
-      target = new Date(Number(parts[2]), Number(parts[1]) - 1, Number(parts[0]), 10, 0, 0);
-      target.setDate(target.getDate() - 1); // 1 day before
+    const deadlineUtc = parseMoscowDeadline(params.deadlineDateStr);
+    if (!deadlineUtc) {
+      console.warn("Invalid deadline format:", params.deadlineDateStr);
+      return null;
     }
-    // If target is in the past, schedule for 10 seconds from now for safety
-    if (target.getTime() <= Date.now()) {
-      triggerDate = new Date(Date.now() + 10 * 1000);
-    } else {
-      triggerDate = target;
+    triggerDate = calculateReminderTriggerTime(deadlineUtc);
+    if (!triggerDate) {
+      // Deadline has already passed
+      return null;
     }
   }
 
@@ -130,29 +192,31 @@ export async function cancelDeadlineReminder(
   try {
     await Notifications.cancelScheduledNotificationAsync(identifier);
   } catch (err) {
-    console.warn("Failed to cancel scheduled notification:", err);
+    console.warn("Could not cancel native notification:", err);
   }
-
   const repo = getTimetableRepository();
-  await repo.updateNotificationStatus(identifier, "CANCELLED");
+  await repo.deleteScheduledNotification(identifier);
 }
 
-export async function cancelAllRemindersForTask(
-  userId: string,
-  taskId: string,
-): Promise<void> {
-  const repo = getTimetableRepository();
-  const existing = await repo.getScheduledNotificationsForTask(userId, taskId);
-  for (const notif of existing) {
-    try {
-      await Notifications.cancelScheduledNotificationAsync(notif.id);
-    } catch (err) {
-      console.warn("Failed to cancel scheduled notification:", err);
-    }
-    await repo.updateNotificationStatus(notif.id, "CANCELLED");
-  }
-}
-
-export async function getActiveScheduledNotifications(): Promise<Notifications.NotificationRequest[]> {
-  return Notifications.getAllScheduledNotificationsAsync();
+/**
+ * Handles deadline reschedule: cancels old notification and registers new one.
+ */
+export async function rescheduleDeadlineReminder(params: {
+  userId: string;
+  taskId: string;
+  oldDeadlineId: string;
+  newDeadlineId: string;
+  taskTitle: string;
+  subjectName: string;
+  newDeadlineDateStr: string;
+}): Promise<ScheduledNotificationRecord | null> {
+  await cancelDeadlineReminder(params.userId, params.taskId, params.oldDeadlineId);
+  return scheduleDeadlineReminder({
+    userId: params.userId,
+    taskId: params.taskId,
+    deadlineId: params.newDeadlineId,
+    taskTitle: params.taskTitle,
+    subjectName: params.subjectName,
+    deadlineDateStr: params.newDeadlineDateStr,
+  });
 }

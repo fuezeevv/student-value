@@ -87,3 +87,22 @@ export type ScheduledNotificationRecord = {
   status: "SCHEDULED" | "DELIVERED" | "CANCELLED";
   createdAt: string; // ISO
 };
+
+export type CachedTask = {
+  id: string;
+  groupCode: string;
+  title: string;
+  subject: string;
+  type: string;
+  deadlineId: string | null;
+  deadlineDate: string | null;
+  deadlineMoscowStr: string | null;
+  deadlineStatus: string | null;
+  materialId: string | null;
+  materialTitle: string | null;
+  materialFilename: string | null;
+  materialByteSize: number | null;
+  materialMimeType: string | null;
+  materialSha256: string | null;
+  updatedAt: string;
+};

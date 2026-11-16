@@ -256,4 +256,102 @@ describe("Mobile Progress & Outbox Idempotency (Stage B)", () => {
     const jsonB = await resB.json();
     expect(jsonB.progress).toBeNull();
   });
+
+  it("enforces strong operationId idempotency and protects against out-of-order execution", async () => {
+    const { user, sessionToken } = await createTestStudent("idempotency-user");
+    const task = await createTestTask("test-group");
+    const operationId = randomUUID();
+
+    // 1. Initial execution
+    const req1 = new NextRequest("http://localhost:3000/api/v1/progress", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${sessionToken}`,
+      },
+      body: JSON.stringify({
+        operationId,
+        taskId: task.id,
+        status: "READY",
+        notes: "First run",
+        createdAt: new Date().toISOString(),
+      }),
+    });
+    const res1 = await handleMobileProgress(req1);
+    expect(res1.status).toBe(200);
+    const json1 = await res1.json();
+    expect(json1.success).toBe(true);
+    expect(json1.operationId).toBe(operationId);
+    expect(json1.progress.status).toBe("READY");
+
+    // 2. Exact retry of operationId: must return replayed: true without mutating DB
+    const reqRetry = new NextRequest("http://localhost:3000/api/v1/progress", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${sessionToken}`,
+      },
+      body: JSON.stringify({
+        operationId,
+        taskId: task.id,
+        status: "READY",
+        notes: "First run",
+        createdAt: new Date().toISOString(),
+      }),
+    });
+    const resRetry = await handleMobileProgress(reqRetry);
+    expect(resRetry.status).toBe(200);
+    const jsonRetry = await resRetry.json();
+    expect(jsonRetry.success).toBe(true);
+    expect(jsonRetry.operationId).toBe(operationId);
+    expect(jsonRetry.replayed).toBe(true);
+    expect(jsonRetry.progress.status).toBe("READY");
+
+    // 3. User unmarks task with a NEW operationId
+    const unmarkOpId = randomUUID();
+    const reqUnmark = new NextRequest("http://localhost:3000/api/v1/progress", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${sessionToken}`,
+      },
+      body: JSON.stringify({
+        operationId: unmarkOpId,
+        taskId: task.id,
+        status: "IN_PROGRESS",
+        createdAt: new Date(Date.now() + 1000).toISOString(),
+      }),
+    });
+    const resUnmark = await handleMobileProgress(reqUnmark);
+    expect(resUnmark.status).toBe(200);
+    const jsonUnmark = await resUnmark.json();
+    expect(jsonUnmark.progress.status).toBe("IN_PROGRESS");
+
+    // 4. Delayed/out-of-order operation with OLD timestamp (e.g. earlier READY retry from network queue)
+    const delayedOpId = randomUUID();
+    const reqDelayed = new NextRequest("http://localhost:3000/api/v1/progress", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${sessionToken}`,
+      },
+      body: JSON.stringify({
+        operationId: delayedOpId,
+        taskId: task.id,
+        status: "READY",
+        // Created 1 minute in the past, older than the unmark
+        createdAt: new Date(Date.now() - 60000).toISOString(),
+      }),
+    });
+    const resDelayed = await handleMobileProgress(reqDelayed);
+    expect(resDelayed.status).toBe(200);
+    const jsonDelayed = await resDelayed.json();
+    expect(jsonDelayed.superseded).toBe(true);
+    // Crucial check: status in database remains IN_PROGRESS, not reverted back to READY!
+    expect(jsonDelayed.progress.status).toBe("IN_PROGRESS");
+    const dbCheck = await prisma.studentTaskProgress.findUnique({
+      where: { taskId_userId: { taskId: task.id, userId: user.id } },
+    });
+    expect(dbCheck?.status).toBe("IN_PROGRESS");
+  });
 });

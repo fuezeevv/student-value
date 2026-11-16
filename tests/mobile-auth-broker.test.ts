@@ -53,8 +53,10 @@ describe("Mobile Auth Broker (RFC 7636 PKCE & Revocable Mobile Sessions)", () =>
   it("accepts valid parameters and sets encrypted PKCE broker cookie", async () => {
     const origEnv = process.env.NODE_ENV;
     const origDevAuth = process.env.ALLOW_DEV_AUTH;
-    process.env.NODE_ENV = "development";
+    const origKey = process.env.NEXT_SERVER_ACTIONS_ENCRYPTION_KEY;
+    (process.env as any).NODE_ENV = "development";
     process.env.ALLOW_DEV_AUTH = "true";
+    process.env.NEXT_SERVER_ACTIONS_ENCRYPTION_KEY = Buffer.alloc(32, 1).toString("base64");
 
     try {
       const { challenge, state } = createPkcePair();
@@ -79,8 +81,9 @@ describe("Mobile Auth Broker (RFC 7636 PKCE & Revocable Mobile Sessions)", () =>
       expect(decrypted?.redirectUri).toBe(redirectUri);
       expect(decrypted?.expiresAt).toBeGreaterThan(Date.now());
     } finally {
-      process.env.NODE_ENV = origEnv;
+      (process.env as any).NODE_ENV = origEnv;
       process.env.ALLOW_DEV_AUTH = origDevAuth;
+      process.env.NEXT_SERVER_ACTIONS_ENCRYPTION_KEY = origKey;
     }
   });
 

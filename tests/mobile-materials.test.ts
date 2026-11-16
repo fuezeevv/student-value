@@ -53,6 +53,7 @@ describe("Mobile Material Download & Integrity (Stage C)", () => {
         userId: testUserId,
         tokenHash: hashToken(validToken),
         expiresAt: new Date(Date.now() + 30 * 86400 * 1000),
+        userAgent: "StudentValue-Mobile/1.0",
       },
     });
 
@@ -95,6 +96,7 @@ describe("Mobile Material Download & Integrity (Stage C)", () => {
         userId: foreignUserId,
         tokenHash: hashToken(foreignToken),
         expiresAt: new Date(Date.now() + 30 * 86400 * 1000),
+        userAgent: "StudentValue-Mobile/1.0",
       },
     });
 
@@ -273,5 +275,84 @@ describe("Mobile Material Download & Integrity (Stage C)", () => {
 
     const afterLogoutNotifs = await repo.getScheduledNotificationsForTask(testUserId, "task-otu-lab1");
     expect(afterLogoutNotifs).toHaveLength(0);
+  });
+
+  it("supports multi-chunk binary materials (> 1 MiB) with exact binary SHA-256", async () => {
+    const multiMaterialId = `mat-multi-${randomBytes(4).toString("hex")}`;
+    const binarySize = 1_500_000; // ~1.43 MiB (2 chunks of 1 MiB and 451.4 KiB)
+    const binaryData = Buffer.alloc(binarySize);
+    binaryData.write("%PDF-1.4\n%Multi-chunk binary PDF test\n", 0);
+    for (let i = 50; i < binarySize; i++) {
+      binaryData[i] = (i * 33 + 7) % 256;
+    }
+    const binarySha = createHash("sha256").update(binaryData).digest("hex");
+
+    await prisma.courseMaterial.create({
+      data: {
+        id: multiMaterialId,
+        courseOfferingId: "test-course",
+        title: "Multi-chunk PDF Guide",
+        type: "METHODOLOGY",
+        url: `/api/v1/materials/${multiMaterialId}/file`,
+        sourceNote: "Binary PDF Guide",
+      },
+    });
+
+    await prisma.materialFile.create({
+      data: {
+        materialId: multiMaterialId,
+        filename: "Advanced_Guide.pdf",
+        mimeType: "application/pdf",
+        byteSize: binaryData.byteLength,
+        sha256: binarySha,
+        content: binaryData,
+      },
+    });
+
+    // 1. Metadata check: shows total size 1,500,000 bytes and binary sha
+    const metaReq = new NextRequest(
+      `http://localhost:3000/api/v1/materials/${multiMaterialId}/metadata`,
+      { headers: { authorization: `Bearer ${validToken}` } },
+    );
+    const metaRes = await handleMobileMaterialMetadata(metaReq, multiMaterialId);
+    expect(metaRes.status).toBe(200);
+    const meta = await metaRes.json();
+    expect(meta.byteSize).toBe(1_500_000);
+    expect(meta.sha256).toBe(binarySha);
+    expect(meta.filename).toBe("Advanced_Guide.pdf");
+
+    // 2. Fetch chunk 0: exactly 1 MiB (1048576 bytes)
+    const chunk0Req = new NextRequest(
+      `http://localhost:3000/api/v1/materials/${multiMaterialId}/file?chunk=0`,
+      { headers: { authorization: `Bearer ${validToken}` } },
+    );
+    const chunk0Res = await handleMobileMaterialFile(chunk0Req, multiMaterialId);
+    expect(chunk0Res.status).toBe(200);
+    const chunk0Bytes = Buffer.from(await chunk0Res.arrayBuffer());
+    expect(chunk0Bytes.byteLength).toBe(1024 * 1024);
+
+    // 3. Fetch chunk 1: remainder (1500000 - 1048576 = 451424 bytes)
+    const chunk1Req = new NextRequest(
+      `http://localhost:3000/api/v1/materials/${multiMaterialId}/file?chunk=1`,
+      { headers: { authorization: `Bearer ${validToken}` } },
+    );
+    const chunk1Res = await handleMobileMaterialFile(chunk1Req, multiMaterialId);
+    expect(chunk1Res.status).toBe(200);
+    const chunk1Bytes = Buffer.from(await chunk1Res.arrayBuffer());
+    expect(chunk1Bytes.byteLength).toBe(1_500_000 - 1024 * 1024);
+
+    // 4. Combined binary check: exactly matches original binaryData and its SHA-256
+    const combined = Buffer.concat([chunk0Bytes, chunk1Bytes]);
+    expect(combined.byteLength).toBe(1_500_000);
+    const combinedSha = createHash("sha256").update(combined).digest("hex");
+    expect(combinedSha).toBe(binarySha);
+
+    // 5. Out of bounds chunk 2 returns 400
+    const chunk2Req = new NextRequest(
+      `http://localhost:3000/api/v1/materials/${multiMaterialId}/file?chunk=2`,
+      { headers: { authorization: `Bearer ${validToken}` } },
+    );
+    const chunk2Res = await handleMobileMaterialFile(chunk2Req, multiMaterialId);
+    expect(chunk2Res.status).toBe(400);
   });
 });

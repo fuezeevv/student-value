@@ -12,6 +12,7 @@ import type {
   UserTaskProgress,
   DownloadedMaterial,
   ScheduledNotificationRecord,
+  CachedTask,
 } from "./types";
 
 function weekStartForDate(dateStr: string): string {
@@ -605,5 +606,88 @@ export class TimetableSqliteRepository {
     await this.db.run(`DELETE FROM user_task_progress WHERE user_id = ?`, [userId]);
     await this.db.run(`DELETE FROM downloaded_materials WHERE user_id = ?`, [userId]);
     await this.db.run(`DELETE FROM scheduled_notifications WHERE user_id = ?`, [userId]);
+  }
+
+  async saveCachedTasksForGroup(
+    groupCode: string,
+    tasks: CachedTask[],
+  ): Promise<void> {
+    await this.init();
+    await this.db.transaction(async () => {
+      await this.db.run(`DELETE FROM cached_tasks WHERE group_code = ?`, [groupCode]);
+      const now = new Date().toISOString();
+      for (const t of tasks) {
+        await this.db.run(
+          `INSERT INTO cached_tasks (
+            id, group_code, title, subject, type,
+            deadline_id, deadline_date, deadline_moscow_str, deadline_status,
+            material_id, material_title, material_filename, material_byte_size,
+            material_mime_type, material_sha256, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            t.id,
+            groupCode,
+            t.title,
+            t.subject,
+            t.type,
+            t.deadlineId,
+            t.deadlineDate,
+            t.deadlineMoscowStr,
+            t.deadlineStatus,
+            t.materialId,
+            t.materialTitle,
+            t.materialFilename,
+            t.materialByteSize,
+            t.materialMimeType,
+            t.materialSha256,
+            now,
+          ],
+        );
+      }
+    });
+  }
+
+  async getCachedTasksForGroup(groupCode: string): Promise<CachedTask[]> {
+    await this.init();
+    const rows = await this.db.all<{
+      id: string;
+      group_code: string;
+      title: string;
+      subject: string;
+      type: string;
+      deadline_id: string | null;
+      deadline_date: string | null;
+      deadline_moscow_str: string | null;
+      deadline_status: string | null;
+      material_id: string | null;
+      material_title: string | null;
+      material_filename: string | null;
+      material_byte_size: number | null;
+      material_mime_type: string | null;
+      material_sha256: string | null;
+      updated_at: string;
+    }>(
+      `SELECT * FROM cached_tasks WHERE group_code = ? ORDER BY deadline_date ASC, id ASC`,
+      [groupCode],
+    );
+
+    return rows.map((r) => ({
+      id: r.id,
+      groupCode: r.group_code,
+      title: r.title,
+      subject: r.subject,
+      type: r.type,
+      deadlineId: r.deadline_id,
+      deadlineDate: r.deadline_date,
+      deadlineMoscowStr: r.deadline_moscow_str,
+      deadlineStatus: r.deadline_status,
+      materialId: r.material_id,
+      materialTitle: r.material_title,
+      materialFilename: r.material_filename,
+      materialByteSize: r.material_byte_size,
+      materialMimeType: r.material_mime_type,
+      materialSha256: r.material_sha256,
+      updatedAt: r.updated_at,
+    }));
   }
 }

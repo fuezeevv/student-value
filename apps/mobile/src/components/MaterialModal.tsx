@@ -16,6 +16,7 @@ import {
   deleteLocalMaterial,
   fetchMaterialMetadata,
   type MaterialMetadata,
+  type LocalMaterialReadResult,
 } from "../materials/downloader";
 import { getTimetableRepository } from "../storage/repository";
 
@@ -37,14 +38,14 @@ export const MaterialModal: React.FC<MaterialModalProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [metadata, setMetadata] = useState<MaterialMetadata | null>(null);
   const [downloaded, setDownloaded] = useState<DownloadedMaterial | null>(null);
-  const [fileContent, setFileContent] = useState<string | null>(null);
+  const [readResult, setReadResult] = useState<LocalMaterialReadResult | null>(null);
   const [viewingFile, setViewingFile] = useState(false);
 
   useEffect(() => {
     if (!visible || !materialId || !userId) {
       setMetadata(null);
       setDownloaded(null);
-      setFileContent(null);
+      setReadResult(null);
       setViewingFile(false);
       setError(null);
       return;
@@ -101,8 +102,8 @@ export const MaterialModal: React.FC<MaterialModalProps> = ({
     setLoading(true);
     setError(null);
     try {
-      const content = await readLocalMaterialContent(userId, materialId);
-      setFileContent(content);
+      const result = await readLocalMaterialContent(userId, materialId);
+      setReadResult(result);
       setViewingFile(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Не удалось открыть файл");
@@ -124,7 +125,7 @@ export const MaterialModal: React.FC<MaterialModalProps> = ({
             if (!materialId || !userId) return;
             await deleteLocalMaterial(userId, materialId);
             setDownloaded(null);
-            setFileContent(null);
+            setReadResult(null);
             setViewingFile(false);
           },
         },
@@ -158,7 +159,19 @@ export const MaterialModal: React.FC<MaterialModalProps> = ({
                 </TouchableOpacity>
               </View>
               <ScrollView style={styles.readerBody}>
-                <Text style={styles.readerText}>{fileContent}</Text>
+                {readResult?.isBinary ? (
+                  <View style={styles.binaryContainer}>
+                    <Text style={styles.binaryTitle}>📄 Бинарный документ</Text>
+                    <Text style={styles.binarySubtitle}>
+                      {readResult.filename} ({readResult.mimeType || "application/octet-stream"})
+                    </Text>
+                    <Text style={styles.binaryDesc}>
+                      Файл загружен и верифицирован ({readResult.byteSize} байт). Сохранён в изолированной памяти устройства для работы без сети.
+                    </Text>
+                  </View>
+                ) : (
+                  <Text style={styles.readerText}>{readResult?.content}</Text>
+                )}
               </ScrollView>
             </View>
           ) : (
@@ -447,5 +460,31 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     fontFamily: "monospace",
     color: "#dbeafe",
+  },
+  binaryContainer: {
+    padding: 16,
+    backgroundColor: "rgba(30, 41, 59, 0.7)",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(59, 130, 246, 0.3)",
+    alignItems: "center",
+  },
+  binaryTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#93c5fd",
+    marginBottom: 6,
+  },
+  binarySubtitle: {
+    fontSize: 13,
+    color: "#cbd5e1",
+    marginBottom: 12,
+    textAlign: "center",
+  },
+  binaryDesc: {
+    fontSize: 12,
+    lineHeight: 18,
+    color: "#94a3b8",
+    textAlign: "center",
   },
 });

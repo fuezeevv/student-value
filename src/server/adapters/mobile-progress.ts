@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getMobileSessionUser } from "./mobile-auth";
 import { updateOwnProgress } from "@/server/domain/progress";
+import { taskVisibilityWhere } from "@/server/domain/access";
 import { ForbiddenError, UnauthorizedError } from "@/lib/permissions/checker";
 import { prisma } from "@/lib/db/prisma";
 
@@ -48,22 +49,113 @@ export async function handleMobileProgress(
     );
   }
 
-  const { operationId, taskId, status, notes } = parsed.data;
+  const { operationId, taskId, status, notes, createdAt } = parsed.data;
 
-  try {
-    const updated = await updateOwnProgress(user, taskId, status, notes);
+  // 1. Check Idempotency Journal: if this operationId was already executed
+  const existingLog = await prisma.auditLog.findUnique({
+    where: { id: operationId },
+  });
+
+  if (existingLog) {
+    if (existingLog.userId !== user.id) {
+      return NextResponse.json(
+        {
+          error: "OPERATION_USER_MISMATCH",
+          message: "Operation ID does not belong to user",
+        },
+        { status: 403 },
+      );
+    }
+    const details = existingLog.details as any;
     return NextResponse.json({
       success: true,
       operationId,
-      progress: {
-        taskId: updated.taskId,
-        userId: updated.userId,
-        status: updated.status,
-        isVerified: updated.isVerified,
-        studentNotes: updated.studentNotes,
-        completedAt: updated.completedAt?.toISOString() ?? null,
-        updatedAt: updated.updatedAt.toISOString(),
-      },
+      replayed: true,
+      progress: details?.progressSnapshot ?? null,
+    });
+  }
+
+  // 2. Out-of-order check: do not overwrite a newer progress state with a delayed older operation
+  const currentProgress = await prisma.studentTaskProgress.findUnique({
+    where: { taskId_userId: { taskId, userId: user.id } },
+  });
+
+  if (
+    createdAt &&
+    currentProgress &&
+    currentProgress.updatedAt.getTime() > new Date(createdAt).getTime()
+  ) {
+    const currentSnapshot = {
+      taskId: currentProgress.taskId,
+      userId: currentProgress.userId,
+      status: currentProgress.status,
+      isVerified: currentProgress.isVerified,
+      studentNotes: currentProgress.studentNotes,
+      completedAt: currentProgress.completedAt?.toISOString() ?? null,
+      updatedAt: currentProgress.updatedAt.toISOString(),
+    };
+
+    // Save audit entry so repeat retries of this old op are also recognized as superseded
+    await prisma.auditLog
+      .create({
+        data: {
+          id: operationId,
+          userId: user.id,
+          action: "MOBILE_PROGRESS_OPERATION",
+          entityType: "Task",
+          entityId: taskId,
+          details: {
+            taskId,
+            status,
+            superseded: true,
+            progressSnapshot: currentSnapshot,
+          },
+        },
+      })
+      .catch(() => {});
+
+    return NextResponse.json({
+      success: true,
+      operationId,
+      superseded: true,
+      progress: currentSnapshot,
+    });
+  }
+
+  try {
+    const updated = await updateOwnProgress(user, taskId, status, notes);
+    const progressSnapshot = {
+      taskId: updated.taskId,
+      userId: updated.userId,
+      status: updated.status,
+      isVerified: updated.isVerified,
+      studentNotes: updated.studentNotes,
+      completedAt: updated.completedAt?.toISOString() ?? null,
+      updatedAt: updated.updatedAt.toISOString(),
+    };
+
+    // Record the executed operation in the Idempotency Journal
+    await prisma.auditLog
+      .create({
+        data: {
+          id: operationId,
+          userId: user.id,
+          action: "MOBILE_PROGRESS_OPERATION",
+          entityType: "Task",
+          entityId: taskId,
+          details: {
+            taskId,
+            status,
+            progressSnapshot,
+          },
+        },
+      })
+      .catch(() => {});
+
+    return NextResponse.json({
+      success: true,
+      operationId,
+      progress: progressSnapshot,
     });
   } catch (err: any) {
     if (err instanceof ForbiddenError || err.statusCode === 403) {
@@ -102,10 +194,16 @@ export async function handleGetMobileProgress(
     return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
   }
 
+  const visibleTasksWhere = await taskVisibilityWhere(user);
+
   const taskId = request.nextUrl.searchParams.get("taskId");
   if (taskId) {
-    const row = await prisma.studentTaskProgress.findUnique({
-      where: { taskId_userId: { taskId, userId: user.id } },
+    const row = await prisma.studentTaskProgress.findFirst({
+      where: {
+        taskId,
+        userId: user.id,
+        task: visibleTasksWhere,
+      },
     });
     if (!row) {
       return NextResponse.json({ progress: null });
@@ -124,7 +222,10 @@ export async function handleGetMobileProgress(
   }
 
   const rows = await prisma.studentTaskProgress.findMany({
-    where: { userId: user.id },
+    where: {
+      userId: user.id,
+      task: visibleTasksWhere,
+    },
   });
 
   return NextResponse.json({

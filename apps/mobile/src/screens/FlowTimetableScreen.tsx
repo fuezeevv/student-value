@@ -15,6 +15,7 @@ import type {
   MobileLesson,
   MobileTimetable,
   UserTaskProgress,
+  CachedTask,
 } from "@studentvalue/mobile-contracts";
 import { getTimetableRepository } from "../storage/repository";
 import {
@@ -22,7 +23,11 @@ import {
   getActiveApiOrigin,
   setActiveApiOrigin,
 } from "../api/client";
-import { getSessionUser, type MobileSessionUser } from "../auth/token-storage";
+import {
+  getSessionUser,
+  getSessionToken,
+  type MobileSessionUser,
+} from "../auth/token-storage";
 import { enqueueProgressUpdate, flushOutbox } from "../sync/outbox";
 import { DaySwitcher, type DayItem } from "../components/DaySwitcher";
 import { FlowHeroCard } from "../components/FlowHeroCard";
@@ -178,7 +183,9 @@ export const FlowTimetableScreen: React.FC = () => {
   // Material and Reminder states (Stage C)
   const [materialModalVisible, setMaterialModalVisible] = useState<boolean>(false);
   const [activeMaterialModalId, setActiveMaterialModalId] = useState<string | null>(null);
-  const [isReminderScheduled, setIsReminderScheduled] = useState<boolean>(false);
+  const [tasks, setTasks] = useState<CachedTask[]>([]);
+  const [scheduledReminders, setScheduledReminders] = useState<Record<string, boolean>>({});
+  const [updatingTaskId, setUpdatingTaskId] = useState<string | null>(null);
 
   const repo = useMemo(() => getTimetableRepository(), []);
   const reqGenRef = useRef(0);
@@ -189,7 +196,87 @@ export const FlowTimetableScreen: React.FC = () => {
     setupNotificationChannels().catch(() => {});
   }, []);
 
-  // Load session user and outbox count on mount
+  const loadTasks = useCallback(
+    async (groupCode: string, user: MobileSessionUser | null) => {
+      // 1. Initial cached tasks from SQLite
+      try {
+        const cached = await repo.getCachedTasksForGroup(groupCode);
+        if (cached.length > 0) {
+          setTasks(cached);
+        }
+      } catch (err) {
+        console.warn("Could not read cached tasks from SQLite:", err);
+      }
+
+      // 2. Fetch fresh tasks from API
+      try {
+        const origin = await getActiveApiOrigin();
+        const token = await getSessionToken();
+        const headers: Record<string, string> = {};
+        if (token && user) {
+          headers["Authorization"] = `Bearer ${token}`;
+        }
+        const res = await fetch(
+          `${origin}/api/v1/tasks?group=${encodeURIComponent(groupCode)}`,
+          { headers },
+        );
+        if (res.ok) {
+          const data = await res.json();
+          const serverTasks = data.tasks || [];
+          const mapped: CachedTask[] = serverTasks.map((t: any) => ({
+            id: t.id,
+            groupCode,
+            title: t.title,
+            subject: t.subject,
+            type: t.type,
+            deadlineId: t.deadline?.id ?? null,
+            deadlineDate: t.deadline?.date ?? null,
+            deadlineMoscowStr: t.deadline?.dateMoscowStr ?? null,
+            deadlineStatus: t.deadline?.status ?? null,
+            materialId: t.material?.id ?? null,
+            materialTitle: t.material?.title ?? null,
+            materialFilename: t.material?.filename ?? null,
+            materialByteSize: t.material?.byteSize ?? null,
+            materialMimeType: t.material?.mimeType ?? null,
+            materialSha256: t.material?.sha256 ?? null,
+            updatedAt: new Date().toISOString(),
+          }));
+          await repo.saveCachedTasksForGroup(groupCode, mapped);
+          setTasks(mapped);
+
+          // Populate task progress from server response if authenticated
+          if (user) {
+            const progMap: Record<string, UserTaskProgress> = {};
+            const remMap: Record<string, boolean> = {};
+            for (const t of serverTasks) {
+              if (t.progress) {
+                progMap[t.id] = {
+                  userId: user.id,
+                  taskId: t.id,
+                  status: t.progress.status,
+                  isVerified: t.progress.isVerified,
+                  studentNotes: t.progress.studentNotes,
+                  completedAt: t.progress.completedAt,
+                  updatedAt: t.progress.updatedAt,
+                  syncState: "SYNCED",
+                };
+                await repo.saveUserProgress(progMap[t.id]);
+              }
+              const notifs = await repo.getScheduledNotificationsForTask(user.id, t.id);
+              remMap[t.id] = notifs.some((n) => n.status === "SCHEDULED");
+            }
+            setTaskProgress((prev) => ({ ...prev, ...progMap }));
+            setScheduledReminders(remMap);
+          }
+        }
+      } catch {
+        // Network offline: retain SQLite cache
+      }
+    },
+    [repo],
+  );
+
+  // Load session user, outbox count and tasks on mount
   useEffect(() => {
     getSessionUser().then(async (u) => {
       setSessionUser(u);
@@ -203,23 +290,23 @@ export const FlowTimetableScreen: React.FC = () => {
         }
         setTaskProgress(map);
 
-        const notifs = await repo.getScheduledNotificationsForTask(u.id, "task-otu-lab1");
-        const active = notifs.some((n) => n.status === "SCHEDULED");
-        setIsReminderScheduled(active);
         // Try initial outbox flush
-        flushOutbox().then(async () => {
-          const freshOps = await repo.getPendingOperations(u.id);
-          setPendingOpsCount(freshOps.length);
-          const freshProgress = await repo.getAllUserProgress(u.id);
-          const freshMap: Record<string, UserTaskProgress> = {};
-          for (const p of freshProgress) {
-            freshMap[p.taskId] = p;
-          }
-          setTaskProgress(freshMap);
-        }).catch(() => {});
+        flushOutbox()
+          .then(async () => {
+            const freshOps = await repo.getPendingOperations(u.id);
+            setPendingOpsCount(freshOps.length);
+            const freshProgress = await repo.getAllUserProgress(u.id);
+            const freshMap: Record<string, UserTaskProgress> = {};
+            for (const p of freshProgress) {
+              freshMap[p.taskId] = p;
+            }
+            setTaskProgress(freshMap);
+          })
+          .catch(() => {});
       }
+      await loadTasks(selectedGroup, u);
     });
-  }, [repo]);
+  }, [repo, selectedGroup, loadTasks]);
 
   // Live timer for ongoing lesson progress and midnight day rollover
   useEffect(() => {
@@ -469,7 +556,7 @@ export const FlowTimetableScreen: React.FC = () => {
         ? "IN_PROGRESS"
         : "READY";
 
-    setIsUpdatingProgress(true);
+    setUpdatingTaskId(taskId);
     try {
       const { optimisticProgress } = await enqueueProgressUpdate(
         taskId,
@@ -488,21 +575,29 @@ export const FlowTimetableScreen: React.FC = () => {
       const remainingOps = await repo.getPendingOperations(sessionUser.id);
       setPendingOpsCount(remainingOps.length);
 
-      // Stage C: Update notification reminders
-      if (newStatus === "READY") {
-        await cancelDeadlineReminder(sessionUser.id, taskId, "dl-otu-lab1");
-        setIsReminderScheduled(false);
-      } else {
-        await scheduleDeadlineReminder({
-          userId: sessionUser.id,
-          taskId,
-          deadlineId: "dl-otu-lab1",
-          taskTitle: "Лабораторная работа 1: SystemVerilog · Lab1–Lab2",
-          subjectName: "Синтез и моделирование аппаратных средств",
-          deadlineDateStr: "14.09.2026",
-          secondsFromNow: 5,
-        });
-        setIsReminderScheduled(true);
+      // Notification update with real deadline if configured
+      const targetTask = tasks.find((t) => t.id === taskId);
+      if (targetTask?.deadlineId && targetTask.deadlineDate) {
+        if (newStatus === "READY") {
+          await cancelDeadlineReminder(
+            sessionUser.id,
+            taskId,
+            targetTask.deadlineId,
+          );
+          setScheduledReminders((prev) => ({ ...prev, [taskId]: false }));
+        } else {
+          const scheduled = await scheduleDeadlineReminder({
+            userId: sessionUser.id,
+            taskId,
+            deadlineId: targetTask.deadlineId,
+            taskTitle: targetTask.title,
+            subjectName: targetTask.subject,
+            deadlineDateStr: targetTask.deadlineDate,
+          });
+          if (scheduled) {
+            setScheduledReminders((prev) => ({ ...prev, [taskId]: true }));
+          }
+        }
       }
     } catch (err: any) {
       Alert.alert(
@@ -510,37 +605,48 @@ export const FlowTimetableScreen: React.FC = () => {
         err.message || "Не удалось сохранить отметку",
       );
     } finally {
-      setIsUpdatingProgress(false);
+      setUpdatingTaskId(null);
     }
   };
 
-  const handleToggleReminder = async () => {
+  const handleToggleReminderForTask = async (task: CachedTask) => {
     if (!sessionUser) {
       setAuthModalVisible(true);
       return;
     }
-    const taskId = "task-otu-lab1";
-    const deadlineId = "dl-otu-lab1";
+    if (!task.deadlineId || !task.deadlineDate) {
+      Alert.alert(
+        "Дедлайн не установлен",
+        "Для этого задания нет подтверждённого срока сдачи.",
+      );
+      return;
+    }
 
-    if (isReminderScheduled) {
-      await cancelDeadlineReminder(sessionUser.id, taskId, deadlineId);
-      setIsReminderScheduled(false);
+    const isCurrentScheduled = Boolean(scheduledReminders[task.id]);
+
+    if (isCurrentScheduled) {
+      await cancelDeadlineReminder(sessionUser.id, task.id, task.deadlineId);
+      setScheduledReminders((prev) => ({ ...prev, [task.id]: false }));
       Alert.alert("Напоминание", "Напоминание о дедлайне отключено.");
     } else {
       const scheduled = await scheduleDeadlineReminder({
         userId: sessionUser.id,
-        taskId,
-        deadlineId,
-        taskTitle: "Лабораторная работа 1: SystemVerilog · Lab1–Lab2",
-        subjectName: "Синтез и моделирование аппаратных средств",
-        deadlineDateStr: "14.09.2026",
-        secondsFromNow: 5,
+        taskId: task.id,
+        deadlineId: task.deadlineId,
+        taskTitle: task.title,
+        subjectName: task.subject,
+        deadlineDateStr: task.deadlineDate,
       });
       if (scheduled) {
-        setIsReminderScheduled(true);
+        setScheduledReminders((prev) => ({ ...prev, [task.id]: true }));
         Alert.alert(
           "Напоминание установлено",
-          "Уведомление запланировано на устройстве (сработает через 5 сек для теста).",
+          `Напоминание запланировано за 24ч до срока (${task.deadlineMoscowStr}) в 10:00 по Москве.`,
+        );
+      } else {
+        Alert.alert(
+          "Срок сдачи прошёл",
+          "Дедлайн уже наступил, напоминание не требуется.",
         );
       }
     }
@@ -557,14 +663,12 @@ export const FlowTimetableScreen: React.FC = () => {
         map[p.taskId] = p;
       }
       setTaskProgress(map);
-
-      const notifs = await repo.getScheduledNotificationsForTask(user.id, "task-otu-lab1");
-      const active = notifs.some((n) => n.status === "SCHEDULED");
-      setIsReminderScheduled(active);
+      await loadTasks(selectedGroup, user);
     } else {
-      setIsReminderScheduled(false);
+      setScheduledReminders({});
       setPendingOpsCount(0);
       setTaskProgress({});
+      await loadTasks(selectedGroup, null);
     }
   };
 
@@ -699,25 +803,40 @@ export const FlowTimetableScreen: React.FC = () => {
             {/* Stage B & C: Protected Personal Progress, Materials and Reminders */}
             <View style={styles.taskSection}>
               <Text style={styles.sectionHeaderTitle}>Текущая работа и прогресс</Text>
-              <TaskProgressCard
-                taskId="task-otu-lab1"
-                title="Лабораторная работа 1: SystemVerilog · Lab1–Lab2"
-                subject="Синтез и моделирование аппаратных средств"
-                deadlineText="Дедлайн: 14.09.2026"
-                progress={taskProgress["task-otu-lab1"] || null}
-                isLoggedIn={Boolean(sessionUser)}
-                materialId="material-otu-lab1"
-                materialTitle="Методические указания: SystemVerilog Lab1"
-                reminderScheduled={isReminderScheduled}
-                onToggleReminder={handleToggleReminder}
-                onOpenMaterial={(matId) => {
-                  setActiveMaterialModalId(matId);
-                  setMaterialModalVisible(true);
-                }}
-                onToggleStatus={handleToggleTaskStatus}
-                onOpenLogin={() => setAuthModalVisible(true)}
-                loading={isUpdatingProgress}
-              />
+              {tasks.length > 0 ? (
+                tasks.map((task) => (
+                  <TaskProgressCard
+                    key={task.id}
+                    taskId={task.id}
+                    title={task.title}
+                    subject={task.subject}
+                    deadlineText={
+                      task.deadlineMoscowStr
+                        ? `Дедлайн: ${task.deadlineMoscowStr}`
+                        : "Без установленного дедлайна"
+                    }
+                    progress={taskProgress[task.id] || null}
+                    isLoggedIn={Boolean(sessionUser)}
+                    materialId={task.materialId}
+                    materialTitle={task.materialTitle}
+                    reminderScheduled={Boolean(scheduledReminders[task.id])}
+                    onToggleReminder={() => handleToggleReminderForTask(task)}
+                    onOpenMaterial={(matId) => {
+                      setActiveMaterialModalId(matId);
+                      setMaterialModalVisible(true);
+                    }}
+                    onToggleStatus={handleToggleTaskStatus}
+                    onOpenLogin={() => setAuthModalVisible(true)}
+                    loading={updatingTaskId === task.id}
+                  />
+                ))
+              ) : (
+                <View style={styles.emptyTasksBox}>
+                  <Text style={styles.emptyTasksText}>
+                    В группе {selectedGroup} нет опубликованных заданий на текущий семестр.
+                  </Text>
+                </View>
+              )}
             </View>
 
             {/* Upcoming today list */}
@@ -1049,5 +1168,18 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
     letterSpacing: 0.5,
     marginBottom: 4,
+  },
+  emptyTasksBox: {
+    padding: 16,
+    borderRadius: 8,
+    backgroundColor: "rgba(30, 41, 59, 0.4)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.06)",
+    marginVertical: 4,
+  },
+  emptyTasksText: {
+    fontSize: 13,
+    color: "#8a9bb5",
+    textAlign: "center",
   },
 });

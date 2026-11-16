@@ -44,17 +44,30 @@ export function getMobilePkceCookieName(): string {
 }
 
 function getPkceSecret(): string {
-  if (process.env.NEXT_SERVER_ACTIONS_ENCRYPTION_KEY) {
-    return process.env.NEXT_SERVER_ACTIONS_ENCRYPTION_KEY;
+  const secret = process.env.NEXT_SERVER_ACTIONS_ENCRYPTION_KEY;
+  if (!secret) {
+    throw new Error(
+      "Configuration error: NEXT_SERVER_ACTIONS_ENCRYPTION_KEY is required",
+    );
   }
-  return Buffer.alloc(32, 42).toString("base64");
+  const key = Buffer.from(secret, "base64");
+  if (key.length !== 32) {
+    throw new Error(
+      "Configuration error: NEXT_SERVER_ACTIONS_ENCRYPTION_KEY must be a valid 32-byte base64 string",
+    );
+  }
+  return secret;
 }
 
 function pkceKey(secret: string): Buffer {
   const key = Buffer.from(secret, "base64");
-  const validKey = key.length === 32 ? key : Buffer.alloc(32, 42);
+  if (key.length !== 32) {
+    throw new Error(
+      "Configuration error: Key must be exactly 32 bytes in base64",
+    );
+  }
   return Buffer.from(
-    hkdfSync("sha256", validKey, "studentvalue1984", "mobile-pkce-v1", 32),
+    hkdfSync("sha256", key, "studentvalue1984", "mobile-pkce-v1", 32),
   );
 }
 
@@ -122,6 +135,11 @@ export async function getMobileSessionUser(
   });
 
   if (!dbSession || dbSession.expiresAt <= new Date()) {
+    return null;
+  }
+
+  // Reject unexchanged authorization codes or non-mobile sessions
+  if (dbSession.userAgent !== "StudentValue-Mobile/1.0") {
     return null;
   }
 
@@ -244,7 +262,18 @@ export async function handleMobileAuthStart(
     expiresAt: Date.now() + 300_000, // 5 minutes
   };
 
-  const encryptedCookie = encryptPkceCookie(pkcePayload);
+  let encryptedCookie: string;
+  try {
+    encryptedCookie = encryptPkceCookie(pkcePayload);
+  } catch {
+    return NextResponse.json(
+      {
+        error: "AUTH_CONFIGURATION_ERROR",
+        message: "Server encryption key configuration error",
+      },
+      { status: 500 },
+    );
+  }
   const cookieName = getMobilePkceCookieName();
 
   let config = null;

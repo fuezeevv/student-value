@@ -99,6 +99,33 @@ export const MIGRATIONS = [
         ON scheduled_notifications (user_id, task_id);
     `,
   },
+  {
+    version: 5,
+    description: "Cached academic tasks per group",
+    sql: `
+      CREATE TABLE IF NOT EXISTS cached_tasks (
+        id TEXT PRIMARY KEY,
+        group_code TEXT NOT NULL,
+        title TEXT NOT NULL,
+        subject TEXT NOT NULL,
+        type TEXT NOT NULL,
+        deadline_id TEXT,
+        deadline_date TEXT,
+        deadline_moscow_str TEXT,
+        deadline_status TEXT,
+        material_id TEXT,
+        material_title TEXT,
+        material_filename TEXT,
+        material_byte_size INTEGER,
+        material_mime_type TEXT,
+        material_sha256 TEXT,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_cached_tasks_group
+        ON cached_tasks (group_code);
+    `,
+  },
 ];
 
 export async function applySqliteMigrations(db: SqliteDatabase): Promise<number> {

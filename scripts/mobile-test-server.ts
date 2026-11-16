@@ -29,6 +29,9 @@ async function main() {
     handleMobileMaterialMetadata,
     handleMobileMaterialFile,
   } = await import("../src/server/adapters/mobile-materials");
+  const { handleGetMobileTasks } = await import(
+    "../src/server/adapters/mobile-tasks"
+  );
   const { prisma } = await import("../src/lib/db/prisma");
   const { hashToken } = await import("../src/lib/auth/google");
 
@@ -142,6 +145,53 @@ async function main() {
     create: {
       taskId: "task-otu-lab1",
       materialId: "material-otu-lab1",
+    },
+  });
+
+  // Seed multi-chunk binary file (> 1 MiB) for testing chunked download & binary SHA-256
+  const binarySize = 1_500_000; // ~1.43 MiB (2 chunks)
+  const binaryContent = Buffer.alloc(binarySize);
+  // Write PDF magic bytes header
+  binaryContent.write("%PDF-1.4\n%Binary test material for Student Value Stage C\n", 0);
+  for (let i = 60; i < binarySize; i++) {
+    binaryContent[i] = (i * 31 + 17) % 256;
+  }
+  const binarySha = createHash("sha256").update(binaryContent).digest("hex");
+
+  await prisma.courseMaterial.upsert({
+    where: { id: "material-binary-guide" },
+    update: {
+      title: "Руководство к выполнению (PDF, 1.4 МБ)",
+      url: "/api/v1/materials/material-binary-guide/file",
+      type: "METHODOLOGY",
+      sourceNote: "Официальное пособие (PDF)",
+    },
+    create: {
+      id: "material-binary-guide",
+      courseOfferingId: "test-course",
+      title: "Руководство к выполнению (PDF, 1.4 МБ)",
+      type: "METHODOLOGY",
+      url: "/api/v1/materials/material-binary-guide/file",
+      sourceNote: "Официальное пособие (PDF)",
+    },
+  });
+
+  await prisma.materialFile.upsert({
+    where: { materialId: "material-binary-guide" },
+    update: {
+      filename: "SystemVerilog_Advanced_Reference.pdf",
+      mimeType: "application/pdf",
+      byteSize: binaryContent.byteLength,
+      sha256: binarySha,
+      content: binaryContent,
+    },
+    create: {
+      materialId: "material-binary-guide",
+      filename: "SystemVerilog_Advanced_Reference.pdf",
+      mimeType: "application/pdf",
+      byteSize: binaryContent.byteLength,
+      sha256: binarySha,
+      content: binaryContent,
     },
   });
 
@@ -325,6 +375,8 @@ async function main() {
         nextRes = await handleMobileExchange(nextReq);
       } else if (pathname === "/api/v1/auth/mobile/logout") {
         nextRes = await handleMobileLogout(nextReq);
+      } else if (pathname === "/api/v1/tasks") {
+        nextRes = await handleGetMobileTasks(nextReq);
       } else if (pathname === "/api/v1/progress") {
         if (method === "POST") {
           nextRes = await handleMobileProgress(nextReq);
