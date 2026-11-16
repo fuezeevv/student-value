@@ -11,6 +11,7 @@ async function main() {
   delete process.env.SV_TEST_ISOLATED;
   process.env.ALLOW_DEV_AUTH = "true";
   (process.env as Record<string, string | undefined>).NODE_ENV = "development";
+  process.env.NEXT_SERVER_ACTIONS_ENCRYPTION_KEY ||= Buffer.alloc(32, 1).toString("base64");
 
   const { NextRequest } = await import("next/server");
   const { handleTimetableRequest } = await import(
@@ -350,7 +351,8 @@ async function main() {
         bodyBuffer = Buffer.concat(chunks);
       }
 
-      const fullUrl = `http://127.0.0.1:${port}${rawUrl}`;
+      const host = req.headers.host || `127.0.0.1:${port}`;
+      const fullUrl = `http://${host}${rawUrl}`;
       const nextReq = new NextRequest(fullUrl, {
         method,
         headers: req.headers as Record<string, string>,
@@ -397,7 +399,14 @@ async function main() {
 
       res.statusCode = nextRes.status;
       for (const [k, v] of nextRes.headers.entries()) {
+        if (k.toLowerCase() === "set-cookie") continue;
         res.setHeader(k, v);
+      }
+      if (typeof nextRes.headers.getSetCookie === "function") {
+        const cookies = nextRes.headers.getSetCookie();
+        if (cookies.length > 0) {
+          res.setHeader("Set-Cookie", cookies);
+        }
       }
       const bodyText = await nextRes.text();
       res.end(bodyText);
