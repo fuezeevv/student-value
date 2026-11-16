@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { kickCalendarUpdates } from "@/server/calendar/background";
 import { calendarConsentCallback } from "@/server/calendar/callback";
 import { NextRequest, NextResponse } from "next/server";
@@ -8,7 +9,14 @@ import {
   googleConfiguration,
   readGoogleFlow,
   secureCookie,
+  hashToken,
 } from "@/lib/auth/google";
+import { isDevAuthEnabled } from "@/lib/auth/dev-policy";
+import { prisma } from "@/lib/db/prisma";
+import {
+  decryptPkceCookie,
+  isAllowedRedirectUri,
+} from "@/server/adapters/mobile-auth";
 import {
   completeGoogleLogin,
   resolveGoogleLoginGroup,
@@ -46,6 +54,39 @@ export async function GET(request: NextRequest) {
     const groupId = await resolveGoogleLoginGroup(identity, flow.invite);
     const session = await completeGoogleLogin(identity, groupId, flow.invite);
     kickCalendarUpdates(session.userId);
+
+    const pkceCookieName = isDevAuthEnabled()
+      ? "mobile_pkce"
+      : "__Host-mobile-pkce";
+    const pkceRaw = request.cookies.get(pkceCookieName)?.value;
+    if (pkceRaw) {
+      const pkce = decryptPkceCookie(pkceRaw);
+      if (pkce && isAllowedRedirectUri(pkce.redirectUri)) {
+        const exchangeCode = randomBytes(32).toString("base64url");
+        await prisma.session.create({
+          data: {
+            userId: session.userId,
+            tokenHash: hashToken(exchangeCode),
+            expiresAt: new Date(Date.now() + 60_000), // 60s single-use
+            userAgent: `exchange:${pkce.challenge}:${pkce.redirectUri}`,
+          },
+        });
+
+        const redirectUrl = new URL(pkce.redirectUri);
+        redirectUrl.searchParams.set("code", exchangeCode);
+        redirectUrl.searchParams.set("state", pkce.state);
+
+        const mobileResponse = NextResponse.redirect(redirectUrl.href, 303);
+        mobileResponse.headers.set("Cache-Control", "no-store");
+        mobileResponse.headers.set("Referrer-Policy", "no-referrer");
+        mobileResponse.cookies.set(pkceCookieName, "", {
+          ...secureCookie,
+          maxAge: 0,
+        });
+        return mobileResponse;
+      }
+    }
+
     response.cookies.set("__Host-sv-group", groupId, {
       ...secureCookie,
       maxAge: 14 * 86400,

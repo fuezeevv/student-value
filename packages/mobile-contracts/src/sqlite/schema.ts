@@ -35,6 +35,35 @@ export const MIGRATIONS = [
       );
     `,
   },
+  {
+    version: 3,
+    sql: `
+      CREATE TABLE IF NOT EXISTS pending_operations (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        task_id TEXT NOT NULL,
+        action TEXT NOT NULL,
+        payload_json TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'PENDING'
+      );
+
+      CREATE TABLE IF NOT EXISTS user_task_progress (
+        user_id TEXT NOT NULL,
+        task_id TEXT NOT NULL,
+        status TEXT NOT NULL,
+        is_verified INTEGER NOT NULL DEFAULT 0,
+        student_notes TEXT,
+        completed_at TEXT,
+        updated_at TEXT NOT NULL,
+        sync_state TEXT NOT NULL DEFAULT 'SYNCED',
+        PRIMARY KEY (user_id, task_id)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_pending_ops_user
+        ON pending_operations (user_id, status);
+    `,
+  },
 ];
 
 export async function applySqliteMigrations(db: SqliteDatabase): Promise<number> {

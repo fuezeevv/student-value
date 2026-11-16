@@ -39,3 +39,27 @@ export type DayTimetableResult =
       weekStart: string;
       message: string;
     };
+
+export type PendingOperation = {
+  id: string; // UUID
+  userId: string;
+  taskId: string;
+  action: "SET_STATUS" | "SAVE_NOTES";
+  payload: {
+    status?: "NOT_STARTED" | "IN_PROGRESS" | "READY" | "SUBMITTED";
+    notes?: string;
+  };
+  createdAt: string; // ISO
+  status: "PENDING" | "SYNCING" | "FAILED";
+};
+
+export type UserTaskProgress = {
+  userId: string;
+  taskId: string;
+  status: "NOT_STARTED" | "IN_PROGRESS" | "READY" | "SUBMITTED" | "ACCEPTED";
+  isVerified: boolean;
+  studentNotes: string | null;
+  completedAt: string | null;
+  updatedAt: string;
+  syncState: "SYNCED" | "PENDING_SYNC" | "FAILED";
+};

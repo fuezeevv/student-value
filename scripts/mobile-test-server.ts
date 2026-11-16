@@ -1,4 +1,5 @@
 import http from "node:http";
+import { randomBytes } from "node:crypto";
 import { prepareTestDatabase } from "./test-db.mjs";
 
 async function main() {
@@ -6,22 +7,88 @@ async function main() {
   for (const [k, v] of Object.entries(env)) {
     process.env[k] = v;
   }
+  process.env.ALLOW_DEV_AUTH = "true";
+  (process.env as Record<string, string | undefined>).NODE_ENV = "development";
 
   const { NextRequest } = await import("next/server");
   const { handleTimetableRequest } = await import(
     "../src/server/adapters/timetable-v1"
   );
+  const {
+    handleMobileAuthStart,
+    handleMobileExchange,
+    handleMobileLogout,
+    decryptPkceCookie,
+    getMobilePkceCookieName,
+  } = await import("../src/server/adapters/mobile-auth");
+  const {
+    handleMobileProgress,
+    handleGetMobileProgress,
+  } = await import("../src/server/adapters/mobile-progress");
+  const { prisma } = await import("../src/lib/db/prisma");
+  const { hashToken } = await import("../src/lib/auth/google");
+
+  // Ensure test user has enrollment in test-group where task-otu-lab1 already exists
+  const testGroup = await prisma.studyGroup.findUniqueOrThrow({
+    where: { id: "test-group" },
+  });
+
+  const testUser = await prisma.user.upsert({
+    where: { id: "test-user-rasool" },
+    update: {},
+    create: {
+      id: "test-user-rasool",
+      nickname: "Rasool",
+    },
+  });
+
+  await prisma.groupMember.upsert({
+    where: {
+      groupId_userId: {
+        groupId: testGroup.id,
+        userId: testUser.id,
+      },
+    },
+    update: {},
+    create: {
+      groupId: testGroup.id,
+      userId: testUser.id,
+      isOwner: false,
+    },
+  });
+
+  await prisma.enrollment.upsert({
+    where: {
+      groupId_userId: {
+        groupId: testGroup.id,
+        userId: testUser.id,
+      },
+    },
+    update: {},
+    create: {
+      groupId: testGroup.id,
+      userId: testUser.id,
+      fullName: "Rasool Student",
+      status: "VERIFIED",
+    },
+  });
 
   const port = Number(process.env.PORT || 3000);
 
   const server = http.createServer(async (req, res) => {
     const method = req.method ?? "GET";
-    const url = req.url ?? "/";
-    console.log(`[MOBILE_TEST_SERVER] ${method} ${url}`);
+    const rawUrl = req.url ?? "/";
+    const urlObj = new URL(rawUrl, `http://127.0.0.1:${port}`);
+    const pathname = urlObj.pathname;
+
+    console.log(`[MOBILE_TEST_SERVER] ${method} ${pathname}`);
 
     res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Accept");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.setHeader(
+      "Access-Control-Allow-Headers",
+      "Content-Type, Accept, Authorization",
+    );
 
     if (method === "OPTIONS") {
       res.statusCode = 204;
@@ -30,13 +97,167 @@ async function main() {
     }
 
     try {
-      const fullUrl = `http://127.0.0.1:${port}${url}`;
+      // 1. Mobile auth approval page in browser Custom Tab
+      if (pathname === "/login" && urlObj.searchParams.get("mobile") === "1") {
+        const pkceCookieName = getMobilePkceCookieName();
+        const pkceFromQuery = urlObj.searchParams.get("pkce");
+        const cookieHeader = req.headers.cookie || "";
+        const match = cookieHeader.match(new RegExp(`${pkceCookieName}=([^;]+)`));
+        const pkceRaw = pkceFromQuery || (match ? match[1] : "");
+        const pkce = decryptPkceCookie(pkceRaw);
+
+        if (req.method === "POST") {
+          // User clicked "Войти" in the browser
+          if (!pkce) {
+            res.statusCode = 400;
+            res.end("Expired PKCE session");
+            return;
+          }
+
+          const exchangeCode = randomBytes(32).toString("base64url");
+          await prisma.session.create({
+            data: {
+              userId: testUser.id,
+              tokenHash: hashToken(exchangeCode),
+              expiresAt: new Date(Date.now() + 60_000), // 60s
+              userAgent: `exchange:${pkce.challenge}:${pkce.redirectUri}`,
+            },
+          });
+
+          const redirectUrl = new URL(pkce.redirectUri);
+          redirectUrl.searchParams.set("code", exchangeCode);
+          redirectUrl.searchParams.set("state", pkce.state);
+
+          res.statusCode = 303;
+          res.setHeader("Location", redirectUrl.href);
+          res.end();
+          return;
+        }
+
+        // Render HTML confirmation in system browser
+        res.statusCode = 200;
+        res.setHeader("Content-Type", "text/html; charset=utf-8");
+        res.end(`
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <title>Вход · Student Value</title>
+              <style>
+                body {
+                  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                  background: #0b1424;
+                  color: #f0f4f8;
+                  display: flex;
+                  flex-direction: column;
+                  align-items: center;
+                  justify-content: center;
+                  min-height: 100vh;
+                  margin: 0;
+                  padding: 20px;
+                  box-sizing: border-box;
+                }
+                .card {
+                  background: #16253d;
+                  border: 1px solid #223554;
+                  border-radius: 20px;
+                  padding: 28px;
+                  width: 100%;
+                  max-width: 380px;
+                  text-align: center;
+                  box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+                }
+                .avatar {
+                  width: 64px;
+                  height: 64px;
+                  border-radius: 32px;
+                  background: #2563eb;
+                  color: #fff;
+                  font-size: 28px;
+                  font-weight: bold;
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                  margin: 0 auto 16px;
+                }
+                h2 { margin: 0 0 6px; font-size: 20px; }
+                p { color: #8a9bb5; font-size: 14px; margin: 0 0 24px; }
+                button {
+                  width: 100%;
+                  background: #2563eb;
+                  color: #fff;
+                  border: none;
+                  border-radius: 12px;
+                  padding: 14px;
+                  font-size: 16px;
+                  font-weight: 600;
+                  cursor: pointer;
+                }
+                .note {
+                  font-size: 12px;
+                  color: #6b7d96;
+                  margin-top: 16px;
+                }
+              </style>
+            </head>
+            <body>
+              <div class="card">
+                <div class="avatar">R</div>
+                <h2>Авторизация в приложении</h2>
+                <p>Войти как <strong>Rasool</strong> (группа 5130901/40102)</p>
+                <form method="POST" action="/login?mobile=1&pkce=${encodeURIComponent(pkceRaw)}">
+                  <button type="submit">Подтвердить вход</button>
+                </form>
+                <div class="note">OAuth 2.0 PKCE · Перенаправление в Student Value</div>
+              </div>
+            </body>
+          </html>
+        `);
+        return;
+      }
+
+      // Read request body if present
+      let bodyBuffer: Buffer | null = null;
+      if (method === "POST") {
+        const chunks: Buffer[] = [];
+        for await (const chunk of req) {
+          chunks.push(chunk);
+        }
+        bodyBuffer = Buffer.concat(chunks);
+      }
+
+      const fullUrl = `http://127.0.0.1:${port}${rawUrl}`;
       const nextReq = new NextRequest(fullUrl, {
         method,
         headers: req.headers as Record<string, string>,
+        body: bodyBuffer ? new Uint8Array(bodyBuffer) : undefined,
       });
 
-      const nextRes = await handleTimetableRequest(nextReq);
+      let nextRes;
+      if (pathname === "/api/v1/timetable") {
+        nextRes = await handleTimetableRequest(nextReq);
+      } else if (pathname === "/api/v1/auth/mobile/start") {
+        nextRes = await handleMobileAuthStart(nextReq);
+      } else if (pathname === "/api/v1/auth/mobile/exchange") {
+        nextRes = await handleMobileExchange(nextReq);
+      } else if (pathname === "/api/v1/auth/mobile/logout") {
+        nextRes = await handleMobileLogout(nextReq);
+      } else if (pathname === "/api/v1/progress") {
+        if (method === "POST") {
+          nextRes = await handleMobileProgress(nextReq);
+          console.log("[MOBILE_TEST_SERVER] progress response status:", nextRes.status);
+          const clone = nextRes.clone();
+          console.log("[MOBILE_TEST_SERVER] progress response body:", await clone.text());
+        } else {
+          nextRes = await handleGetMobileProgress(nextReq);
+        }
+      } else {
+        res.statusCode = 404;
+        res.setHeader("Content-Type", "application/json");
+        res.end(JSON.stringify({ code: "NOT_FOUND", message: "Endpoint not found" }));
+        return;
+      }
+
       res.statusCode = nextRes.status;
       for (const [k, v] of nextRes.headers.entries()) {
         res.setHeader(k, v);
@@ -53,7 +274,7 @@ async function main() {
 
   server.listen(port, "0.0.0.0", () => {
     console.log(
-      `[MOBILE_TEST_SERVER] Serving timetable v1 on http://0.0.0.0:${port}`,
+      `[MOBILE_TEST_SERVER] Serving API v1 (auth, timetable, progress) on http://0.0.0.0:${port}`,
     );
   });
 

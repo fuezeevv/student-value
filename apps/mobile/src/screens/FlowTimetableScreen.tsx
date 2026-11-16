@@ -8,11 +8,13 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   AppState,
+  Alert,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import type {
   MobileLesson,
   MobileTimetable,
+  UserTaskProgress,
 } from "@studentvalue/mobile-contracts";
 import { getTimetableRepository } from "../storage/repository";
 import {
@@ -20,10 +22,14 @@ import {
   getActiveApiOrigin,
   setActiveApiOrigin,
 } from "../api/client";
+import { getSessionUser, type MobileSessionUser } from "../auth/token-storage";
+import { enqueueProgressUpdate, flushOutbox } from "../sync/outbox";
 import { DaySwitcher, type DayItem } from "../components/DaySwitcher";
 import { FlowHeroCard } from "../components/FlowHeroCard";
 import { FullDayLessonList } from "../components/FullDayLessonList";
 import { GroupPickerModal } from "../components/GroupPickerModal";
+import { AuthModal } from "../components/AuthModal";
+import { TaskProgressCard } from "../components/TaskProgressCard";
 
 function getMoscowDateString(date = new Date()): string {
   const formatter = new Intl.DateTimeFormat("en-CA", {
@@ -156,6 +162,13 @@ export const FlowTimetableScreen: React.FC = () => {
   // Current week snapshot
   const [weekSnapshot, setWeekSnapshot] = useState<MobileTimetable | null>(null);
 
+  // Auth and task progress states (Stage B)
+  const [sessionUser, setSessionUser] = useState<MobileSessionUser | null>(null);
+  const [authModalVisible, setAuthModalVisible] = useState<boolean>(false);
+  const [pendingOpsCount, setPendingOpsCount] = useState<number>(0);
+  const [taskProgress, setTaskProgress] = useState<Record<string, UserTaskProgress>>({});
+  const [isUpdatingProgress, setIsUpdatingProgress] = useState<boolean>(false);
+
   const repo = useMemo(() => getTimetableRepository(), []);
   const reqGenRef = useRef(0);
 
@@ -163,6 +176,34 @@ export const FlowTimetableScreen: React.FC = () => {
   useEffect(() => {
     getActiveApiOrigin().then(setApiOrigin);
   }, []);
+
+  // Load session user and outbox count on mount
+  useEffect(() => {
+    getSessionUser().then(async (u) => {
+      setSessionUser(u);
+      if (u) {
+        const ops = await repo.getPendingOperations(u.id);
+        setPendingOpsCount(ops.length);
+        const progressList = await repo.getAllUserProgress(u.id);
+        const map: Record<string, UserTaskProgress> = {};
+        for (const p of progressList) {
+          map[p.taskId] = p;
+        }
+        setTaskProgress(map);
+        // Try initial outbox flush
+        flushOutbox().then(async () => {
+          const freshOps = await repo.getPendingOperations(u.id);
+          setPendingOpsCount(freshOps.length);
+          const freshProgress = await repo.getAllUserProgress(u.id);
+          const freshMap: Record<string, UserTaskProgress> = {};
+          for (const p of freshProgress) {
+            freshMap[p.taskId] = p;
+          }
+          setTaskProgress(freshMap);
+        }).catch(() => {});
+      }
+    });
+  }, [repo]);
 
   // Live timer for ongoing lesson progress and midnight day rollover
   useEffect(() => {
@@ -398,6 +439,65 @@ export const FlowTimetableScreen: React.FC = () => {
     return { heroLesson: null, remainingLessons: [], allDoneToday: true };
   }, [lessons, isSelectedToday, nowMoscowMin]);
 
+  const handleToggleTaskStatus = async (
+    taskId: string,
+    currentStatus: string,
+  ) => {
+    if (!sessionUser) {
+      setAuthModalVisible(true);
+      return;
+    }
+
+    const newStatus =
+      currentStatus === "READY" || currentStatus === "SUBMITTED"
+        ? "IN_PROGRESS"
+        : "READY";
+
+    setIsUpdatingProgress(true);
+    try {
+      const { optimisticProgress } = await enqueueProgressUpdate(
+        taskId,
+        newStatus,
+      );
+      setTaskProgress((prev) => ({ ...prev, [taskId]: optimisticProgress }));
+      setPendingOpsCount((c) => c + 1);
+
+      const report = await flushOutbox();
+      if (report.succeeded > 0) {
+        const updated = await repo.getUserProgress(sessionUser.id, taskId);
+        if (updated) {
+          setTaskProgress((prev) => ({ ...prev, [taskId]: updated }));
+        }
+      }
+      const remainingOps = await repo.getPendingOperations(sessionUser.id);
+      setPendingOpsCount(remainingOps.length);
+    } catch (err: any) {
+      Alert.alert(
+        "Ошибка отметки",
+        err.message || "Не удалось сохранить отметку",
+      );
+    } finally {
+      setIsUpdatingProgress(false);
+    }
+  };
+
+  const handleUserChanged = async (user: MobileSessionUser | null) => {
+    setSessionUser(user);
+    if (user) {
+      const ops = await repo.getPendingOperations(user.id);
+      setPendingOpsCount(ops.length);
+      const progressList = await repo.getAllUserProgress(user.id);
+      const map: Record<string, UserTaskProgress> = {};
+      for (const p of progressList) {
+        map[p.taskId] = p;
+      }
+      setTaskProgress(map);
+    } else {
+      setPendingOpsCount(0);
+      setTaskProgress({});
+    }
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar style="light" />
@@ -420,19 +520,45 @@ export const FlowTimetableScreen: React.FC = () => {
           <Text style={styles.groupPickerArrow}>▼</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity
-          onPress={handleManualSync}
-          style={styles.syncButton}
-          accessibilityRole="button"
-          accessibilityLabel="Обновить расписание"
-          disabled={isSyncing}
-        >
-          {isSyncing ? (
-            <ActivityIndicator size="small" color="#93c5fd" />
-          ) : (
-            <Text style={styles.syncIcon}>↻</Text>
-          )}
-        </TouchableOpacity>
+        <View style={styles.headerRightActions}>
+          <TouchableOpacity
+            onPress={handleManualSync}
+            style={styles.syncButton}
+            accessibilityRole="button"
+            accessibilityLabel="Обновить расписание"
+            disabled={isSyncing}
+          >
+            {isSyncing ? (
+              <ActivityIndicator size="small" color="#93c5fd" />
+            ) : (
+              <Text style={styles.syncIcon}>↻</Text>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => setAuthModalVisible(true)}
+            style={styles.avatarButton}
+            accessibilityRole="button"
+            accessibilityLabel={
+              sessionUser
+                ? `Профиль: ${sessionUser.nickname}`
+                : "Войти в аккаунт"
+            }
+          >
+            {sessionUser ? (
+              <View style={styles.avatarBadge}>
+                <Text style={styles.avatarText}>
+                  {(sessionUser.nickname[0] || "U").toUpperCase()}
+                </Text>
+                {pendingOpsCount > 0 && <View style={styles.pendingDotBadge} />}
+              </View>
+            ) : (
+              <View style={styles.loginPill}>
+                <Text style={styles.loginPillText}>Войти</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Data status / age banner */}
@@ -500,6 +626,22 @@ export const FlowTimetableScreen: React.FC = () => {
               nowMoscowMinutes={nowMoscowMin}
             />
 
+            {/* Stage B: Protected Personal Progress Scenario */}
+            <View style={styles.taskSection}>
+              <Text style={styles.sectionHeaderTitle}>Текущая работа и прогресс</Text>
+              <TaskProgressCard
+                taskId="task-otu-lab1"
+                title="Лабораторная работа 1: SystemVerilog · Lab1–Lab2"
+                subject="Синтез и моделирование аппаратных средств"
+                deadlineText="Дедлайн: 14.09.2026"
+                progress={taskProgress["task-otu-lab1"] || null}
+                isLoggedIn={Boolean(sessionUser)}
+                onToggleStatus={handleToggleTaskStatus}
+                onOpenLogin={() => setAuthModalVisible(true)}
+                loading={isUpdatingProgress}
+              />
+            </View>
+
             {/* Upcoming today list */}
             {remainingLessons.length > 0 && (
               <View style={styles.upcomingSection}>
@@ -563,6 +705,27 @@ export const FlowTimetableScreen: React.FC = () => {
         currentOrigin={apiOrigin}
         onSelectOrigin={handleSelectOrigin}
         onClose={() => setGroupPickerVisible(false)}
+      />
+
+      {/* Auth & Profile Modal (Stage B) */}
+      <AuthModal
+        visible={authModalVisible}
+        user={sessionUser}
+        pendingCount={pendingOpsCount}
+        onClose={() => setAuthModalVisible(false)}
+        onUserChanged={handleUserChanged}
+        onFlushComplete={async () => {
+          if (sessionUser) {
+            const ops = await repo.getPendingOperations(sessionUser.id);
+            setPendingOpsCount(ops.length);
+            const progressList = await repo.getAllUserProgress(sessionUser.id);
+            const map: Record<string, UserTaskProgress> = {};
+            for (const p of progressList) {
+              map[p.taskId] = p;
+            }
+            setTaskProgress(map);
+          }
+        }}
       />
     </SafeAreaView>
   );
@@ -740,5 +903,66 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "600",
     color: "#93c5fd",
+  },
+  headerRightActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  avatarButton: {
+    minHeight: 44,
+    minWidth: 44,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  avatarBadge: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#2563eb",
+    justifyContent: "center",
+    alignItems: "center",
+    position: "relative",
+  },
+  avatarText: {
+    color: "#ffffff",
+    fontWeight: "bold",
+    fontSize: 15,
+  },
+  pendingDotBadge: {
+    position: "absolute",
+    top: -2,
+    right: -2,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: "#fbbf24",
+    borderWidth: 2,
+    borderColor: "#0b1424",
+  },
+  loginPill: {
+    backgroundColor: "rgba(147, 197, 253, 0.12)",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(147, 197, 253, 0.25)",
+  },
+  loginPillText: {
+    color: "#93c5fd",
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  taskSection: {
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  sectionHeaderTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#8a9bb5",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    marginBottom: 4,
   },
 });

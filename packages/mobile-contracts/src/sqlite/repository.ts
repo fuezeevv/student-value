@@ -8,6 +8,8 @@ import type {
   SqliteDatabase,
   StoredSnapshotRow,
   DayTimetableResult,
+  PendingOperation,
+  UserTaskProgress,
 } from "./types";
 
 function weekStartForDate(dateStr: string): string {
@@ -241,5 +243,166 @@ export class TimetableSqliteRepository {
       `,
       [key, value, now],
     );
+  }
+
+  async addPendingOperation(op: PendingOperation): Promise<void> {
+    await this.init();
+    await this.db.run(
+      `
+      INSERT INTO pending_operations (
+        id, user_id, task_id, action, payload_json, created_at, status
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        payload_json = excluded.payload_json,
+        status = excluded.status
+      `,
+      [
+        op.id,
+        op.userId,
+        op.taskId,
+        op.action,
+        JSON.stringify(op.payload),
+        op.createdAt,
+        op.status,
+      ],
+    );
+  }
+
+  async getPendingOperations(userId: string): Promise<PendingOperation[]> {
+    await this.init();
+    const rows = await this.db.all<{
+      id: string;
+      user_id: string;
+      task_id: string;
+      action: "SET_STATUS" | "SAVE_NOTES";
+      payload_json: string;
+      created_at: string;
+      status: "PENDING" | "SYNCING" | "FAILED";
+    }>(
+      `SELECT * FROM pending_operations WHERE user_id = ? ORDER BY created_at ASC`,
+      [userId],
+    );
+    return rows.map((r) => ({
+      id: r.id,
+      userId: r.user_id,
+      taskId: r.task_id,
+      action: r.action,
+      payload: JSON.parse(r.payload_json),
+      createdAt: r.created_at,
+      status: r.status,
+    }));
+  }
+
+  async removePendingOperation(id: string): Promise<void> {
+    await this.init();
+    await this.db.run(`DELETE FROM pending_operations WHERE id = ?`, [id]);
+  }
+
+  async updatePendingOperationStatus(
+    id: string,
+    status: "PENDING" | "SYNCING" | "FAILED",
+  ): Promise<void> {
+    await this.init();
+    await this.db.run(`UPDATE pending_operations SET status = ? WHERE id = ?`, [
+      status,
+      id,
+    ]);
+  }
+
+  async clearUserPendingOperations(userId: string): Promise<void> {
+    await this.init();
+    await this.db.run(`DELETE FROM pending_operations WHERE user_id = ?`, [userId]);
+  }
+
+  async saveUserProgress(progress: UserTaskProgress): Promise<void> {
+    await this.init();
+    await this.db.run(
+      `
+      INSERT INTO user_task_progress (
+        user_id, task_id, status, is_verified, student_notes, completed_at, updated_at, sync_state
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(user_id, task_id) DO UPDATE SET
+        status = excluded.status,
+        is_verified = excluded.is_verified,
+        student_notes = excluded.student_notes,
+        completed_at = excluded.completed_at,
+        updated_at = excluded.updated_at,
+        sync_state = excluded.sync_state
+      `,
+      [
+        progress.userId,
+        progress.taskId,
+        progress.status,
+        progress.isVerified ? 1 : 0,
+        progress.studentNotes,
+        progress.completedAt,
+        progress.updatedAt,
+        progress.syncState,
+      ],
+    );
+  }
+
+  async getUserProgress(
+    userId: string,
+    taskId: string,
+  ): Promise<UserTaskProgress | null> {
+    await this.init();
+    const row = await this.db.get<{
+      user_id: string;
+      task_id: string;
+      status: "NOT_STARTED" | "IN_PROGRESS" | "READY" | "SUBMITTED" | "ACCEPTED";
+      is_verified: number;
+      student_notes: string | null;
+      completed_at: string | null;
+      updated_at: string;
+      sync_state: "SYNCED" | "PENDING_SYNC" | "FAILED";
+    }>(
+      `SELECT * FROM user_task_progress WHERE user_id = ? AND task_id = ?`,
+      [userId, taskId],
+    );
+    if (!row) return null;
+    return {
+      userId: row.user_id,
+      taskId: row.task_id,
+      status: row.status,
+      isVerified: Boolean(row.is_verified),
+      studentNotes: row.student_notes,
+      completedAt: row.completed_at,
+      updatedAt: row.updated_at,
+      syncState: row.sync_state,
+    };
+  }
+
+  async getAllUserProgress(userId: string): Promise<UserTaskProgress[]> {
+    await this.init();
+    const rows = await this.db.all<{
+      user_id: string;
+      task_id: string;
+      status: "NOT_STARTED" | "IN_PROGRESS" | "READY" | "SUBMITTED" | "ACCEPTED";
+      is_verified: number;
+      student_notes: string | null;
+      completed_at: string | null;
+      updated_at: string;
+      sync_state: "SYNCED" | "PENDING_SYNC" | "FAILED";
+    }>(
+      `SELECT * FROM user_task_progress WHERE user_id = ?`,
+      [userId],
+    );
+    return rows.map((row) => ({
+      userId: row.user_id,
+      taskId: row.task_id,
+      status: row.status,
+      isVerified: Boolean(row.is_verified),
+      studentNotes: row.student_notes,
+      completedAt: row.completed_at,
+      updatedAt: row.updated_at,
+      syncState: row.sync_state,
+    }));
+  }
+
+  async clearUserData(userId: string): Promise<void> {
+    await this.init();
+    await this.db.run(`DELETE FROM pending_operations WHERE user_id = ?`, [userId]);
+    await this.db.run(`DELETE FROM user_task_progress WHERE user_id = ?`, [userId]);
   }
 }
