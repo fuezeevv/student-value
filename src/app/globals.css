@@ -163,6 +163,9 @@
   }
   body {
     background-color: var(--canvas);
+    background-image: radial-gradient(ellipse 90% 35% at 50% 100%, rgba(150, 38, 64, 0.075), transparent 75%);
+    background-attachment: fixed;
+    background-repeat: no-repeat;
     color: var(--foreground);
     transition:
       background-color 0.2s ease,

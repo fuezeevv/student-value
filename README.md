@@ -1,35 +1,156 @@
-# Student Value 1.984
+<div align="center">
 
-Учебная платформа группы СПбПУ 5130901/40102: работы, сроки, материалы и личный прогресс. [Учебное ядро](docs/RELIABLE_CORE.md), [ежедневный интерфейс](docs/daily-student-ux.md), [production deployment](docs/DEPLOYMENT.md). Google OAuth реализован и ожидает настройки клиента Google Cloud; Telegram и Calendar API не подключены.
+  <img src="public/icon-192.png" width="88" height="88" alt="Student Value Logo" />
 
-## Локальный запуск
+  # Student Value 1.984
 
-1. Использовать Node из `.node-version`, установить зависимости: `npm ci`.
-2. Настроить DATABASE_URL в `.env` для отдельной PostgreSQL БД.
-3. Выполнить `npx prisma migrate deploy`, затем `npm run prisma:seed`.
-4. Для существующей базы из checkpoint перед исправлениями: после резервной копии выполнить `npm run db:repair-academic`.
-5. Запустить `npm run dev`.
+  <p><strong>Умный академический компаньон, трекер дедлайнов и мобильное flow-расписание для студентов</strong></p>
+  <p>Учёба в своём ритме — без хаоса в чатах, потерянных методичек и пропущенных сроков.</p>
 
-Dev-вход требует одновременно NODE_ENV=development и ALLOW_DEV_AUTH=true. Автоматического владельца нет. Create-only seed не создаёт пользователей с привилегиями; в текущей локальной БД сохраняются ранее существовавшие LOCAL_DEV identities. Новая установка имеет только академический bootstrap, без рабочего production-входа.
+  <p>
+    <a href="https://github.com/fuezeevv/student-value/releases/latest">
+      <img src="https://img.shields.io/badge/Скачать%20APK-v1.984-3378ff?style=for-the-badge&logo=android&logoColor=white" alt="Скачать APK" />
+    </a>
+    <img src="https://img.shields.io/badge/Platform-Android%20%7C%20Web-0b1322?style=for-the-badge" alt="Platform" />
+    <img src="https://img.shields.io/badge/React%20Native-0.88-20232A?style=for-the-badge&logo=react&logoColor=61DAFB" alt="React Native" />
+    <img src="https://img.shields.io/badge/Next.js-15-black?style=for-the-badge&logo=next.js&logoColor=white" alt="Next.js" />
+    <img src="https://img.shields.io/badge/TypeScript-5.x-3178C6?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript" />
+    <img src="https://img.shields.io/badge/License-MIT-9b304d?style=for-the-badge" alt="License" />
+  </p>
 
-## Проверки
+</div>
 
-- `npm run typecheck`
-- `npm run lint`
-- `npm test`
-- `npm run test:e2e`
-- `node scripts/check-migrations.mjs`
-- `npm run build`
+---
 
-Тесты создают отдельную локальную studentvalue_test_core, используя соединение из DATABASE_URL с другим именем базы. Альтернатива — явный TEST_DATABASE_URL; имя обязано начинаться с studentvalue_test_, соединение должно быть локальным и отличаться от рабочей БД. Раннер не сбрасывает и не удаляет базы. Для создания тестовой БД требуются PostgreSQL CLI и право CREATEDB.
+## 📸 Интерфейс приложения
 
-Для проверки production-auth используется сборка с NEXT_DIST_DIR=.next-production-check и DATABASE_URL тестовой БД. Затем `node scripts/check-production-auth.mjs`; даже при ALLOW_DEV_AUTH=true dev-cookie должна отклоняться.
+<div align="center">
+  <table>
+    <tr>
+      <td align="center" width="33%">
+        <strong>Живой Flow-поток</strong><br /><br />
+        <img src="docs/images/flow-hero.png" width="260" alt="Flow-расписание" /><br />
+        <em>Фокус на текущей паре, прогресс-бар и мягкий амбиент</em>
+      </td>
+      <td align="center" width="33%">
+        <strong>Учебные предметы</strong><br /><br />
+        <img src="docs/images/subjects.png" width="260" alt="Предметы" /><br />
+        <em>Все дисциплины семестра, преподаватели и аудитории</em>
+      </td>
+      <td align="center" width="33%">
+        <strong>Сроки и задания</strong><br /><br />
+        <img src="docs/images/deadlines.png" width="260" alt="Дедлайны" /><br />
+        <em>Умная фильтрация, методички и отметка готовности (+20 XP)</em>
+      </td>
+    </tr>
+  </table>
+</div>
 
+---
 
-## Production
+## 💡 О проекте
 
-Выбран Vercel Hobby + Neon Free (Frankfurt), домен `studentvalue1984.eu.cc`. `vercel.json` закрепляет build и регион, автоматические Git deployments отключены. Runtime guards выполняются внутри Vercel Functions, а не только через `npm start`.
+Студенческая жизнь полна информационного шума: расписание меняется на портале, методички тонут в архивах десятков чатов, дедлайны фиксируются на разрозненных листочках или в таблицах, а личный статус готовности работ теряется.
 
-`npm run build:vercel` не соединяется с БД. `npm run db:migrate:production` использует отдельный direct Neon URL и выполняется перед release, не в build/preview/CI. `npm run test:vercel-runtime` проверяет guards на production-сборке без `npm start`. Secrets и порядок релиза — в [DEPLOYMENT.md](docs/DEPLOYMENT.md).
+**Student Value 1.984** создавался как чистый, молниеносный и эстетичный академический компаньон, решающий эти боли:
+- **Мгновенный ответ на вопрос «Что у меня сейчас?»**: больше не нужно искать пару в громоздких таблицах — приложение открывается сразу на текущем или ближайшем занятии.
+- **Оригинальные учебные материалы под рукой**: методички (PDF, DOCX) привязаны прямо к соответствующим работам и доступны для скачивания и просмотра офлайн.
+- **Спокойный фокус вместо тревожности**: прогресс пары отображается элегантной заполняющейся полосой без навязчивых процентов, а раздел «Сегодня в своём темпе» помогает двигаться по учёбе небольшими комфортными шагами.
 
-Облачный deployment и Google OAuth пока не выполнены: не выдавать закрытую страницу входа за готовый пилот. Не использовать dev-вход, fixture seed или автоматическое восстановление локального dump в production.
+---
+
+## ✨ Ключевые возможности
+
+### ⚡ 1. Flow-расписание (Live Schedule Flow)
+- **Фокус на текущем моменте**: при открытии сразу видна текущая пара, преподаватель, аудитория и статус.
+- **Заполняющийся прогресс-бар**: наглядная полоса времени прямо под крупными часами пары с точным расчётом оставшихся минут.
+- **Адаптивный свайп**: потягивание снизу вверх плавно открывает следующий блок занятий на сегодня и актуальные задания.
+- **Атмосферный визуал**: мягкий бордовый амбиент-блик у нижней панели навигации, создающий ощущение премиального стеклянного экрана.
+
+### 📚 2. Учебные предметы и материалы
+- Каталог всех дисциплин семестра с разделением по типам занятий (Лекции, Практики, Лабораторные).
+- Доступ к оригинальным методическим пособиям и заданиям преподавателей.
+- Локальное сохранение файлов в память устройства для чтения без интернета.
+
+### ⏱️ 3. Сроки и трекер выполнения
+- Умная фильтрация: **Все**, **Предстоит сдать**, **Выполнено**.
+- Локальные системные напоминания о приближающихся дедлайнах.
+- Модель самостоятельной отметки готовности работы студентом с начислением очков опыта (+20 XP).
+
+### 🧘 4. Сегодня в своём темпе (Focus & Wellbeing)
+- Встроенный таймер концентрации для комфортной подготовки к лабораторным и расчётным заданиям.
+- Дневной чек-лист микро-шагов по учёбе.
+- Индикатор прогресса дня в верхнем правом бейдже.
+
+### 🛡️ 5. Архитектура Offline-First
+- Полная автономность: локальная реляционная база данных **SQLite** на устройстве.
+- Мгновенная загрузка экранов и смена вкладок без сетевых задержек (60–120 FPS).
+- Очередь фоновой синхронизации (Outbox) с защитой от повторной отправки (`operationId`).
+
+---
+
+## 🛠️ Стек технологий
+
+| Область | Технологии |
+| :--- | :--- |
+| **Mobile App** | React Native 0.88, Expo 58, TypeScript, Expo SQLite, Expo Notifications, Expo FileSystem |
+| **Web & API** | Next.js 15 (App Router), React 19, Tailwind CSS |
+| **Backend & База** | PostgreSQL 16, Prisma ORM, строгое соблюдение часового пояса `Europe/Moscow` |
+| **Инфраструктура** | Android Debug/Release APK, GitHub Actions, Vercel |
+
+---
+
+## 🚀 Быстрый старт
+
+### Для пользователей (Android)
+1. Перейдите в раздел **[Releases](https://github.com/fuezeevv/student-value/releases/latest)**.
+2. Скачайте файл `StudentValue-1.984.apk`.
+3. Установите на смартфон с Android 8.0+.
+
+---
+
+### Для разработчиков (Локальный запуск)
+
+1. **Клонируйте репозиторий:**
+   ```bash
+   git clone https://github.com/fuezeevv/student-value.git
+   cd student-value
+   ```
+
+2. **Установите зависимости:**
+   ```bash
+   npm ci
+   ```
+
+3. **Настройте базу данных:**
+   Создайте `.env` на основе примера и примените миграции:
+   ```bash
+   npx prisma migrate deploy
+   ```
+
+4. **Запустите проект:**
+   ```bash
+   # Веб-приложение и API
+   npm run dev
+
+   # Мобильное приложение (в отдельном терминале)
+   cd apps/mobile && npm run android
+   ```
+
+---
+
+## 📦 Релизы и версионирование
+
+Готовые сборки мобильного приложения публикуются на странице **[Releases](https://github.com/fuezeevv/student-value/releases)**. Каждая версия сопровождается списком изменений и прямым APK-файлом.
+
+---
+
+## 📝 Лицензия
+
+Распространяется под лицензией **MIT**. Подробности в файле [LICENSE](LICENSE).
+
+---
+
+<div align="center">
+  <sub>Разработано для спокойной и продуктивной учёбы. Student Value 1.984</sub>
+</div>

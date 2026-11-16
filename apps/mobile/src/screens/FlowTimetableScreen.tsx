@@ -47,6 +47,7 @@ import { ProfileTab } from "../components/tabs/ProfileTab";
 import { SpringPressable } from "../components/SpringPressable";
 import { WellbeingModal } from "../components/WellbeingModal";
 import { AppInfoModal } from "../components/AppInfoModal";
+import { AmbientBottomGlow } from "../components/AmbientBottomGlow";
 import {
   scheduleDeadlineReminder,
   cancelDeadlineReminder,
@@ -835,6 +836,9 @@ export const FlowTimetableScreen: React.FC = () => {
           )}
         </View>
       </View>
+
+      {/* Ambient bottom reflection glow */}
+      <AmbientBottomGlow />
 
       {/* Persistent Bottom Navigation Bar */}
       <BottomNavBar
