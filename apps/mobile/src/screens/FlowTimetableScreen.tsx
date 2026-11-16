@@ -9,6 +9,10 @@ import {
   ActivityIndicator,
   AppState,
   Alert,
+  Platform,
+  StatusBar as RNStatusBar,
+  Image,
+  RefreshControl,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import type {
@@ -679,34 +683,29 @@ export const FlowTimetableScreen: React.FC = () => {
       {/* Top Header */}
       <View style={styles.topHeader}>
         <View style={styles.logoAndBrand}>
-          <Text style={styles.brandTitle}>SV 1.984</Text>
+          <Image
+            source={require("../../assets/brand-mark.png")}
+            style={styles.brandLogoImage}
+            resizeMode="contain"
+          />
+          <View style={styles.brandTextGroup}>
+            <Text style={styles.brandTitle}>
+              Student Value <Text style={styles.brandCoefficient}>1.984</Text>
+            </Text>
+          </View>
         </View>
-
-        <TouchableOpacity
-          onPress={() => setGroupPickerVisible(true)}
-          style={styles.groupPickerButton}
-          accessibilityRole="button"
-          accessibilityLabel={`Текущая группа: ${selectedGroup}. Нажмите для выбора.`}
-        >
-          <Text style={styles.groupPickerText}>
-            {getGroupDisplayLabel(selectedGroup)}
-          </Text>
-          <Text style={styles.groupPickerArrow}>▼</Text>
-        </TouchableOpacity>
 
         <View style={styles.headerRightActions}>
           <TouchableOpacity
-            onPress={handleManualSync}
-            style={styles.syncButton}
+            onPress={() => setGroupPickerVisible(true)}
+            style={styles.groupPickerButton}
             accessibilityRole="button"
-            accessibilityLabel="Обновить расписание"
-            disabled={isSyncing}
+            accessibilityLabel={`Текущая группа: ${selectedGroup}. Нажмите для выбора.`}
           >
-            {isSyncing ? (
-              <ActivityIndicator size="small" color="#93c5fd" />
-            ) : (
-              <Text style={styles.syncIcon}>↻</Text>
-            )}
+            <Text style={styles.groupPickerText}>
+              {getGroupDisplayLabel(selectedGroup)}
+            </Text>
+            <Text style={styles.groupPickerArrow}>▼</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -786,6 +785,14 @@ export const FlowTimetableScreen: React.FC = () => {
         style={styles.contentScroll}
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isSyncing}
+            onRefresh={handleManualSync}
+            tintColor="#93c5fd"
+            colors={["#3378ff"]}
+          />
+        }
       >
         {viewMode === "flow" ? (
           <>
@@ -939,6 +946,8 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: "#0b1424",
+    paddingTop:
+      Platform.OS === "android" ? (RNStatusBar.currentHeight || 28) + 4 : 0,
   },
   topHeader: {
     flexDirection: "row",
@@ -952,21 +961,34 @@ const styles = StyleSheet.create({
   logoAndBrand: {
     flexDirection: "row",
     alignItems: "center",
+    gap: 8,
+  },
+  brandLogoImage: {
+    width: 30,
+    height: 30,
+    borderRadius: 6,
+  },
+  brandTextGroup: {
+    flexDirection: "column",
   },
   brandTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "800",
     color: "#f0f4f8",
-    letterSpacing: -0.5,
+    letterSpacing: -0.3,
+  },
+  brandCoefficient: {
+    color: "#60a5fa",
+    fontWeight: "700",
   },
   groupPickerButton: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#16253d",
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     borderRadius: 20,
-    minHeight: 44,
+    minHeight: 40,
     gap: 6,
     borderWidth: 1,
     borderColor: "#223554",

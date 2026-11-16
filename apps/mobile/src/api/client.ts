@@ -4,14 +4,15 @@ import {
 } from "@studentvalue/mobile-contracts";
 import { getTimetableRepository } from "../storage/repository";
 
-// Configurable API origin with fallback to production
+// Configurable API origin with fallback to local Wi-Fi or production
 export const DEFAULT_API_ORIGIN =
   process.env.EXPO_PUBLIC_API_URL ||
-  (__DEV__ ? "http://127.0.0.1:3000" : "https://studentvalue1984.eu.cc");
+  (__DEV__ ? "http://192.168.0.26:3000" : "https://studentvalue1984.eu.cc");
 
 export const KNOWN_API_ORIGINS = [
+  { id: "lan", label: "Local Wi-Fi (192.168.0.26:3000)", origin: "http://192.168.0.26:3000" },
+  { id: "usb", label: "Local USB (127.0.0.1:3000)", origin: "http://127.0.0.1:3000" },
   { id: "prod", label: "Production (eu.cc)", origin: "https://studentvalue1984.eu.cc" },
-  { id: "dev", label: "Local Test Server (127.0.0.1:3000)", origin: "http://127.0.0.1:3000" },
 ] as const;
 
 export async function getActiveApiOrigin(): Promise<string> {
