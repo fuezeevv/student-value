@@ -1,10 +1,9 @@
-import React, { useEffect, useRef } from "react";
+import React from "react";
 import {
   View,
   Text,
   StyleSheet,
-  Dimensions,
-  Animated,
+  TouchableOpacity,
 } from "react-native";
 import {
   calculateLessonProgress,
@@ -22,6 +21,7 @@ export type FlowHeroCardProps = {
   totalLessonsToday: number;
   allDoneToday: boolean;
   nowMoscowMinutes: number;
+  containerHeight?: number;
   onOpenSubject?: (lesson: MobileLesson) => void;
   onSelectGroup?: () => void;
   onScrollCuePress?: () => void;
@@ -46,13 +46,11 @@ function formatPolytechRoom(rooms: string[]): string {
   return rooms
     .map((r) => {
       const trimmed = r.trim();
-      // Match "3 к. 406" or "3 к.406"
       const kMatch = trimmed.match(/^(\d+|Гл|ГИ)\s*к\.?\s*(\S+)$/i);
       if (kMatch) {
         const b = BUILDING_NAMES[kMatch[1]] || `${kMatch[1]}-й корпус`;
         return `${b} · аудитория ${kMatch[2]}`;
       }
-      // Match "3-406"
       const dashMatch = trimmed.match(/^(\d+)-(\d+[a-zA-Zа-яА-Я]?)$/);
       if (dashMatch) {
         const b = BUILDING_NAMES[dashMatch[1]] || `${dashMatch[1]}-й корпус`;
@@ -72,60 +70,16 @@ export const FlowHeroCard: React.FC<FlowHeroCardProps> = ({
   totalLessonsToday,
   allDoneToday,
   nowMoscowMinutes,
+  containerHeight,
   onOpenSubject,
   onSelectGroup,
   onScrollCuePress,
 }) => {
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(18)).current;
-  const bounceAnim = useRef(new Animated.Value(0)).current;
-
-  // Staggered entrance animation when lesson or date changes
-  useEffect(() => {
-    fadeAnim.setValue(0);
-    slideAnim.setValue(18);
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 350,
-        useNativeDriver: true,
-      }),
-      Animated.spring(slideAnim, {
-        toValue: 0,
-        speed: 20,
-        bounciness: 4,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [lesson?.id, dateLabel]);
-
-  // Subtle breathing loop for the scroll indicator
-  useEffect(() => {
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(bounceAnim, {
-          toValue: 6,
-          duration: 1200,
-          useNativeDriver: true,
-        }),
-        Animated.timing(bounceAnim, {
-          toValue: 0,
-          duration: 1000,
-          useNativeDriver: true,
-        }),
-      ]),
-    );
-    loop.start();
-    return () => loop.stop();
-  }, []);
-
-  const windowHeight = Dimensions.get("window").height;
-  // Hero takes up almost full viewport (subtracting status bar + header + bottom bar ~ 160)
-  const heroMinHeight = Math.max(480, windowHeight - 170);
+  const cardHeight = containerHeight && containerHeight > 300 ? containerHeight : 560;
 
   if (!isLoaded) {
     return (
-      <View style={[styles.stateContainer, { minHeight: heroMinHeight }]}>
+      <View style={[styles.stateContainer, { height: cardHeight }]}>
         <Text style={styles.stateTitle}>Расписание не загружено</Text>
         <Text style={styles.stateSubtitle}>
           Данные отсутствуют в памяти устройства. Потяните вниз для обновления.
@@ -136,7 +90,7 @@ export const FlowHeroCard: React.FC<FlowHeroCardProps> = ({
 
   if (totalLessonsToday === 0) {
     return (
-      <View style={[styles.stateContainer, { minHeight: heroMinHeight }]}>
+      <View style={[styles.stateContainer, { height: cardHeight }]}>
         <SpringPressable onPress={onSelectGroup} activeScale={0.94}>
           <Text style={styles.groupCodeEyebrow}>{groupCode}</Text>
         </SpringPressable>
@@ -152,7 +106,7 @@ export const FlowHeroCard: React.FC<FlowHeroCardProps> = ({
 
   if (allDoneToday) {
     return (
-      <View style={[styles.stateContainer, { minHeight: heroMinHeight }]}>
+      <View style={[styles.stateContainer, { height: cardHeight }]}>
         <SpringPressable onPress={onSelectGroup} activeScale={0.94}>
           <Text style={styles.groupCodeEyebrow}>{groupCode}</Text>
         </SpringPressable>
@@ -163,16 +117,14 @@ export const FlowHeroCard: React.FC<FlowHeroCardProps> = ({
           Все пары подошли к концу. Листайте ниже для просмотра дедлайнов.
         </Text>
         {onScrollCuePress && (
-          <SpringPressable
+          <TouchableOpacity
             style={styles.scrollCueContainer}
             onPress={onScrollCuePress}
-            activeScale={0.92}
+            activeOpacity={0.7}
           >
-            <Text style={styles.scrollCueText}>Сроки и задания</Text>
-            <Animated.View style={{ transform: [{ translateY: bounceAnim }] }}>
-              <ChevronDownIcon size={14} color="#64748b" />
-            </Animated.View>
-          </SpringPressable>
+            <Text style={styles.scrollCueText}>Сроки и задания ↓</Text>
+            <ChevronDownIcon size={16} color="#93c5fd" />
+          </TouchableOpacity>
         )}
       </View>
     );
@@ -182,7 +134,6 @@ export const FlowHeroCard: React.FC<FlowHeroCardProps> = ({
     return null;
   }
 
-  // Calculate 90-minute progress if ongoing
   const progressResult = isToday
     ? calculateLessonProgress(lesson.start, nowMoscowMinutes, 90)
     : { isOngoing: false, progressPercent: 0 };
@@ -190,117 +141,127 @@ export const FlowHeroCard: React.FC<FlowHeroCardProps> = ({
   const progressPercent = progressResult.progressPercent;
 
   return (
-    <Animated.View
-      style={[
-        styles.heroFullscreenContainer,
-        {
-          minHeight: heroMinHeight,
-          opacity: fadeAnim,
-          transform: [{ translateY: slideAnim }],
-        },
-      ]}
-    >
-      {/* 1. Subtle Group Code */}
-      <SpringPressable
-        onPress={onSelectGroup}
-        activeScale={0.95}
-        accessibilityRole="button"
-        accessibilityLabel={`Группа ${groupCode}. Нажмите для выбора.`}
-      >
-        <Text style={styles.groupCodeEyebrow}>{groupCode}</Text>
-      </SpringPressable>
-
-      {/* 2. Date */}
-      <Text style={styles.dateEyebrow}>{dateLabel}</Text>
-
-      {/* 3. Big Start Time */}
-      <View style={styles.timeWrapper}>
-        <Text style={styles.bigTimeText}>{lesson.start}</Text>
-        {isOngoing && (
-          <View style={styles.progressTrack}>
-            <View
-              style={[
-                styles.progressBar,
-                { width: `${Math.min(100, Math.max(4, progressPercent))}%` },
-              ]}
-            />
-          </View>
-        )}
+    <View style={[styles.heroFullscreenContainer, { height: cardHeight }]}>
+      {/* Top section: Group and Date */}
+      <View style={styles.heroTopGroup}>
+        <SpringPressable
+          onPress={onSelectGroup}
+          activeScale={0.95}
+          accessibilityRole="button"
+          accessibilityLabel={`Группа ${groupCode}. Нажмите для выбора.`}
+        >
+          <Text style={styles.groupCodeEyebrow}>{groupCode}</Text>
+        </SpringPressable>
+        <Text style={styles.dateEyebrow}>{dateLabel}</Text>
       </View>
 
-      {/* 4. Large Bold Uppercase Subject Title */}
-      <Text style={styles.subjectTitleHero} numberOfLines={4}>
-        {lesson.subject.toUpperCase()}
-      </Text>
+      {/* Center section: Clock, Title, Format, Room, Teacher, Link */}
+      <View style={styles.heroCenterGroup}>
+        <View style={styles.timeWrapper}>
+          <Text style={styles.bigTimeText}>{lesson.start}</Text>
+          {isOngoing && (
+            <View style={styles.progressTrack}>
+              <View
+                style={[
+                  styles.progressBar,
+                  { width: `${Math.min(100, Math.max(4, progressPercent))}%` },
+                ]}
+              />
+            </View>
+          )}
+        </View>
 
-      {/* 5. Lesson Type Pill / Label */}
-      {lesson.type ? (
-        <Text style={styles.lessonTypeHero}>{lesson.type}</Text>
-      ) : null}
+        <Text style={styles.subjectTitleHero} numberOfLines={4}>
+          {lesson.subject.toUpperCase()}
+        </Text>
 
-      {/* 6. Building & Room */}
-      <Text style={styles.roomHero}>{formatPolytechRoom(lesson.rooms)}</Text>
+        {lesson.type ? (
+          <Text style={styles.lessonTypeHero}>{lesson.type}</Text>
+        ) : null}
 
-      {/* 7. Teacher Name */}
-      {lesson.teachers.length > 0 && (
-        <Text style={styles.teacherHero}>{lesson.teachers.join(", ")}</Text>
-      )}
+        <Text style={styles.roomHero}>{formatPolytechRoom(lesson.rooms)}</Text>
 
-      {/* 8. Action Link: Открыть предмет ↗ */}
-      <SpringPressable
-        style={styles.openSubjectButton}
-        activeScale={0.95}
-        onPress={() => onOpenSubject?.(lesson)}
-        accessibilityRole="button"
-        accessibilityLabel={`Открыть предмет ${lesson.subject}`}
-      >
-        <Text style={styles.openSubjectText}>Открыть предмет</Text>
-        <ArrowUpRightIcon size={14} color="#93c5fd" />
-      </SpringPressable>
+        {lesson.teachers.length > 0 && (
+          <Text style={styles.teacherHero}>{lesson.teachers.join(", ")}</Text>
+        )}
 
-      {/* 9. Scroll down guidance cue */}
-      {totalLessonsToday > 1 && (
         <SpringPressable
-          style={styles.scrollCueContainer}
-          onPress={onScrollCuePress}
-          activeScale={0.92}
+          style={styles.openSubjectButton}
+          activeScale={0.95}
+          onPress={() => onOpenSubject?.(lesson)}
+          accessibilityRole="button"
+          accessibilityLabel={`Открыть предмет ${lesson.subject}`}
         >
-          <Text style={styles.scrollCueText}>Ещё {totalLessonsToday - 1} пары сегодня</Text>
-          <Animated.View style={{ transform: [{ translateY: bounceAnim }] }}>
-            <ChevronDownIcon size={14} color="#64748b" />
-          </Animated.View>
+          <Text style={styles.openSubjectText}>Открыть предмет</Text>
+          <ArrowUpRightIcon size={14} color="#93c5fd" />
         </SpringPressable>
-      )}
-    </Animated.View>
+      </View>
+
+      {/* Bottom section: Action cue to scroll to "Далее сегодня" full screen */}
+      <View style={styles.heroBottomGroup}>
+        {totalLessonsToday > 1 ? (
+          <TouchableOpacity
+            style={styles.scrollCueContainer}
+            onPress={onScrollCuePress}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Открыть расписание на день"
+          >
+            <Text style={styles.scrollCueText}>
+              Далее сегодня ({totalLessonsToday - 1}) ↓
+            </Text>
+            <ChevronDownIcon size={16} color="#93c5fd" />
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            style={styles.scrollCueContainer}
+            onPress={onScrollCuePress}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.scrollCueText}>Дедлайны и задания ↓</Text>
+            <ChevronDownIcon size={16} color="#93c5fd" />
+          </TouchableOpacity>
+        )}
+      </View>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   heroFullscreenContainer: {
     alignItems: "center",
-    justifyContent: "center",
+    justifyContent: "space-between",
     paddingHorizontal: 20,
     paddingTop: 16,
-    paddingBottom: 24,
+    paddingBottom: 20,
+  },
+  heroTopGroup: {
+    alignItems: "center",
+    paddingTop: 8,
   },
   groupCodeEyebrow: {
     fontSize: 13,
     fontWeight: "600",
     color: "#64748b",
     letterSpacing: 0.8,
-    marginBottom: 6,
+    marginBottom: 4,
   },
   dateEyebrow: {
     fontSize: 15,
     fontWeight: "500",
     color: "#94a3b8",
-    marginBottom: 14,
     textTransform: "capitalize",
+  },
+  heroCenterGroup: {
+    alignItems: "center",
+    justifyContent: "center",
+    width: "100%",
+    paddingVertical: 10,
   },
   timeWrapper: {
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 16,
+    marginBottom: 12,
     minWidth: 160,
   },
   bigTimeText: {
@@ -338,7 +299,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
     lineHeight: 30,
     letterSpacing: 0.5,
-    marginBottom: 12,
+    marginBottom: 10,
     maxWidth: 340,
   },
   lessonTypeHero: {
@@ -346,7 +307,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#fda4af",
     textAlign: "center",
-    marginBottom: 8,
+    marginBottom: 6,
     letterSpacing: 0.3,
   },
   roomHero: {
@@ -360,7 +321,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#8a9bb5",
     textAlign: "center",
-    marginBottom: 16,
+    marginBottom: 14,
   },
   openSubjectButton: {
     flexDirection: "row",
@@ -373,25 +334,33 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(96, 165, 250, 0.25)",
     borderRadius: 24,
-    marginTop: 4,
+    marginTop: 2,
   },
   openSubjectText: {
     fontSize: 14,
     fontWeight: "600",
     color: "#93c5fd",
   },
+  heroBottomGroup: {
+    alignItems: "center",
+    paddingBottom: 4,
+  },
   scrollCueContainer: {
-    marginTop: 28,
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 4,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
+    gap: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    backgroundColor: "rgba(255, 255, 255, 0.04)",
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.08)",
   },
   scrollCueText: {
-    fontSize: 12,
-    fontWeight: "500",
-    color: "#64748b",
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#93c5fd",
   },
   stateContainer: {
     alignItems: "center",

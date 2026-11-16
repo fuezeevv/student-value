@@ -1,10 +1,10 @@
-import React, { useRef } from "react";
+import React from "react";
 import {
-  Animated,
   Pressable,
   type PressableProps,
   type StyleProp,
   type ViewStyle,
+  StyleSheet,
 } from "react-native";
 
 export interface SpringPressableProps
@@ -16,52 +16,32 @@ export interface SpringPressableProps
 }
 
 /**
- * Tactile spring-animated pressable component.
- * Delivers responsive, native-feeling feedback on press without layout shifts.
+ * High-performance, crash-free tactile pressable.
+ * Uses native Pressable state to deliver immediate tactile feedback
+ * without risking native driver crashes during list scrolling.
  */
 export const SpringPressable: React.FC<SpringPressableProps> = ({
   children,
   style,
   containerStyle,
-  activeScale = 0.96,
-  onPress,
+  activeScale = 0.97,
   disabled,
   ...props
 }) => {
-  const scale = useRef(new Animated.Value(1)).current;
-
-  const handlePressIn = () => {
-    if (disabled) return;
-    Animated.spring(scale, {
-      toValue: activeScale,
-      useNativeDriver: true,
-      speed: 30,
-      bounciness: 4,
-    }).start();
-  };
-
-  const handlePressOut = () => {
-    if (disabled) return;
-    Animated.spring(scale, {
-      toValue: 1,
-      useNativeDriver: true,
-      speed: 25,
-      bounciness: 6,
-    }).start();
-  };
-
   return (
     <Pressable
-      onPressIn={handlePressIn}
-      onPressOut={handlePressOut}
-      onPress={onPress}
       disabled={disabled}
-      style={containerStyle}
+      style={({ pressed }) => [
+        containerStyle,
+        style,
+        pressed && !disabled && {
+          opacity: 0.85,
+          transform: [{ scale: activeScale }],
+        },
+      ]}
       {...props}
     >
-      <Animated.View style={[style, { transform: [{ scale }] }]}>
-        {children}
-      </Animated.View>
+      {children}
     </Pressable>
   );
 };

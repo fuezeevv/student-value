@@ -12,6 +12,7 @@ import {
   Dimensions,
   Alert,
   AppState,
+  TouchableOpacity,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import type {
@@ -115,6 +116,7 @@ function formatFlowDate(dateStr: string): string {
 
 export const FlowTimetableScreen: React.FC = () => {
   const [activeTab, setActiveTab] = useState<NavTab>("flow");
+  const [containerHeight, setContainerHeight] = useState<number>(0);
   const [selectedGroup, setSelectedGroup] = useState<string>("5130901/40102");
   const [todayStr, setTodayStr] = useState<string>(() => getMoscowDateString());
   const [nowMoscowMin, setNowMoscowMin] = useState<number>(() => getMoscowNowMinutes());
@@ -590,13 +592,24 @@ export const FlowTimetableScreen: React.FC = () => {
       </View>
 
       {/* Main Tab Screen View */}
-      <View style={styles.bodyContainer}>
+      <View
+        style={styles.bodyContainer}
+        onLayout={(e) => {
+          const { height } = e.nativeEvent.layout;
+          if (height > 200 && height !== containerHeight) {
+            setContainerHeight(height);
+          }
+        }}
+      >
         {activeTab === "flow" && (
           <ScrollView
             ref={scrollRef}
             style={styles.scrollArea}
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
+            snapToOffsets={containerHeight > 0 ? [0, containerHeight] : undefined}
+            snapToEnd={false}
+            decelerationRate="fast"
             refreshControl={
               <RefreshControl
                 refreshing={isSyncing}
@@ -606,7 +619,7 @@ export const FlowTimetableScreen: React.FC = () => {
               />
             }
           >
-            {/* 1. Immersive Fullscreen Hero */}
+            {/* Page 1: Immersive Fullscreen Hero */}
             <FlowHeroCard
               lesson={heroLesson}
               groupCode={selectedGroup}
@@ -616,41 +629,60 @@ export const FlowTimetableScreen: React.FC = () => {
               totalLessonsToday={lessons.length}
               allDoneToday={allDoneToday}
               nowMoscowMinutes={nowMoscowMin}
+              containerHeight={containerHeight}
               onSelectGroup={() => setGroupPickerVisible(true)}
               onOpenSubject={(l) => {
                 setSelectedLessonForModal(l);
                 setSubjectModalVisible(true);
               }}
               onScrollCuePress={() => {
+                const targetY = containerHeight > 0 ? containerHeight : 560;
                 scrollRef.current?.scrollTo({
-                  y: Dimensions.get("window").height - 180,
+                  y: targetY,
                   animated: true,
                 });
               }}
             />
 
-            {/* 2. Upcoming Lessons of the day (shown as user scrolls down) */}
-            {remainingLessons.length > 0 && (
-              <View style={styles.upcomingSection}>
-                <Text style={styles.sectionHeaderTitle}>Далее сегодня</Text>
-                {remainingLessons.map((l) => (
-                  <UpcomingLessonCard
-                    key={l.id}
-                    lesson={l}
-                    onPress={() => {
-                      setSelectedLessonForModal(l);
-                      setSubjectModalVisible(true);
-                    }}
-                  />
-                ))}
-              </View>
-            )}
+            {/* Page 2: Full Screen "Далее сегодня" + Дедлайны */}
+            <View
+              style={[
+                styles.page2Container,
+                containerHeight > 0 ? { minHeight: containerHeight } : undefined,
+              ]}
+            >
+              {remainingLessons.length > 0 && (
+                <View style={styles.upcomingSection}>
+                  <View style={styles.page2HeaderRow}>
+                    <Text style={styles.sectionHeaderTitle}>Далее сегодня</Text>
+                    <TouchableOpacity
+                      onPress={() => scrollRef.current?.scrollTo({ y: 0, animated: true })}
+                      style={styles.backToHeroButton}
+                      activeOpacity={0.7}
+                      accessibilityRole="button"
+                      accessibilityLabel="Вернуться к текущей паре"
+                    >
+                      <Text style={styles.backToHeroText}>↑ К текущей паре</Text>
+                    </TouchableOpacity>
+                  </View>
+                  {remainingLessons.map((l) => (
+                    <UpcomingLessonCard
+                      key={l.id}
+                      lesson={l}
+                      onPress={() => {
+                        setSelectedLessonForModal(l);
+                        setSubjectModalVisible(true);
+                      }}
+                    />
+                  ))}
+                </View>
+              )}
 
-            {/* 3. Deadlines and Tasks section */}
-            <View style={styles.tasksSection}>
-              <Text style={styles.sectionHeaderTitle}>
-                Текущая работа и дедлайны
-              </Text>
+              {/* Deadlines and Tasks section */}
+              <View style={styles.tasksSection}>
+                <Text style={styles.sectionHeaderTitle}>
+                  Текущая работа и дедлайны
+                </Text>
               {tasks.length > 0 ? (
                 tasks.map((task) => (
                   <TaskProgressCard
@@ -686,7 +718,8 @@ export const FlowTimetableScreen: React.FC = () => {
                 </View>
               )}
             </View>
-          </ScrollView>
+          </View>
+        </ScrollView>
         )}
 
         {activeTab === "subjects" && (
@@ -858,6 +891,28 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingBottom: 40,
+  },
+  page2Container: {
+    paddingTop: 8,
+  },
+  page2HeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 12,
+  },
+  backToHeroButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 14,
+    backgroundColor: "rgba(51, 120, 255, 0.1)",
+    borderWidth: 1,
+    borderColor: "rgba(96, 165, 250, 0.2)",
+  },
+  backToHeroText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#93c5fd",
   },
   upcomingSection: {
     paddingHorizontal: 20,
