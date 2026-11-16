@@ -131,6 +131,12 @@ function formatAge(isoString: string | null): string {
 
 export const FlowTimetableScreen: React.FC = () => {
   const [activeTab, setActiveTab] = useState<NavTab>("flow");
+  const [visitedTabs, setVisitedTabs] = useState<Record<NavTab, boolean>>({
+    flow: true,
+    subjects: false,
+    deadlines: false,
+    profile: false,
+  });
   const [containerHeight, setContainerHeight] = useState<number>(0);
   const [selectedGroup, setSelectedGroup] = useState<string>("5130901/40102");
   const [todayStr, setTodayStr] = useState<string>(() => getMoscowDateString());
@@ -171,6 +177,29 @@ export const FlowTimetableScreen: React.FC = () => {
   const scrollRef = useRef<any>(null);
   const reqGenRef = useRef(0);
 
+  const handleSelectTab = useCallback((t: NavTab) => {
+    setActiveTab(t);
+    setVisitedTabs((prev) => (prev[t] ? prev : { ...prev, [t]: true }));
+  }, []);
+
+  const handleOpenLesson = useCallback((l: MobileLesson) => {
+    setSelectedLessonForModal(l);
+    setSubjectModalVisible(true);
+  }, []);
+
+  const handleOpenMaterial = useCallback((matId: string) => {
+    setActiveMaterialModalId(matId);
+    setMaterialModalVisible(true);
+  }, []);
+
+  const handleOpenLogin = useCallback(() => {
+    setAuthModalVisible(true);
+  }, []);
+
+  const handleOpenGroupPicker = useCallback(() => {
+    setGroupPickerVisible(true);
+  }, []);
+
   // Load API origin and notification channels
   useEffect(() => {
     getActiveApiOrigin().then(setApiOrigin);
@@ -201,7 +230,9 @@ export const FlowTimetableScreen: React.FC = () => {
         );
         if (res.ok) {
           const data = await res.json();
-          const serverTasks = data.tasks || [];
+          const serverTasks = (data.tasks || []).filter(
+            (t: any) => !t.title?.includes("[TEST]") && !t.id?.startsWith("test-"),
+          );
           const mapped: CachedTask[] = serverTasks.map((t: any) => ({
             id: t.id,
             groupCode,
@@ -614,7 +645,7 @@ export const FlowTimetableScreen: React.FC = () => {
         </TouchableOpacity>
       </View>
 
-      {/* Main Tab Screen View */}
+      {/* Main Tab Screen View with Retained Tabs */}
       <View
         style={styles.bodyContainer}
         onLayout={(e) => {
@@ -624,7 +655,11 @@ export const FlowTimetableScreen: React.FC = () => {
           }
         }}
       >
-        {activeTab === "flow" && (
+        {/* Tab 1: Flow */}
+        <View
+          style={[styles.tabPane, activeTab !== "flow" && styles.hiddenPane]}
+          pointerEvents={activeTab === "flow" ? "auto" : "none"}
+        >
           <ScrollView
             ref={scrollRef}
             style={styles.scrollArea}
@@ -653,11 +688,8 @@ export const FlowTimetableScreen: React.FC = () => {
               allDoneToday={allDoneToday}
               nowMoscowMinutes={nowMoscowMin}
               containerHeight={containerHeight}
-              onSelectGroup={() => setGroupPickerVisible(true)}
-              onOpenSubject={(l) => {
-                setSelectedLessonForModal(l);
-                setSubjectModalVisible(true);
-              }}
+              onSelectGroup={handleOpenGroupPicker}
+              onOpenSubject={handleOpenLesson}
               onScrollCuePress={() => {
                 const targetY = containerHeight > 0 ? containerHeight : 560;
                 scrollRef.current?.scrollTo({
@@ -742,60 +774,72 @@ export const FlowTimetableScreen: React.FC = () => {
               )}
             </View>
           </View>
-        </ScrollView>
-        )}
+          </ScrollView>
+        </View>
 
-        {activeTab === "subjects" && (
-          <SubjectsTab
-            lessons={weekLessons.length > 0 ? weekLessons : lessons}
-            tasks={tasks}
-            groupCode={selectedGroup}
-            onOpenLesson={(l) => {
-              setSelectedLessonForModal(l);
-              setSubjectModalVisible(true);
-            }}
-          />
-        )}
+        {/* Tab 2: Subjects */}
+        <View
+          style={[styles.tabPane, activeTab !== "subjects" && styles.hiddenPane]}
+          pointerEvents={activeTab === "subjects" ? "auto" : "none"}
+        >
+          {visitedTabs.subjects && (
+            <SubjectsTab
+              lessons={weekLessons.length > 0 ? weekLessons : lessons}
+              tasks={tasks}
+              groupCode={selectedGroup}
+              onOpenLesson={handleOpenLesson}
+            />
+          )}
+        </View>
 
-        {activeTab === "deadlines" && (
-          <DeadlinesTab
-            tasks={tasks}
-            taskProgress={taskProgress}
-            groupCode={selectedGroup}
-            isLoggedIn={Boolean(sessionUser)}
-            scheduledReminders={scheduledReminders}
-            updatingTaskId={updatingTaskId}
-            onToggleStatus={handleToggleTaskStatus}
-            onToggleReminder={handleToggleReminderForTask}
-            onOpenMaterial={(matId) => {
-              setActiveMaterialModalId(matId);
-              setMaterialModalVisible(true);
-            }}
-            onOpenLogin={() => setAuthModalVisible(true)}
-          />
-        )}
+        {/* Tab 3: Deadlines */}
+        <View
+          style={[styles.tabPane, activeTab !== "deadlines" && styles.hiddenPane]}
+          pointerEvents={activeTab === "deadlines" ? "auto" : "none"}
+        >
+          {visitedTabs.deadlines && (
+            <DeadlinesTab
+              tasks={tasks}
+              taskProgress={taskProgress}
+              groupCode={selectedGroup}
+              isLoggedIn={Boolean(sessionUser)}
+              scheduledReminders={scheduledReminders}
+              updatingTaskId={updatingTaskId}
+              onToggleStatus={handleToggleTaskStatus}
+              onToggleReminder={handleToggleReminderForTask}
+              onOpenMaterial={handleOpenMaterial}
+              onOpenLogin={handleOpenLogin}
+            />
+          )}
+        </View>
 
-        {activeTab === "profile" && (
-          <ProfileTab
-            sessionUser={sessionUser}
-            groupCode={selectedGroup}
-            cachedLessonsCount={lessons.length}
-            cachedTasksCount={tasks.length}
-            apiOrigin={apiOrigin}
-            isStale={isStale}
-            onOpenGroupPicker={() => setGroupPickerVisible(true)}
-            onOpenLogin={() => setAuthModalVisible(true)}
-            onLogout={handleLogout}
-            onSelectOrigin={handleSelectOrigin}
-            onRefreshData={handleManualSync}
-          />
-        )}
+        {/* Tab 4: Profile */}
+        <View
+          style={[styles.tabPane, activeTab !== "profile" && styles.hiddenPane]}
+          pointerEvents={activeTab === "profile" ? "auto" : "none"}
+        >
+          {visitedTabs.profile && (
+            <ProfileTab
+              sessionUser={sessionUser}
+              groupCode={selectedGroup}
+              cachedLessonsCount={lessons.length}
+              cachedTasksCount={tasks.length}
+              apiOrigin={apiOrigin}
+              isStale={isStale}
+              onOpenGroupPicker={handleOpenGroupPicker}
+              onOpenLogin={handleOpenLogin}
+              onLogout={handleLogout}
+              onSelectOrigin={handleSelectOrigin}
+              onRefreshData={handleManualSync}
+            />
+          )}
+        </View>
       </View>
 
       {/* Persistent Bottom Navigation Bar */}
       <BottomNavBar
         activeTab={activeTab}
-        onSelectTab={(t) => setActiveTab(t)}
+        onSelectTab={handleSelectTab}
       />
 
       {/* Group Picker Modal */}
@@ -950,6 +994,12 @@ const styles = StyleSheet.create({
   },
   bodyContainer: {
     flex: 1,
+  },
+  tabPane: {
+    flex: 1,
+  },
+  hiddenPane: {
+    display: "none",
   },
   scrollArea: {
     flex: 1,

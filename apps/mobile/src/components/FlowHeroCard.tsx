@@ -166,27 +166,26 @@ export const FlowHeroCard: React.FC<FlowHeroCardProps> = ({
         <View style={styles.timeWrapper}>
           <Text style={styles.bigTimeText}>{lesson.start}</Text>
 
-          {/* Ongoing Lesson Progress & Elapsed / Remaining time */}
+          {/* Ongoing Lesson: Smooth filling bar directly under the time */}
           {isOngoing && (
             <View style={styles.ongoingContainer}>
-              <View style={styles.liveIndicatorRow}>
-                <View style={styles.liveDot} />
-                <Text style={styles.liveIndicatorText}>Идёт сейчас</Text>
-                <Text style={styles.progressPercentBadge}>{progressPercent}%</Text>
-              </View>
-
               <View style={styles.progressTrack}>
                 <View
                   style={[
                     styles.progressBar,
-                    { width: `${Math.min(100, Math.max(4, progressPercent))}%` },
+                    { width: `${Math.min(100, Math.max(3, progressPercent))}%` },
                   ]}
                 />
               </View>
 
-              <Text style={styles.timeRemainingText}>
-                Прошло {elapsed} мин · Осталось {remaining} мин
-              </Text>
+              <View style={styles.ongoingInfoRow}>
+                <View style={styles.liveDot} />
+                <Text style={styles.timeRemainingText}>
+                  {remaining > 0
+                    ? `Осталось ${remaining} мин · Прошло ${elapsed} мин`
+                    : `Завершается · Прошло ${elapsed} мин`}
+                </Text>
+              </View>
             </View>
           )}
 
@@ -329,34 +328,10 @@ const styles = StyleSheet.create({
   },
   ongoingContainer: {
     width: "100%",
-    maxWidth: 240,
+    maxWidth: 220,
     alignItems: "center",
     marginTop: 6,
-  },
-  liveIndicatorRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
     marginBottom: 6,
-  },
-  liveDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
-    backgroundColor: "#10b981",
-  },
-  liveIndicatorText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#10b981",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  progressPercentBadge: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#93c5fd",
-    marginLeft: 4,
   },
   progressTrack: {
     width: "100%",
@@ -364,12 +339,23 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255, 255, 255, 0.12)",
     borderRadius: 2,
     overflow: "hidden",
-    marginBottom: 6,
+    marginBottom: 8,
   },
   progressBar: {
     height: "100%",
-    backgroundColor: "#60a5fa",
+    backgroundColor: "#38bdf8",
     borderRadius: 2,
+  },
+  ongoingInfoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  liveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "#10b981",
   },
   timeRemainingText: {
     fontSize: 12,

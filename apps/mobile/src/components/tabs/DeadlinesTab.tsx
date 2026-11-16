@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { View, Text, StyleSheet, ScrollView } from "react-native";
 import type { CachedTask, UserTaskProgress } from "@studentvalue/mobile-contracts";
 import { SpringPressable } from "../SpringPressable";
@@ -17,7 +17,7 @@ export interface DeadlinesTabProps {
   onOpenLogin: () => void;
 }
 
-export const DeadlinesTab: React.FC<DeadlinesTabProps> = ({
+export const DeadlinesTab = React.memo<DeadlinesTabProps>(({
   tasks,
   taskProgress,
   groupCode,
@@ -31,13 +31,19 @@ export const DeadlinesTab: React.FC<DeadlinesTabProps> = ({
 }) => {
   const [filter, setFilter] = useState<"all" | "pending" | "done">("all");
 
-  const filteredTasks = tasks.filter((t) => {
-    const prog = taskProgress[t.id];
-    const isDone = prog && (prog.status === "READY" || prog.status === "SUBMITTED" || prog.status === "ACCEPTED");
-    if (filter === "pending") return !isDone;
-    if (filter === "done") return isDone;
-    return true;
-  });
+  const filteredTasks = useMemo(() => {
+    return tasks.filter((t) => {
+      const prog = taskProgress[t.id];
+      const isDone =
+        prog &&
+        (prog.status === "READY" ||
+          prog.status === "SUBMITTED" ||
+          prog.status === "ACCEPTED");
+      if (filter === "pending") return !isDone;
+      if (filter === "done") return isDone;
+      return true;
+    });
+  }, [tasks, taskProgress, filter]);
 
   return (
     <ScrollView
@@ -137,7 +143,7 @@ export const DeadlinesTab: React.FC<DeadlinesTabProps> = ({
       )}
     </ScrollView>
   );
-};
+});
 
 const styles = StyleSheet.create({
   container: {

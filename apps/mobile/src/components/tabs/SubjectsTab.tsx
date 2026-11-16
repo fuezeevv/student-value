@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { View, Text, StyleSheet, ScrollView } from "react-native";
 import type { MobileLesson, CachedTask } from "@studentvalue/mobile-contracts";
 import { SpringPressable } from "../SpringPressable";
@@ -21,60 +21,64 @@ interface SubjectSummary {
   sampleLesson: MobileLesson;
 }
 
-export const SubjectsTab: React.FC<SubjectsTabProps> = ({
+export const SubjectsTab = React.memo<SubjectsTabProps>(({
   lessons,
   tasks,
   groupCode,
   onOpenLesson,
 }) => {
-  // Aggregate subjects from timetable lessons
-  const subjectMap = new Map<string, SubjectSummary>();
+  // Aggregate subjects from timetable lessons (memoized)
+  const subjects = useMemo(() => {
+    const subjectMap = new Map<string, SubjectSummary>();
 
-  for (const l of lessons) {
-    const key = l.subject.trim();
-    if (!subjectMap.has(key)) {
-      subjectMap.set(key, {
-        title: key,
-        types: [],
-        teachers: [],
-        rooms: [],
-        lessonCount: 0,
-        taskCount: 0,
-        sampleLesson: l,
-      });
-    }
-    const item = subjectMap.get(key)!;
-    item.lessonCount += 1;
-    if (l.type && !item.types.includes(l.type)) {
-      item.types.push(l.type);
-    }
-    for (const t of l.teachers) {
-      if (t && !item.teachers.includes(t)) {
-        item.teachers.push(t);
+    for (const l of lessons) {
+      const key = l.subject.trim();
+      if (!subjectMap.has(key)) {
+        subjectMap.set(key, {
+          title: key,
+          types: [],
+          teachers: [],
+          rooms: [],
+          lessonCount: 0,
+          taskCount: 0,
+          sampleLesson: l,
+        });
+      }
+      const item = subjectMap.get(key)!;
+      item.lessonCount += 1;
+      if (l.type && !item.types.includes(l.type)) {
+        item.types.push(l.type);
+      }
+      for (const t of l.teachers) {
+        if (t && !item.teachers.includes(t)) {
+          item.teachers.push(t);
+        }
+      }
+      for (const r of l.rooms) {
+        if (r && !item.rooms.includes(r)) {
+          item.rooms.push(r);
+        }
       }
     }
-    for (const r of l.rooms) {
-      if (r && !item.rooms.includes(r)) {
-        item.rooms.push(r);
+
+    // Count matching tasks
+    for (const task of tasks) {
+      const taskSubjLower = task.subject.toLowerCase();
+      for (const [title, item] of subjectMap.entries()) {
+        const titleLower = title.toLowerCase();
+        if (
+          taskSubjLower.includes(titleLower) ||
+          titleLower.includes(taskSubjLower)
+        ) {
+          item.taskCount += 1;
+        }
       }
     }
-  }
 
-  // Count matching tasks
-  for (const task of tasks) {
-    for (const [title, item] of subjectMap.entries()) {
-      if (
-        task.subject.toLowerCase().includes(title.toLowerCase()) ||
-        title.toLowerCase().includes(task.subject.toLowerCase())
-      ) {
-        item.taskCount += 1;
-      }
-    }
-  }
-
-  const subjects = Array.from(subjectMap.values()).sort((a, b) =>
-    a.title.localeCompare(b.title, "ru"),
-  );
+    return Array.from(subjectMap.values()).sort((a, b) =>
+      a.title.localeCompare(b.title, "ru"),
+    );
+  }, [lessons, tasks]);
 
   return (
     <ScrollView
@@ -140,7 +144,7 @@ export const SubjectsTab: React.FC<SubjectsTabProps> = ({
       )}
     </ScrollView>
   );
-};
+});
 
 const styles = StyleSheet.create({
   container: {

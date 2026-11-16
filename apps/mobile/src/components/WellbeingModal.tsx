@@ -123,13 +123,14 @@ export const WellbeingModal: React.FC<WellbeingModalProps> = ({
     }
   }, [data, ready]);
 
-  // Tick timer every second when modal is open or when timer is running
+  // Tick timer every second only when modal is visible and timer is running
   useEffect(() => {
+    if (!visible || !data.running) return;
     const timer = setInterval(() => {
       setTick(Date.now());
     }, 1000);
     return () => clearInterval(timer);
-  }, []);
+  }, [visible, data.running]);
 
   const day = useMemo(() => {
     return data.days[today] || { seconds: 0, steps: [] };

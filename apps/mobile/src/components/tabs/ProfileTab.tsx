@@ -17,7 +17,7 @@ export interface ProfileTabProps {
   onRefreshData: () => void;
 }
 
-export const ProfileTab: React.FC<ProfileTabProps> = ({
+export const ProfileTab = React.memo<ProfileTabProps>(({
   sessionUser,
   groupCode,
   cachedLessonsCount,
@@ -185,7 +185,7 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({
       </View>
     </ScrollView>
   );
-};
+});
 
 const styles = StyleSheet.create({
   container: {

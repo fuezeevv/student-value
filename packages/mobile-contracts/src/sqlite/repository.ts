@@ -649,6 +649,10 @@ export class TimetableSqliteRepository {
 
   async getCachedTasksForGroup(groupCode: string): Promise<CachedTask[]> {
     await this.init();
+    // Prune any legacy test artifacts so real academic work is never polluted
+    await this.db.run(
+      `DELETE FROM cached_tasks WHERE title LIKE '%[TEST]%' OR id LIKE 'test-%' OR id LIKE 'e2e-%'`,
+    );
     const rows = await this.db.all<{
       id: string;
       group_code: string;
@@ -667,7 +671,7 @@ export class TimetableSqliteRepository {
       material_sha256: string | null;
       updated_at: string;
     }>(
-      `SELECT * FROM cached_tasks WHERE group_code = ? ORDER BY deadline_date ASC, id ASC`,
+      `SELECT * FROM cached_tasks WHERE group_code = ? AND title NOT LIKE '%[TEST]%' ORDER BY deadline_date ASC, id ASC`,
       [groupCode],
     );
 

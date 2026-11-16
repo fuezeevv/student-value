@@ -3,9 +3,14 @@ import { randomBytes, createHash } from "node:crypto";
 import { prepareTestDatabase } from "./test-db.mjs";
 
 async function main() {
-  const env = prepareTestDatabase();
-  for (const [k, v] of Object.entries(env)) {
-    process.env[k] = v;
+  if (process.env.SV_TEST_ISOLATED === "1") {
+    const env = prepareTestDatabase();
+    for (const [k, v] of Object.entries(env)) {
+      process.env[k] = v;
+    }
+  } else {
+    const { loadEnv } = await import("./test-db.mjs");
+    loadEnv();
   }
   // Allow real public RUZ schedule loading for live classes
   delete process.env.SV_TEST_ISOLATED;
@@ -38,118 +43,132 @@ async function main() {
   const { prisma } = await import("../src/lib/db/prisma");
   const { hashToken } = await import("../src/lib/auth/google");
 
-  // Ensure test user has enrollment in test-group where task-otu-lab1 already exists
-  const testGroup = await prisma.studyGroup.findUniqueOrThrow({
-    where: { id: "test-group" },
-  });
-
-  const testUser = await prisma.user.upsert({
-    where: { id: "test-user-rasool" },
-    update: {},
-    create: {
-      id: "test-user-rasool",
-      nickname: "Rasool",
+  // Ensure test user has enrollment in an available group
+  let testUser: any = null;
+  const testGroup = await prisma.studyGroup.findFirst({
+    where: {
+      OR: [
+        { code: "5130901/40102" },
+        { id: "test-group" },
+      ],
     },
   });
 
-  await prisma.groupMember.upsert({
-    where: {
-      groupId_userId: {
+  if (testGroup) {
+    testUser = await prisma.user.upsert({
+      where: { id: "test-user-rasool" },
+      update: {},
+      create: {
+        id: "test-user-rasool",
+        nickname: "Rasool",
+      },
+    });
+
+    await prisma.groupMember.upsert({
+      where: {
+        groupId_userId: {
+          groupId: testGroup.id,
+          userId: testUser.id,
+        },
+      },
+      update: {},
+      create: {
         groupId: testGroup.id,
         userId: testUser.id,
+        isOwner: false,
       },
-    },
-    update: {},
-    create: {
-      groupId: testGroup.id,
-      userId: testUser.id,
-      isOwner: false,
-    },
-  });
+    });
 
-  await prisma.enrollment.upsert({
-    where: {
-      groupId_userId: {
+    await prisma.enrollment.upsert({
+      where: {
+        groupId_userId: {
+          groupId: testGroup.id,
+          userId: testUser.id,
+        },
+      },
+      update: {},
+      create: {
         groupId: testGroup.id,
         userId: testUser.id,
+        fullName: "Rasool Student",
+        status: "VERIFIED",
       },
-    },
-    update: {},
-    create: {
-      groupId: testGroup.id,
-      userId: testUser.id,
-      fullName: "Rasool Student",
-      status: "VERIFIED",
-    },
+    });
+  }
+
+  // Stage C: Seed course material for test-course or offering-otu and task-otu-lab1
+  const otuOffering = await prisma.courseOffering.findFirst({
+    where: { OR: [{ id: "offering-otu" }, { id: "test-course" }] },
   });
 
-  // Stage C: Seed course material for test-course and task-otu-lab1
-  const sampleGuide = Buffer.from(
-    "Лабораторная работа №1: Знакомство со средой SystemVerilog\n" +
-      "Предмет: Синтез и моделирование аппаратных средств (ОТУ)\n" +
-      "Группа: 5130901/40102\n\n" +
-      "Цель работы:\n" +
-      "1. Освоить базовый синтаксис языка описания аппаратуры SystemVerilog.\n" +
-      "2. Реализовать параметризованный модуль сдвигового регистра.\n" +
-      "3. Провести функциональное моделирование в ModelSim / QuestaSim.\n\n" +
-      "Требования к отчёту:\n" +
-      "- Исходный код модуля и testbench.\n" +
-      "- Временные диаграммы симуляции.\n" +
-      "- Выводы по выполненной работе.",
-    "utf8",
-  );
-  const sampleSha = createHash("sha256").update(sampleGuide).digest("hex");
+  if (otuOffering) {
+    const sampleGuide = Buffer.from(
+      "Лабораторная работа №1: Знакомство со средой SystemVerilog\n" +
+        "Предмет: Синтез и моделирование аппаратных средств (ОТУ)\n" +
+        "Группа: 5130901/40102\n\n" +
+        "Цель работы:\n" +
+        "1. Освоить базовый синтаксис языка описания аппаратуры SystemVerilog.\n" +
+        "2. Реализовать параметризованный модуль сдвигового регистра.\n" +
+        "3. Провести функциональное моделирование в ModelSim / QuestaSim.\n\n" +
+        "Требования к отчёту:\n" +
+        "- Исходный код модуля и testbench.\n" +
+        "- Временные диаграммы симуляции.\n" +
+        "- Выводы по выполненной работе.",
+      "utf8",
+    );
+    const sampleSha = createHash("sha256").update(sampleGuide).digest("hex");
 
-  await prisma.courseMaterial.upsert({
-    where: { id: "material-otu-lab1" },
-    update: {
-      title: "Методические указания: SystemVerilog Lab1",
-      url: "/api/v1/materials/material-otu-lab1/file",
-      type: "METHODOLOGY",
-      sourceNote: "Официальное пособие",
-    },
-    create: {
-      id: "material-otu-lab1",
-      courseOfferingId: "test-course",
-      title: "Методические указания: SystemVerilog Lab1",
-      type: "METHODOLOGY",
-      url: "/api/v1/materials/material-otu-lab1/file",
-      sourceNote: "Официальное пособие",
-    },
-  });
+    await prisma.courseMaterial.upsert({
+      where: { id: "material-otu-lab1" },
+      update: {
+        title: "Методические указания: SystemVerilog Lab1",
+        url: "/api/v1/materials/material-otu-lab1/file",
+        type: "METHODOLOGY",
+        sourceNote: "Официальное пособие",
+      },
+      create: {
+        id: "material-otu-lab1",
+        courseOfferingId: otuOffering.id,
+        title: "Методические указания: SystemVerilog Lab1",
+        type: "METHODOLOGY",
+        url: "/api/v1/materials/material-otu-lab1/file",
+        sourceNote: "Официальное пособие",
+      },
+    });
 
-  await prisma.materialFile.upsert({
-    where: { materialId: "material-otu-lab1" },
-    update: {
-      filename: "SystemVerilog_Lab1_Guide.txt",
-      mimeType: "text/plain",
-      byteSize: sampleGuide.byteLength,
-      sha256: sampleSha,
-      content: sampleGuide,
-    },
-    create: {
-      materialId: "material-otu-lab1",
-      filename: "SystemVerilog_Lab1_Guide.txt",
-      mimeType: "text/plain",
-      byteSize: sampleGuide.byteLength,
-      sha256: sampleSha,
-      content: sampleGuide,
-    },
-  });
+    await prisma.materialFile.upsert({
+      where: { materialId: "material-otu-lab1" },
+      update: {
+        filename: "SystemVerilog_Lab1_Guide.txt",
+        mimeType: "text/plain",
+        byteSize: sampleGuide.byteLength,
+        sha256: sampleSha,
+        content: sampleGuide,
+      },
+      create: {
+        materialId: "material-otu-lab1",
+        filename: "SystemVerilog_Lab1_Guide.txt",
+        mimeType: "text/plain",
+        byteSize: sampleGuide.byteLength,
+        sha256: sampleSha,
+        content: sampleGuide,
+      },
+    });
 
-  await prisma.taskMaterial.upsert({
-    where: {
-      taskId_materialId: {
+    await prisma.taskMaterial.upsert({
+      where: {
+        taskId_materialId: {
+          taskId: "task-otu-lab1",
+          materialId: "material-otu-lab1",
+        },
+      },
+      update: {},
+      create: {
         taskId: "task-otu-lab1",
         materialId: "material-otu-lab1",
       },
-    },
-    update: {},
-    create: {
-      taskId: "task-otu-lab1",
-      materialId: "material-otu-lab1",
-    },
-  });
+    });
+  }
 
   // Seed multi-chunk binary file (> 1 MiB) for testing chunked download & binary SHA-256
   const binarySize = 1_500_000; // ~1.43 MiB (2 chunks)
@@ -161,42 +180,44 @@ async function main() {
   }
   const binarySha = createHash("sha256").update(binaryContent).digest("hex");
 
-  await prisma.courseMaterial.upsert({
-    where: { id: "material-binary-guide" },
-    update: {
-      title: "Руководство к выполнению (PDF, 1.4 МБ)",
-      url: "/api/v1/materials/material-binary-guide/file",
-      type: "METHODOLOGY",
-      sourceNote: "Официальное пособие (PDF)",
-    },
-    create: {
-      id: "material-binary-guide",
-      courseOfferingId: "test-course",
-      title: "Руководство к выполнению (PDF, 1.4 МБ)",
-      type: "METHODOLOGY",
-      url: "/api/v1/materials/material-binary-guide/file",
-      sourceNote: "Официальное пособие (PDF)",
-    },
-  });
+  if (otuOffering) {
+    await prisma.courseMaterial.upsert({
+      where: { id: "material-binary-guide" },
+      update: {
+        title: "Руководство к выполнению (PDF, 1.4 МБ)",
+        url: "/api/v1/materials/material-binary-guide/file",
+        type: "METHODOLOGY",
+        sourceNote: "Официальное пособие (PDF)",
+      },
+      create: {
+        id: "material-binary-guide",
+        courseOfferingId: otuOffering.id,
+        title: "Руководство к выполнению (PDF, 1.4 МБ)",
+        type: "METHODOLOGY",
+        url: "/api/v1/materials/material-binary-guide/file",
+        sourceNote: "Официальное пособие (PDF)",
+      },
+    });
 
-  await prisma.materialFile.upsert({
-    where: { materialId: "material-binary-guide" },
-    update: {
-      filename: "SystemVerilog_Advanced_Reference.pdf",
-      mimeType: "application/pdf",
-      byteSize: binaryContent.byteLength,
-      sha256: binarySha,
-      content: binaryContent,
-    },
-    create: {
-      materialId: "material-binary-guide",
-      filename: "SystemVerilog_Advanced_Reference.pdf",
-      mimeType: "application/pdf",
-      byteSize: binaryContent.byteLength,
-      sha256: binarySha,
-      content: binaryContent,
-    },
-  });
+    await prisma.materialFile.upsert({
+      where: { materialId: "material-binary-guide" },
+      update: {
+        filename: "SystemVerilog_Advanced_Reference.pdf",
+        mimeType: "application/pdf",
+        byteSize: binaryContent.byteLength,
+        sha256: binarySha,
+        content: binaryContent,
+      },
+      create: {
+        materialId: "material-binary-guide",
+        filename: "SystemVerilog_Advanced_Reference.pdf",
+        mimeType: "application/pdf",
+        byteSize: binaryContent.byteLength,
+        sha256: binarySha,
+        content: binaryContent,
+      },
+    });
+  }
 
   const port = Number(process.env.PORT || 3000);
 

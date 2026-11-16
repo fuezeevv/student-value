@@ -1,3 +1,4 @@
+import { Platform } from "react-native";
 import {
   mobileTimetableSchema,
   type MobileTimetable,
@@ -7,10 +8,10 @@ import { getTimetableRepository } from "../storage/repository";
 // Configurable API origin with fallback to local Wi-Fi or production
 export const DEFAULT_API_ORIGIN =
   process.env.EXPO_PUBLIC_API_URL ||
-  (__DEV__ ? "http://192.168.0.26:3000" : "https://studentvalue1984.eu.cc");
+  (__DEV__ ? "http://10.210.5.173:3000" : "https://studentvalue1984.eu.cc");
 
 export const KNOWN_API_ORIGINS = [
-  { id: "lan", label: "Local Wi-Fi (192.168.0.26:3000)", origin: "http://192.168.0.26:3000" },
+  { id: "lan", label: "Local Wi-Fi (10.210.5.173:3000)", origin: "http://10.210.5.173:3000" },
   { id: "usb", label: "Local USB (127.0.0.1:3000)", origin: "http://127.0.0.1:3000" },
   { id: "prod", label: "Production (eu.cc)", origin: "https://studentvalue1984.eu.cc" },
 ] as const;
@@ -19,7 +20,17 @@ export async function getActiveApiOrigin(): Promise<string> {
   try {
     const repo = getTimetableRepository();
     const saved = await repo.getPreference("api_origin");
-    if (saved && saved.trim()) return saved.trim();
+    if (saved && saved.trim()) {
+      const trimmed = saved.trim();
+      // On real Android device, 127.0.0.1 loopback and stale subnet IPs cannot reach the dev server
+      if (
+        Platform.OS === "android" &&
+        (trimmed.includes("127.0.0.1") || trimmed.includes("192.168.0.26"))
+      ) {
+        return DEFAULT_API_ORIGIN;
+      }
+      return trimmed;
+    }
   } catch {}
   return DEFAULT_API_ORIGIN;
 }

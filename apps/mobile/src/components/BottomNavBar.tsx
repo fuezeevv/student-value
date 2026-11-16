@@ -4,7 +4,7 @@ import {
   Text,
   StyleSheet,
   Platform,
-  Pressable,
+  TouchableOpacity,
   type StyleProp,
   type ViewStyle,
 } from "react-native";
@@ -55,7 +55,7 @@ const TABS: TabDef[] = [
   },
 ];
 
-export const BottomNavBar: React.FC<BottomNavBarProps> = ({
+export const BottomNavBar = React.memo<BottomNavBarProps>(({
   activeTab,
   onSelectTab,
   style,
@@ -65,17 +65,14 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({
       {TABS.map((tab) => {
         const isActive = activeTab === tab.key;
         return (
-          <Pressable
+          <TouchableOpacity
             key={tab.key}
             onPress={() => onSelectTab(tab.key)}
-            style={({ pressed }) => [
-              styles.tabItem,
-              pressed && styles.tabItemPressed,
-            ]}
+            style={styles.tabItem}
+            activeOpacity={0.7}
             accessibilityRole="tab"
             accessibilityState={{ selected: isActive }}
             accessibilityLabel={`Вкладка ${tab.label}`}
-            hitSlop={{ top: 8, bottom: 8, left: 10, right: 10 }}
           >
             <View
               style={[
@@ -93,12 +90,12 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({
             >
               {tab.label}
             </Text>
-          </Pressable>
+          </TouchableOpacity>
         );
       })}
     </View>
   );
-};
+});
 
 const styles = StyleSheet.create({
   bottomBarContainer: {
