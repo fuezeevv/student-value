@@ -15,8 +15,13 @@ interface TaskProgressCardProps {
   deadlineText: string;
   progress: UserTaskProgress | null;
   isLoggedIn: boolean;
+  materialId?: string | null;
+  materialTitle?: string | null;
+  reminderScheduled?: boolean;
   onToggleStatus: (taskId: string, currentStatus: string) => void;
   onOpenLogin: () => void;
+  onOpenMaterial?: (materialId: string) => void;
+  onToggleReminder?: () => void;
   loading?: boolean;
 }
 
@@ -27,8 +32,13 @@ export const TaskProgressCard: React.FC<TaskProgressCardProps> = ({
   deadlineText,
   progress,
   isLoggedIn,
+  materialId,
+  materialTitle,
+  reminderScheduled = false,
   onToggleStatus,
   onOpenLogin,
+  onOpenMaterial,
+  onToggleReminder,
   loading = false,
 }) => {
   const status = progress?.status || "NOT_STARTED";
@@ -64,6 +74,48 @@ export const TaskProgressCard: React.FC<TaskProgressCardProps> = ({
       </View>
 
       <Text style={styles.titleText}>{title}</Text>
+
+      {/* Course Material Attachment (Stage C) */}
+      {materialId && (
+        <TouchableOpacity
+          style={styles.materialRow}
+          onPress={() => onOpenMaterial?.(materialId)}
+          accessibilityRole="button"
+          accessibilityLabel={`Учебный материал: ${materialTitle ?? "Методические указания"}`}
+        >
+          <Text style={styles.materialIcon}>📄</Text>
+          <View style={styles.materialInfo}>
+            <Text style={styles.materialLabel}>Учебный материал</Text>
+            <Text style={styles.materialTitle} numberOfLines={1}>
+              {materialTitle ?? "Методические указания к работе"}
+            </Text>
+          </View>
+          <Text style={styles.materialArrow}>›</Text>
+        </TouchableOpacity>
+      )}
+
+      {/* Deadline Reminder Row (Stage C) */}
+      {isLoggedIn && onToggleReminder && (
+        <View style={styles.reminderRow}>
+          <TouchableOpacity
+            style={styles.reminderButton}
+            onPress={onToggleReminder}
+            accessibilityRole="button"
+            accessibilityLabel={`Напоминание о дедлайне: ${reminderScheduled ? "Включено" : "Выключено"}`}
+          >
+            <Text style={styles.reminderIcon}>
+              {isReady ? "🔕" : reminderScheduled ? "🔔" : "🔔"}
+            </Text>
+            <Text style={styles.reminderText}>
+              {isReady
+                ? "Напоминание отменено (работа сдана)"
+                : reminderScheduled
+                  ? "Напоминание активно (за день до срока)"
+                  : "Включить напоминание о дедлайне"}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Progress Action Area */}
       <View style={styles.actionRow}>
@@ -129,32 +181,30 @@ const styles = StyleSheet.create({
   headerRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
+    alignItems: "flex-start",
     marginBottom: 8,
   },
   badgeGroup: {
-    flexDirection: "row",
-    alignItems: "center",
-    flexWrap: "wrap",
-    gap: 6,
+    flex: 1,
+    marginRight: 8,
   },
   subjectText: {
     fontSize: 12,
-    fontWeight: "600",
-    color: "#93c5fd",
+    fontWeight: "700",
+    color: "#60a5fa",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
   deadlineBadge: {
-    fontSize: 11,
-    color: "#f87171",
-    backgroundColor: "rgba(239, 68, 68, 0.12)",
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#cbd5e1",
+    marginTop: 2,
   },
   syncIndicator: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
+    gap: 6,
   },
   syncDot: {
     width: 6,
@@ -162,40 +212,92 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
   syncDotSynced: {
-    backgroundColor: "#34d399",
+    backgroundColor: "#10b981",
   },
   syncDotPending: {
-    backgroundColor: "#fbbf24",
+    backgroundColor: "#f59e0b",
   },
   syncDotFailed: {
-    backgroundColor: "#f87171",
+    backgroundColor: "#ef4444",
   },
   syncStateText: {
-    fontSize: 10,
+    fontSize: 11,
     color: "#8a9bb5",
   },
   titleText: {
     fontSize: 15,
-    fontWeight: "700",
+    fontWeight: "600",
     color: "#f0f4f8",
-    marginBottom: 12,
+    lineHeight: 22,
+    marginVertical: 8,
+  },
+  materialRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(30, 41, 59, 0.7)",
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    marginTop: 8,
+    marginBottom: 6,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.08)",
+  },
+  materialIcon: {
+    fontSize: 18,
+    marginRight: 10,
+  },
+  materialInfo: {
+    flex: 1,
+  },
+  materialLabel: {
+    fontSize: 10,
+    color: "#8a9bb5",
+    textTransform: "uppercase",
+    fontWeight: "700",
+  },
+  materialTitle: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#93c5fd",
+  },
+  materialArrow: {
+    fontSize: 18,
+    color: "#8a9bb5",
+    fontWeight: "700",
+  },
+  reminderRow: {
+    marginVertical: 6,
+  },
+  reminderButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 6,
+  },
+  reminderIcon: {
+    fontSize: 14,
+  },
+  reminderText: {
+    fontSize: 12,
+    color: "#94a3b8",
   },
   actionRow: {
-    marginTop: 4,
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255, 255, 255, 0.06)",
   },
   guestButton: {
-    backgroundColor: "rgba(147, 197, 253, 0.08)",
-    paddingVertical: 10,
-    paddingHorizontal: 14,
+    backgroundColor: "#1e3a8a",
+    paddingVertical: 12,
     borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "rgba(147, 197, 253, 0.2)",
     alignItems: "center",
   },
   guestButtonText: {
     fontSize: 13,
-    color: "#93c5fd",
     fontWeight: "600",
+    color: "#93c5fd",
   },
   readyContainer: {
     flexDirection: "row",
@@ -204,38 +306,38 @@ const styles = StyleSheet.create({
   },
   readyBadge: {
     flexDirection: "row",
-    alignItems: "baseline",
-    gap: 4,
+    alignItems: "center",
+    gap: 8,
   },
   readyBadgeText: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#34d399",
+    color: "#10b981",
   },
   readySubtext: {
-    fontSize: 11,
-    color: "#8a9bb5",
+    fontSize: 12,
+    color: "#6b7d96",
   },
   unmarkButton: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
     borderRadius: 8,
-    backgroundColor: "rgba(255, 255, 255, 0.06)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.15)",
   },
   unmarkButtonText: {
-    fontSize: 12,
+    fontSize: 13,
     color: "#8a9bb5",
   },
   markReadyButton: {
     backgroundColor: "#2563eb",
     paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 12,
+    borderRadius: 10,
     alignItems: "center",
   },
   markReadyText: {
-    color: "#ffffff",
     fontSize: 14,
     fontWeight: "700",
+    color: "#ffffff",
   },
 });

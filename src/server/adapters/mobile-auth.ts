@@ -247,7 +247,12 @@ export async function handleMobileAuthStart(
   const encryptedCookie = encryptPkceCookie(pkcePayload);
   const cookieName = getMobilePkceCookieName();
 
-  const config = googleConfiguration();
+  let config = null;
+  try {
+    config = googleConfiguration();
+  } catch {
+    config = null;
+  }
   if (config) {
     const { flow, cookie: googleCookie } = makeGoogleFlow(
       "",

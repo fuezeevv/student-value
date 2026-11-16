@@ -1,5 +1,5 @@
 import http from "node:http";
-import { randomBytes } from "node:crypto";
+import { randomBytes, createHash } from "node:crypto";
 import { prepareTestDatabase } from "./test-db.mjs";
 
 async function main() {
@@ -25,6 +25,10 @@ async function main() {
     handleMobileProgress,
     handleGetMobileProgress,
   } = await import("../src/server/adapters/mobile-progress");
+  const {
+    handleMobileMaterialMetadata,
+    handleMobileMaterialFile,
+  } = await import("../src/server/adapters/mobile-materials");
   const { prisma } = await import("../src/lib/db/prisma");
   const { hashToken } = await import("../src/lib/auth/google");
 
@@ -70,6 +74,74 @@ async function main() {
       userId: testUser.id,
       fullName: "Rasool Student",
       status: "VERIFIED",
+    },
+  });
+
+  // Stage C: Seed course material for test-course and task-otu-lab1
+  const sampleGuide = Buffer.from(
+    "Лабораторная работа №1: Знакомство со средой SystemVerilog\n" +
+      "Предмет: Синтез и моделирование аппаратных средств (ОТУ)\n" +
+      "Группа: 5130901/40102\n\n" +
+      "Цель работы:\n" +
+      "1. Освоить базовый синтаксис языка описания аппаратуры SystemVerilog.\n" +
+      "2. Реализовать параметризованный модуль сдвигового регистра.\n" +
+      "3. Провести функциональное моделирование в ModelSim / QuestaSim.\n\n" +
+      "Требования к отчёту:\n" +
+      "- Исходный код модуля и testbench.\n" +
+      "- Временные диаграммы симуляции.\n" +
+      "- Выводы по выполненной работе.",
+    "utf8",
+  );
+  const sampleSha = createHash("sha256").update(sampleGuide).digest("hex");
+
+  await prisma.courseMaterial.upsert({
+    where: { id: "material-otu-lab1" },
+    update: {
+      title: "Методические указания: SystemVerilog Lab1",
+      url: "/api/v1/materials/material-otu-lab1/file",
+      type: "METHODOLOGY",
+      sourceNote: "Официальное пособие",
+    },
+    create: {
+      id: "material-otu-lab1",
+      courseOfferingId: "test-course",
+      title: "Методические указания: SystemVerilog Lab1",
+      type: "METHODOLOGY",
+      url: "/api/v1/materials/material-otu-lab1/file",
+      sourceNote: "Официальное пособие",
+    },
+  });
+
+  await prisma.materialFile.upsert({
+    where: { materialId: "material-otu-lab1" },
+    update: {
+      filename: "SystemVerilog_Lab1_Guide.txt",
+      mimeType: "text/plain",
+      byteSize: sampleGuide.byteLength,
+      sha256: sampleSha,
+      content: sampleGuide,
+    },
+    create: {
+      materialId: "material-otu-lab1",
+      filename: "SystemVerilog_Lab1_Guide.txt",
+      mimeType: "text/plain",
+      byteSize: sampleGuide.byteLength,
+      sha256: sampleSha,
+      content: sampleGuide,
+    },
+  });
+
+  await prisma.taskMaterial.upsert({
+    where: {
+      taskId_materialId: {
+        taskId: "task-otu-lab1",
+        materialId: "material-otu-lab1",
+      },
+    },
+    update: {},
+    create: {
+      taskId: "task-otu-lab1",
+      materialId: "material-otu-lab1",
     },
   });
 
@@ -233,8 +305,19 @@ async function main() {
         body: bodyBuffer ? new Uint8Array(bodyBuffer) : undefined,
       });
 
+      const matMetaMatch = pathname.match(
+        /^\/api\/v1\/materials\/([^/]+)\/metadata$/,
+      );
+      const matFileMatch = pathname.match(
+        /^\/api\/v1\/materials\/([^/]+)\/file$/,
+      );
+
       let nextRes;
-      if (pathname === "/api/v1/timetable") {
+      if (matMetaMatch) {
+        nextRes = await handleMobileMaterialMetadata(nextReq, matMetaMatch[1]);
+      } else if (matFileMatch) {
+        nextRes = await handleMobileMaterialFile(nextReq, matFileMatch[1]);
+      } else if (pathname === "/api/v1/timetable") {
         nextRes = await handleTimetableRequest(nextReq);
       } else if (pathname === "/api/v1/auth/mobile/start") {
         nextRes = await handleMobileAuthStart(nextReq);

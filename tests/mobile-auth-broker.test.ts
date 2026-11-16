@@ -51,27 +51,37 @@ describe("Mobile Auth Broker (RFC 7636 PKCE & Revocable Mobile Sessions)", () =>
   });
 
   it("accepts valid parameters and sets encrypted PKCE broker cookie", async () => {
-    const { challenge, state } = createPkcePair();
-    const redirectUri = "studentvalue://auth/callback";
-    const req = new NextRequest(
-      `http://localhost:3000/api/v1/auth/mobile/start?challenge=${challenge}&state=${state}&redirect_uri=${encodeURIComponent(redirectUri)}`,
-    );
-    const res = await handleMobileAuthStart(req);
-    expect([302, 303]).toContain(res.status);
+    const origEnv = process.env.NODE_ENV;
+    const origDevAuth = process.env.ALLOW_DEV_AUTH;
+    process.env.NODE_ENV = "development";
+    process.env.ALLOW_DEV_AUTH = "true";
 
-    const cookieName = getMobilePkceCookieName();
-    const cookieHeader = res.headers.get("set-cookie") || "";
-    expect(cookieHeader).toContain(cookieName);
+    try {
+      const { challenge, state } = createPkcePair();
+      const redirectUri = "studentvalue://auth/callback";
+      const req = new NextRequest(
+        `http://localhost:3000/api/v1/auth/mobile/start?challenge=${challenge}&state=${state}&redirect_uri=${encodeURIComponent(redirectUri)}`,
+      );
+      const res = await handleMobileAuthStart(req);
+      expect([302, 303]).toContain(res.status);
 
-    // Extract cookie value and decrypt
-    const match = cookieHeader.match(new RegExp(`${cookieName}=([^;]+)`));
-    expect(match).toBeTruthy();
-    const decrypted = decryptPkceCookie(match![1]);
-    expect(decrypted).not.toBeNull();
-    expect(decrypted?.challenge).toBe(challenge);
-    expect(decrypted?.state).toBe(state);
-    expect(decrypted?.redirectUri).toBe(redirectUri);
-    expect(decrypted?.expiresAt).toBeGreaterThan(Date.now());
+      const cookieName = getMobilePkceCookieName();
+      const cookieHeader = res.headers.get("set-cookie") || "";
+      expect(cookieHeader).toContain(cookieName);
+
+      // Extract cookie value and decrypt
+      const match = cookieHeader.match(new RegExp(`${cookieName}=([^;]+)`));
+      expect(match).toBeTruthy();
+      const decrypted = decryptPkceCookie(match![1]);
+      expect(decrypted).not.toBeNull();
+      expect(decrypted?.challenge).toBe(challenge);
+      expect(decrypted?.state).toBe(state);
+      expect(decrypted?.redirectUri).toBe(redirectUri);
+      expect(decrypted?.expiresAt).toBeGreaterThan(Date.now());
+    } finally {
+      process.env.NODE_ENV = origEnv;
+      process.env.ALLOW_DEV_AUTH = origDevAuth;
+    }
   });
 
   it("rejects exchange with non-existent or expired exchange code", async () => {

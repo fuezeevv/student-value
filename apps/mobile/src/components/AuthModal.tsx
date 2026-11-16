@@ -62,6 +62,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         onPress: async () => {
           setLoading(true);
           try {
+            if (user) {
+              const { purgeAllUserMaterials } = await import("../materials/downloader");
+              await purgeAllUserMaterials(user.id);
+            }
             await logoutMobile();
             onUserChanged(null);
             onClose();

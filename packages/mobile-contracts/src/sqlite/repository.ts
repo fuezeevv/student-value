@@ -10,6 +10,8 @@ import type {
   DayTimetableResult,
   PendingOperation,
   UserTaskProgress,
+  DownloadedMaterial,
+  ScheduledNotificationRecord,
 } from "./types";
 
 function weekStartForDate(dateStr: string): string {
@@ -400,9 +402,208 @@ export class TimetableSqliteRepository {
     }));
   }
 
+  async saveDownloadedMaterial(mat: DownloadedMaterial): Promise<void> {
+    await this.init();
+    await this.db.run(
+      `INSERT OR REPLACE INTO downloaded_materials
+        (material_id, user_id, filename, mime_type, byte_size, sha256, local_path, downloaded_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        mat.materialId,
+        mat.userId,
+        mat.filename,
+        mat.mimeType,
+        mat.byteSize,
+        mat.sha256,
+        mat.localPath,
+        mat.downloadedAt,
+      ],
+    );
+  }
+
+  async getDownloadedMaterial(
+    userId: string,
+    materialId: string,
+  ): Promise<DownloadedMaterial | null> {
+    await this.init();
+    const row = await this.db.get<{
+      material_id: string;
+      user_id: string;
+      filename: string;
+      mime_type: string;
+      byte_size: number;
+      sha256: string;
+      local_path: string;
+      downloaded_at: string;
+    }>(
+      `SELECT material_id, user_id, filename, mime_type, byte_size, sha256, local_path, downloaded_at
+       FROM downloaded_materials
+       WHERE user_id = ? AND material_id = ?`,
+      [userId, materialId],
+    );
+    if (!row) return null;
+    return {
+      materialId: row.material_id,
+      userId: row.user_id,
+      filename: row.filename,
+      mimeType: row.mime_type,
+      byteSize: row.byte_size,
+      sha256: row.sha256,
+      localPath: row.local_path,
+      downloadedAt: row.downloaded_at,
+    };
+  }
+
+  async getAllDownloadedMaterials(userId: string): Promise<DownloadedMaterial[]> {
+    await this.init();
+    const rows = await this.db.all<{
+      material_id: string;
+      user_id: string;
+      filename: string;
+      mime_type: string;
+      byte_size: number;
+      sha256: string;
+      local_path: string;
+      downloaded_at: string;
+    }>(
+      `SELECT material_id, user_id, filename, mime_type, byte_size, sha256, local_path, downloaded_at
+       FROM downloaded_materials
+       WHERE user_id = ?
+       ORDER BY downloaded_at DESC`,
+      [userId],
+    );
+    return rows.map((row) => ({
+      materialId: row.material_id,
+      userId: row.user_id,
+      filename: row.filename,
+      mimeType: row.mime_type,
+      byteSize: row.byte_size,
+      sha256: row.sha256,
+      localPath: row.local_path,
+      downloadedAt: row.downloaded_at,
+    }));
+  }
+
+  async deleteDownloadedMaterial(userId: string, materialId: string): Promise<void> {
+    await this.init();
+    await this.db.run(
+      `DELETE FROM downloaded_materials WHERE user_id = ? AND material_id = ?`,
+      [userId, materialId],
+    );
+  }
+
+  async saveScheduledNotification(notif: ScheduledNotificationRecord): Promise<void> {
+    await this.init();
+    await this.db.run(
+      `INSERT OR REPLACE INTO scheduled_notifications
+        (id, user_id, task_id, deadline_id, notification_type, trigger_time, title, body, status, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        notif.id,
+        notif.userId,
+        notif.taskId,
+        notif.deadlineId,
+        notif.notificationType,
+        notif.triggerTime,
+        notif.title,
+        notif.body,
+        notif.status,
+        notif.createdAt,
+      ],
+    );
+  }
+
+  async getScheduledNotification(id: string): Promise<ScheduledNotificationRecord | null> {
+    await this.init();
+    const row = await this.db.get<{
+      id: string;
+      user_id: string;
+      task_id: string;
+      deadline_id: string;
+      notification_type: "DEADLINE_REMINDER";
+      trigger_time: string;
+      title: string;
+      body: string;
+      status: "SCHEDULED" | "DELIVERED" | "CANCELLED";
+      created_at: string;
+    }>(
+      `SELECT id, user_id, task_id, deadline_id, notification_type, trigger_time, title, body, status, created_at
+       FROM scheduled_notifications WHERE id = ?`,
+      [id],
+    );
+    if (!row) return null;
+    return {
+      id: row.id,
+      userId: row.user_id,
+      taskId: row.task_id,
+      deadlineId: row.deadline_id,
+      notificationType: row.notification_type,
+      triggerTime: row.trigger_time,
+      title: row.title,
+      body: row.body,
+      status: row.status,
+      createdAt: row.created_at,
+    };
+  }
+
+  async getScheduledNotificationsForTask(
+    userId: string,
+    taskId: string,
+  ): Promise<ScheduledNotificationRecord[]> {
+    await this.init();
+    const rows = await this.db.all<{
+      id: string;
+      user_id: string;
+      task_id: string;
+      deadline_id: string;
+      notification_type: "DEADLINE_REMINDER";
+      trigger_time: string;
+      title: string;
+      body: string;
+      status: "SCHEDULED" | "DELIVERED" | "CANCELLED";
+      created_at: string;
+    }>(
+      `SELECT id, user_id, task_id, deadline_id, notification_type, trigger_time, title, body, status, created_at
+       FROM scheduled_notifications
+       WHERE user_id = ? AND task_id = ?
+       ORDER BY trigger_time ASC`,
+      [userId, taskId],
+    );
+    return rows.map((row) => ({
+      id: row.id,
+      userId: row.user_id,
+      taskId: row.task_id,
+      deadlineId: row.deadline_id,
+      notificationType: row.notification_type,
+      triggerTime: row.trigger_time,
+      title: row.title,
+      body: row.body,
+      status: row.status,
+      createdAt: row.created_at,
+    }));
+  }
+
+  async updateNotificationStatus(
+    id: string,
+    status: "SCHEDULED" | "DELIVERED" | "CANCELLED",
+  ): Promise<void> {
+    await this.init();
+    await this.db.run(
+      `UPDATE scheduled_notifications SET status = ? WHERE id = ?`,
+      [status, id],
+    );
+  }
+
+  async deleteScheduledNotification(id: string): Promise<void> {
+    await this.init();
+    await this.db.run(`DELETE FROM scheduled_notifications WHERE id = ?`, [id]);
+  }
+
   async clearUserData(userId: string): Promise<void> {
     await this.init();
     await this.db.run(`DELETE FROM pending_operations WHERE user_id = ?`, [userId]);
     await this.db.run(`DELETE FROM user_task_progress WHERE user_id = ?`, [userId]);
+    await this.db.run(`DELETE FROM downloaded_materials WHERE user_id = ?`, [userId]);
+    await this.db.run(`DELETE FROM scheduled_notifications WHERE user_id = ?`, [userId]);
   }
 }

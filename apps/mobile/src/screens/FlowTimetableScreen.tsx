@@ -30,6 +30,12 @@ import { FullDayLessonList } from "../components/FullDayLessonList";
 import { GroupPickerModal } from "../components/GroupPickerModal";
 import { AuthModal } from "../components/AuthModal";
 import { TaskProgressCard } from "../components/TaskProgressCard";
+import { MaterialModal } from "../components/MaterialModal";
+import {
+  scheduleDeadlineReminder,
+  cancelDeadlineReminder,
+  setupNotificationChannels,
+} from "../notifications/scheduler";
 
 function getMoscowDateString(date = new Date()): string {
   const formatter = new Intl.DateTimeFormat("en-CA", {
@@ -169,12 +175,18 @@ export const FlowTimetableScreen: React.FC = () => {
   const [taskProgress, setTaskProgress] = useState<Record<string, UserTaskProgress>>({});
   const [isUpdatingProgress, setIsUpdatingProgress] = useState<boolean>(false);
 
+  // Material and Reminder states (Stage C)
+  const [materialModalVisible, setMaterialModalVisible] = useState<boolean>(false);
+  const [activeMaterialModalId, setActiveMaterialModalId] = useState<string | null>(null);
+  const [isReminderScheduled, setIsReminderScheduled] = useState<boolean>(false);
+
   const repo = useMemo(() => getTimetableRepository(), []);
   const reqGenRef = useRef(0);
 
-  // Load active API origin from storage on mount
+  // Load active API origin and notification channels from storage on mount
   useEffect(() => {
     getActiveApiOrigin().then(setApiOrigin);
+    setupNotificationChannels().catch(() => {});
   }, []);
 
   // Load session user and outbox count on mount
@@ -190,6 +202,10 @@ export const FlowTimetableScreen: React.FC = () => {
           map[p.taskId] = p;
         }
         setTaskProgress(map);
+
+        const notifs = await repo.getScheduledNotificationsForTask(u.id, "task-otu-lab1");
+        const active = notifs.some((n) => n.status === "SCHEDULED");
+        setIsReminderScheduled(active);
         // Try initial outbox flush
         flushOutbox().then(async () => {
           const freshOps = await repo.getPendingOperations(u.id);
@@ -471,6 +487,23 @@ export const FlowTimetableScreen: React.FC = () => {
       }
       const remainingOps = await repo.getPendingOperations(sessionUser.id);
       setPendingOpsCount(remainingOps.length);
+
+      // Stage C: Update notification reminders
+      if (newStatus === "READY") {
+        await cancelDeadlineReminder(sessionUser.id, taskId, "dl-otu-lab1");
+        setIsReminderScheduled(false);
+      } else {
+        await scheduleDeadlineReminder({
+          userId: sessionUser.id,
+          taskId,
+          deadlineId: "dl-otu-lab1",
+          taskTitle: "Лабораторная работа 1: SystemVerilog · Lab1–Lab2",
+          subjectName: "Синтез и моделирование аппаратных средств",
+          deadlineDateStr: "14.09.2026",
+          secondsFromNow: 5,
+        });
+        setIsReminderScheduled(true);
+      }
     } catch (err: any) {
       Alert.alert(
         "Ошибка отметки",
@@ -478,6 +511,38 @@ export const FlowTimetableScreen: React.FC = () => {
       );
     } finally {
       setIsUpdatingProgress(false);
+    }
+  };
+
+  const handleToggleReminder = async () => {
+    if (!sessionUser) {
+      setAuthModalVisible(true);
+      return;
+    }
+    const taskId = "task-otu-lab1";
+    const deadlineId = "dl-otu-lab1";
+
+    if (isReminderScheduled) {
+      await cancelDeadlineReminder(sessionUser.id, taskId, deadlineId);
+      setIsReminderScheduled(false);
+      Alert.alert("Напоминание", "Напоминание о дедлайне отключено.");
+    } else {
+      const scheduled = await scheduleDeadlineReminder({
+        userId: sessionUser.id,
+        taskId,
+        deadlineId,
+        taskTitle: "Лабораторная работа 1: SystemVerilog · Lab1–Lab2",
+        subjectName: "Синтез и моделирование аппаратных средств",
+        deadlineDateStr: "14.09.2026",
+        secondsFromNow: 5,
+      });
+      if (scheduled) {
+        setIsReminderScheduled(true);
+        Alert.alert(
+          "Напоминание установлено",
+          "Уведомление запланировано на устройстве (сработает через 5 сек для теста).",
+        );
+      }
     }
   };
 
@@ -492,7 +557,12 @@ export const FlowTimetableScreen: React.FC = () => {
         map[p.taskId] = p;
       }
       setTaskProgress(map);
+
+      const notifs = await repo.getScheduledNotificationsForTask(user.id, "task-otu-lab1");
+      const active = notifs.some((n) => n.status === "SCHEDULED");
+      setIsReminderScheduled(active);
     } else {
+      setIsReminderScheduled(false);
       setPendingOpsCount(0);
       setTaskProgress({});
     }
@@ -626,7 +696,7 @@ export const FlowTimetableScreen: React.FC = () => {
               nowMoscowMinutes={nowMoscowMin}
             />
 
-            {/* Stage B: Protected Personal Progress Scenario */}
+            {/* Stage B & C: Protected Personal Progress, Materials and Reminders */}
             <View style={styles.taskSection}>
               <Text style={styles.sectionHeaderTitle}>Текущая работа и прогресс</Text>
               <TaskProgressCard
@@ -636,6 +706,14 @@ export const FlowTimetableScreen: React.FC = () => {
                 deadlineText="Дедлайн: 14.09.2026"
                 progress={taskProgress["task-otu-lab1"] || null}
                 isLoggedIn={Boolean(sessionUser)}
+                materialId="material-otu-lab1"
+                materialTitle="Методические указания: SystemVerilog Lab1"
+                reminderScheduled={isReminderScheduled}
+                onToggleReminder={handleToggleReminder}
+                onOpenMaterial={(matId) => {
+                  setActiveMaterialModalId(matId);
+                  setMaterialModalVisible(true);
+                }}
                 onToggleStatus={handleToggleTaskStatus}
                 onOpenLogin={() => setAuthModalVisible(true)}
                 loading={isUpdatingProgress}
@@ -726,6 +804,13 @@ export const FlowTimetableScreen: React.FC = () => {
             setTaskProgress(map);
           }
         }}
+      />
+      {/* Stage C: Course Material Offline Modal */}
+      <MaterialModal
+        visible={materialModalVisible}
+        materialId={activeMaterialModalId}
+        userId={sessionUser?.id ?? null}
+        onClose={() => setMaterialModalVisible(false)}
       />
     </SafeAreaView>
   );

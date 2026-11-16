@@ -63,3 +63,27 @@ export type UserTaskProgress = {
   updatedAt: string;
   syncState: "SYNCED" | "PENDING_SYNC" | "FAILED";
 };
+
+export type DownloadedMaterial = {
+  materialId: string;
+  userId: string;
+  filename: string;
+  mimeType: string;
+  byteSize: number;
+  sha256: string;
+  localPath: string;
+  downloadedAt: string; // ISO
+};
+
+export type ScheduledNotificationRecord = {
+  id: string;
+  userId: string;
+  taskId: string;
+  deadlineId: string;
+  notificationType: "DEADLINE_REMINDER";
+  triggerTime: string; // ISO
+  title: string;
+  body: string;
+  status: "SCHEDULED" | "DELIVERED" | "CANCELLED";
+  createdAt: string; // ISO
+};

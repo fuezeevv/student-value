@@ -6,7 +6,8 @@ import { getTimetableRepository } from "../storage/repository";
 
 // Configurable API origin with fallback to production
 export const DEFAULT_API_ORIGIN =
-  process.env.EXPO_PUBLIC_API_URL || "https://studentvalue1984.eu.cc";
+  process.env.EXPO_PUBLIC_API_URL ||
+  (__DEV__ ? "http://127.0.0.1:3000" : "https://studentvalue1984.eu.cc");
 
 export const KNOWN_API_ORIGINS = [
   { id: "prod", label: "Production (eu.cc)", origin: "https://studentvalue1984.eu.cc" },

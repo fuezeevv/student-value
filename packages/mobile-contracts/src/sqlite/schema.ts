@@ -64,6 +64,41 @@ export const MIGRATIONS = [
         ON pending_operations (user_id, status);
     `,
   },
+  {
+    version: 4,
+    sql: `
+      CREATE TABLE IF NOT EXISTS downloaded_materials (
+        material_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        filename TEXT NOT NULL,
+        mime_type TEXT NOT NULL,
+        byte_size INTEGER NOT NULL,
+        sha256 TEXT NOT NULL,
+        local_path TEXT NOT NULL,
+        downloaded_at TEXT NOT NULL,
+        PRIMARY KEY (material_id, user_id)
+      );
+
+      CREATE TABLE IF NOT EXISTS scheduled_notifications (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        task_id TEXT NOT NULL,
+        deadline_id TEXT NOT NULL,
+        notification_type TEXT NOT NULL,
+        trigger_time TEXT NOT NULL,
+        title TEXT NOT NULL,
+        body TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'SCHEDULED',
+        created_at TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_materials_user
+        ON downloaded_materials (user_id);
+
+      CREATE INDEX IF NOT EXISTS idx_notifs_user_task
+        ON scheduled_notifications (user_id, task_id);
+    `,
+  },
 ];
 
 export async function applySqliteMigrations(db: SqliteDatabase): Promise<number> {
