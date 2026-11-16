@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db/prisma";
 import { getMobileSessionUser } from "./mobile-auth";
 import { resolveGroupCode } from "./timetable-v1";
 import { taskVisibilityWhere } from "@/server/domain/access";
+import { publicTaskWhere } from "@/server/queries/public-workspace";
 
 export interface MobileTaskDeadline {
   id: string;
@@ -205,22 +206,9 @@ export async function handleGetMobileTasks(
     );
   }
 
-  // Published, active tasks addressed to the group
+  // Published, active tasks addressed to the group (strictly filtered per AGENTS.md)
   const tasks = await prisma.task.findMany({
-    where: {
-      status: "PUBLISHED",
-      audiences: {
-        some: {
-          targetType: "GROUP",
-          groupId: group.id,
-        },
-      },
-      courseOffering: {
-        status: "ACTIVE",
-        mergedIntoId: null,
-        semester: { isCurrent: true },
-      },
-    },
+    where: publicTaskWhere(group.id),
     select: {
       id: true,
       title: true,

@@ -7,6 +7,8 @@ async function main() {
   for (const [k, v] of Object.entries(env)) {
     process.env[k] = v;
   }
+  // Allow real public RUZ schedule loading for live classes
+  delete process.env.SV_TEST_ISOLATED;
   process.env.ALLOW_DEV_AUTH = "true";
   (process.env as Record<string, string | undefined>).NODE_ENV = "development";
 
