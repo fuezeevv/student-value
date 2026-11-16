@@ -45,6 +45,8 @@ import { SubjectsTab } from "../components/tabs/SubjectsTab";
 import { DeadlinesTab } from "../components/tabs/DeadlinesTab";
 import { ProfileTab } from "../components/tabs/ProfileTab";
 import { SpringPressable } from "../components/SpringPressable";
+import { WellbeingModal } from "../components/WellbeingModal";
+import { AppInfoModal } from "../components/AppInfoModal";
 import {
   scheduleDeadlineReminder,
   cancelDeadlineReminder,
@@ -114,6 +116,19 @@ function formatFlowDate(dateStr: string): string {
   return `${dayName}, ${d} ${monthName}`;
 }
 
+function formatAge(isoString: string | null): string {
+  if (!isoString) return "";
+  const diffMs = Date.now() - new Date(isoString).getTime();
+  if (diffMs < 0 || isNaN(diffMs)) return "";
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return "только что";
+  if (mins < 60) return `${mins} мин назад`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours} ч назад`;
+  const days = Math.floor(hours / 24);
+  return `${days} дн назад`;
+}
+
 export const FlowTimetableScreen: React.FC = () => {
   const [activeTab, setActiveTab] = useState<NavTab>("flow");
   const [containerHeight, setContainerHeight] = useState<number>(0);
@@ -144,6 +159,9 @@ export const FlowTimetableScreen: React.FC = () => {
   // Modals
   const [groupPickerVisible, setGroupPickerVisible] = useState<boolean>(false);
   const [authModalVisible, setAuthModalVisible] = useState<boolean>(false);
+  const [wellbeingModalVisible, setWellbeingModalVisible] = useState<boolean>(false);
+  const [appInfoModalVisible, setAppInfoModalVisible] = useState<boolean>(false);
+  const [focusPercent, setFocusPercent] = useState<number>(0);
   const [materialModalVisible, setMaterialModalVisible] = useState<boolean>(false);
   const [activeMaterialModalId, setActiveMaterialModalId] = useState<string | null>(null);
   const [subjectModalVisible, setSubjectModalVisible] = useState<boolean>(false);
@@ -552,43 +570,48 @@ export const FlowTimetableScreen: React.FC = () => {
 
       {/* Top Header - clean, minimal, camera notch protected */}
       <View style={styles.topHeader}>
-        <SpringPressable
+        <TouchableOpacity
           style={styles.logoButton}
-          activeScale={0.92}
-          onPress={() => setActiveTab("flow")}
+          onPress={() => {
+            if (activeTab === "flow") {
+              scrollRef.current?.scrollTo({ y: 0, animated: true });
+            }
+            setAppInfoModalVisible(true);
+          }}
+          activeOpacity={0.7}
           accessibilityRole="button"
-          accessibilityLabel="Логотип Student Value"
+          accessibilityLabel="О приложении и статус сети"
         >
           <Image
             source={require("../../assets/brand-mark.png")}
             style={styles.brandLogoImage}
             resizeMode="contain"
           />
-        </SpringPressable>
+        </TouchableOpacity>
 
-        {/* Circular Wellbeing / XP Badge (matches '0' in user's design) */}
-        <SpringPressable
-          onPress={() => {
-            if (sessionUser) {
-              setActiveTab("profile");
-            } else {
-              setAuthModalVisible(true);
-            }
-          }}
-          style={styles.wellbeingBadge}
-          activeScale={0.9}
+        {/* Circular Wellbeing / Focus Badge (matches '0' in user's design) */}
+        <TouchableOpacity
+          onPress={() => setWellbeingModalVisible(true)}
+          style={[
+            styles.wellbeingBadge,
+            focusPercent >= 100 && styles.wellbeingBadgeCompleted,
+            focusPercent > 0 && focusPercent < 100 && styles.wellbeingBadgeActive,
+          ]}
+          activeOpacity={0.8}
           accessibilityRole="button"
-          accessibilityLabel={
-            sessionUser
-              ? `Баллы XP: ${totalXp}. Открыть профиль.`
-              : "Гостевой режим. Нажмите для входа."
-          }
+          accessibilityLabel={`Сегодня в своём темпе: ${focusPercent}% выполнено. Нажмите для открытия.`}
         >
-          <Text style={styles.wellbeingText}>
-            {sessionUser ? String(totalXp) : "0"}
+          <Text
+            style={[
+              styles.wellbeingText,
+              focusPercent >= 100 && styles.wellbeingTextCompleted,
+              focusPercent > 0 && styles.wellbeingTextActive,
+            ]}
+          >
+            {focusPercent}
           </Text>
           {pendingOpsCount > 0 && <View style={styles.pendingDot} />}
-        </SpringPressable>
+        </TouchableOpacity>
       </View>
 
       {/* Main Tab Screen View */}
@@ -832,6 +855,34 @@ export const FlowTimetableScreen: React.FC = () => {
           setActiveMaterialModalId(null);
         }}
       />
+
+      {/* App Info & Connectivity Modal (opened by Logo) */}
+      <AppInfoModal
+        visible={appInfoModalVisible}
+        groupCode={selectedGroup}
+        isSyncing={isSyncing}
+        isStale={isStale}
+        apiOrigin={apiOrigin}
+        cachedAgeLabel={formatAge(savedAt || sourceFetchedAt)}
+        onClose={() => setAppInfoModalVisible(false)}
+        onRefresh={() => {
+          setAppInfoModalVisible(false);
+          handleManualSync();
+        }}
+        onOpenGroupPicker={() => {
+          setAppInfoModalVisible(false);
+          setGroupPickerVisible(true);
+        }}
+        onSelectOrigin={handleSelectOrigin}
+      />
+
+      {/* Wellbeing & Focus Modal (opened by Circle with 0) */}
+      <WellbeingModal
+        visible={wellbeingModalVisible}
+        tasks={tasks}
+        onClose={() => setWellbeingModalVisible(false)}
+        onFocusPercentChange={setFocusPercent}
+      />
     </SafeAreaView>
   );
 };
@@ -873,6 +924,20 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "700",
     color: "#cbd5e1",
+  },
+  wellbeingBadgeActive: {
+    borderColor: "#60a5fa",
+    backgroundColor: "rgba(59, 130, 246, 0.15)",
+  },
+  wellbeingBadgeCompleted: {
+    borderColor: "#10b981",
+    backgroundColor: "rgba(16, 185, 129, 0.2)",
+  },
+  wellbeingTextActive: {
+    color: "#93c5fd",
+  },
+  wellbeingTextCompleted: {
+    color: "#34d399",
   },
   pendingDot: {
     position: "absolute",

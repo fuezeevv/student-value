@@ -6,7 +6,7 @@ import {
   TouchableOpacity,
 } from "react-native";
 import {
-  calculateLessonProgress,
+  parseTimeToMinutes,
   type MobileLesson,
 } from "@studentvalue/mobile-contracts";
 import { SpringPressable } from "./SpringPressable";
@@ -134,11 +134,17 @@ export const FlowHeroCard: React.FC<FlowHeroCardProps> = ({
     return null;
   }
 
-  const progressResult = isToday
-    ? calculateLessonProgress(lesson.start, nowMoscowMinutes, 90)
-    : { isOngoing: false, progressPercent: 0 };
-  const isOngoing = progressResult.isOngoing;
-  const progressPercent = progressResult.progressPercent;
+  const startMin = parseTimeToMinutes(lesson.start);
+  const endMin = lesson.scheduledEnd ? parseTimeToMinutes(lesson.scheduledEnd) : startMin + 90;
+  const isOngoing = isToday && nowMoscowMinutes >= startMin && nowMoscowMinutes < endMin;
+  const isPast = isToday && nowMoscowMinutes >= endMin;
+  const isFuture = isToday && nowMoscowMinutes < startMin;
+
+  const totalDuration = Math.max(1, endMin - startMin);
+  const elapsed = Math.max(0, Math.min(totalDuration, nowMoscowMinutes - startMin));
+  const remaining = Math.max(0, endMin - nowMoscowMinutes);
+  const progressPercent = Math.min(100, Math.max(0, Math.round((elapsed / totalDuration) * 100)));
+  const minutesUntilStart = startMin - nowMoscowMinutes;
 
   return (
     <View style={[styles.heroFullscreenContainer, { height: cardHeight }]}>
@@ -155,18 +161,60 @@ export const FlowHeroCard: React.FC<FlowHeroCardProps> = ({
         <Text style={styles.dateEyebrow}>{dateLabel}</Text>
       </View>
 
-      {/* Center section: Clock, Title, Format, Room, Teacher, Link */}
+      {/* Center section: Clock, Progress breakdown, Title, Format, Room, Teacher, Link */}
       <View style={styles.heroCenterGroup}>
         <View style={styles.timeWrapper}>
           <Text style={styles.bigTimeText}>{lesson.start}</Text>
+
+          {/* Ongoing Lesson Progress & Elapsed / Remaining time */}
           {isOngoing && (
-            <View style={styles.progressTrack}>
-              <View
-                style={[
-                  styles.progressBar,
-                  { width: `${Math.min(100, Math.max(4, progressPercent))}%` },
-                ]}
-              />
+            <View style={styles.ongoingContainer}>
+              <View style={styles.liveIndicatorRow}>
+                <View style={styles.liveDot} />
+                <Text style={styles.liveIndicatorText}>Идёт сейчас</Text>
+                <Text style={styles.progressPercentBadge}>{progressPercent}%</Text>
+              </View>
+
+              <View style={styles.progressTrack}>
+                <View
+                  style={[
+                    styles.progressBar,
+                    { width: `${Math.min(100, Math.max(4, progressPercent))}%` },
+                  ]}
+                />
+              </View>
+
+              <Text style={styles.timeRemainingText}>
+                Прошло {elapsed} мин · Осталось {remaining} мин
+              </Text>
+            </View>
+          )}
+
+          {/* Upcoming lesson countdown */}
+          {isFuture && (
+            <View style={styles.statusBadge}>
+              <Text style={styles.statusBadgeText}>
+                {minutesUntilStart <= 120
+                  ? `До начала: ${minutesUntilStart} мин`
+                  : `Начало в ${lesson.start}`}
+              </Text>
+            </View>
+          )}
+
+          {/* Completed lesson label */}
+          {isPast && (
+            <View style={styles.statusBadge}>
+              <Text style={styles.statusBadgePastText}>
+                Пара завершена {lesson.scheduledEnd ? `в ${lesson.scheduledEnd}` : ""}
+              </Text>
+            </View>
+          )}
+
+          {!isToday && (
+            <View style={styles.statusBadge}>
+              <Text style={styles.statusBadgeText}>
+                {lesson.scheduledEnd ? `${lesson.start} — ${lesson.scheduledEnd}` : "90 минут"}
+              </Text>
             </View>
           )}
         </View>
@@ -262,7 +310,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 12,
-    minWidth: 160,
+    minWidth: 220,
   },
   bigTimeText: {
     fontSize: 66,
@@ -279,18 +327,73 @@ const styles = StyleSheet.create({
     marginVertical: 12,
     textAlign: "center",
   },
+  ongoingContainer: {
+    width: "100%",
+    maxWidth: 240,
+    alignItems: "center",
+    marginTop: 6,
+  },
+  liveIndicatorRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 6,
+  },
+  liveDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: "#10b981",
+  },
+  liveIndicatorText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#10b981",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  progressPercentBadge: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#93c5fd",
+    marginLeft: 4,
+  },
   progressTrack: {
     width: "100%",
-    height: 3,
-    backgroundColor: "rgba(255, 255, 255, 0.08)",
+    height: 4,
+    backgroundColor: "rgba(255, 255, 255, 0.12)",
     borderRadius: 2,
-    marginTop: 8,
     overflow: "hidden",
+    marginBottom: 6,
   },
   progressBar: {
     height: "100%",
-    backgroundColor: "#a5b4fc",
+    backgroundColor: "#60a5fa",
     borderRadius: 2,
+  },
+  timeRemainingText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#cbd5e1",
+    letterSpacing: 0.2,
+  },
+  statusBadge: {
+    backgroundColor: "rgba(255, 255, 255, 0.04)",
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginTop: 4,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.06)",
+  },
+  statusBadgeText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#93c5fd",
+  },
+  statusBadgePastText: {
+    fontSize: 12,
+    color: "#64748b",
   },
   subjectTitleHero: {
     fontSize: 22,

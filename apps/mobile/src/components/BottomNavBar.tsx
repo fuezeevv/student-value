@@ -4,10 +4,10 @@ import {
   Text,
   StyleSheet,
   Platform,
+  Pressable,
   type StyleProp,
   type ViewStyle,
 } from "react-native";
-import { SpringPressable } from "./SpringPressable";
 import { ListIcon, BookIcon, ClockIcon, ProfileIcon } from "./NativeIcons";
 
 export type NavTab = "flow" | "subjects" | "deadlines" | "profile";
@@ -18,6 +18,43 @@ export interface BottomNavBarProps {
   style?: StyleProp<ViewStyle>;
 }
 
+interface TabDef {
+  key: NavTab;
+  label: string;
+  renderIcon: (active: boolean) => React.ReactNode;
+}
+
+const TABS: TabDef[] = [
+  {
+    key: "flow",
+    label: "Поток",
+    renderIcon: (active) => (
+      <ListIcon size={20} color={active ? "#1e1b4b" : "#64748b"} />
+    ),
+  },
+  {
+    key: "subjects",
+    label: "Предметы",
+    renderIcon: (active) => (
+      <BookIcon size={20} color={active ? "#1e1b4b" : "#64748b"} />
+    ),
+  },
+  {
+    key: "deadlines",
+    label: "Сроки",
+    renderIcon: (active) => (
+      <ClockIcon size={20} color={active ? "#1e1b4b" : "#64748b"} />
+    ),
+  },
+  {
+    key: "profile",
+    label: "Профиль",
+    renderIcon: (active) => (
+      <ProfileIcon size={20} color={active ? "#1e1b4b" : "#64748b"} />
+    ),
+  },
+];
+
 export const BottomNavBar: React.FC<BottomNavBarProps> = ({
   activeTab,
   onSelectTab,
@@ -25,129 +62,40 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({
 }) => {
   return (
     <View style={[styles.bottomBarContainer, style]}>
-      {/* 1. Поток (Flow) */}
-      <SpringPressable
-        containerStyle={styles.tabItemContainer}
-        style={styles.tabContent}
-        activeScale={0.92}
-        onPress={() => onSelectTab("flow")}
-        accessibilityRole="tab"
-        accessibilityState={{ selected: activeTab === "flow" }}
-        accessibilityLabel="Вкладка Поток"
-      >
-        <View
-          style={[
-            styles.iconWrapper,
-            activeTab === "flow" && styles.activePill,
-          ]}
-        >
-          <ListIcon
-            size={20}
-            color={activeTab === "flow" ? "#1e1b4b" : "#64748b"}
-          />
-        </View>
-        <Text
-          style={[
-            styles.tabLabel,
-            activeTab === "flow" ? styles.activeLabel : styles.inactiveLabel,
-          ]}
-        >
-          Поток
-        </Text>
-      </SpringPressable>
-
-      {/* 2. Предметы (Subjects) */}
-      <SpringPressable
-        containerStyle={styles.tabItemContainer}
-        style={styles.tabContent}
-        activeScale={0.92}
-        onPress={() => onSelectTab("subjects")}
-        accessibilityRole="tab"
-        accessibilityState={{ selected: activeTab === "subjects" }}
-        accessibilityLabel="Вкладка Предметы"
-      >
-        <View
-          style={[
-            styles.iconWrapper,
-            activeTab === "subjects" && styles.activePill,
-          ]}
-        >
-          <BookIcon
-            size={20}
-            color={activeTab === "subjects" ? "#1e1b4b" : "#64748b"}
-          />
-        </View>
-        <Text
-          style={[
-            styles.tabLabel,
-            activeTab === "subjects" ? styles.activeLabel : styles.inactiveLabel,
-          ]}
-        >
-          Предметы
-        </Text>
-      </SpringPressable>
-
-      {/* 3. Сроки (Deadlines) */}
-      <SpringPressable
-        containerStyle={styles.tabItemContainer}
-        style={styles.tabContent}
-        activeScale={0.92}
-        onPress={() => onSelectTab("deadlines")}
-        accessibilityRole="tab"
-        accessibilityState={{ selected: activeTab === "deadlines" }}
-        accessibilityLabel="Вкладка Сроки"
-      >
-        <View
-          style={[
-            styles.iconWrapper,
-            activeTab === "deadlines" && styles.activePill,
-          ]}
-        >
-          <ClockIcon
-            size={20}
-            color={activeTab === "deadlines" ? "#1e1b4b" : "#64748b"}
-          />
-        </View>
-        <Text
-          style={[
-            styles.tabLabel,
-            activeTab === "deadlines" ? styles.activeLabel : styles.inactiveLabel,
-          ]}
-        >
-          Сроки
-        </Text>
-      </SpringPressable>
-
-      {/* 4. Профиль (Profile) */}
-      <SpringPressable
-        containerStyle={styles.tabItemContainer}
-        style={styles.tabContent}
-        activeScale={0.92}
-        onPress={() => onSelectTab("profile")}
-        accessibilityRole="tab"
-        accessibilityState={{ selected: activeTab === "profile" }}
-        accessibilityLabel="Вкладка Профиль"
-      >
-        <View
-          style={[
-            styles.iconWrapper,
-            activeTab === "profile" && styles.activePill,
-          ]}
-        >
-          <ProfileIcon
-            size={20}
-            color={activeTab === "profile" ? "#1e1b4b" : "#64748b"}
-          />
-        </View>
-        <Text
-          style={[
-            styles.tabLabel,
-            activeTab === "profile" ? styles.activeLabel : styles.inactiveLabel,
-          ]}
-        >
-          Профиль
-        </Text>
-      </SpringPressable>
+      {TABS.map((tab) => {
+        const isActive = activeTab === tab.key;
+        return (
+          <Pressable
+            key={tab.key}
+            onPress={() => onSelectTab(tab.key)}
+            style={({ pressed }) => [
+              styles.tabItem,
+              pressed && styles.tabItemPressed,
+            ]}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: isActive }}
+            accessibilityLabel={`Вкладка ${tab.label}`}
+            hitSlop={{ top: 8, bottom: 8, left: 10, right: 10 }}
+          >
+            <View
+              style={[
+                styles.iconWrapper,
+                isActive && styles.activePill,
+              ]}
+            >
+              {tab.renderIcon(isActive)}
+            </View>
+            <Text
+              style={[
+                styles.tabLabel,
+                isActive ? styles.activeLabel : styles.inactiveLabel,
+              ]}
+            >
+              {tab.label}
+            </Text>
+          </Pressable>
+        );
+      })}
     </View>
   );
 };
@@ -169,13 +117,13 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 6,
   },
-  tabItemContainer: {
+  tabItem: {
     flex: 1,
     alignItems: "center",
-  },
-  tabContent: {
-    alignItems: "center",
     justifyContent: "center",
+  },
+  tabItemPressed: {
+    opacity: 0.75,
   },
   iconWrapper: {
     width: 60,
@@ -184,9 +132,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 4,
+    overflow: "hidden",
   },
   activePill: {
     backgroundColor: "#c7d2fe",
+    borderRadius: 16,
+    overflow: "hidden",
   },
   tabLabel: {
     fontSize: 12,
