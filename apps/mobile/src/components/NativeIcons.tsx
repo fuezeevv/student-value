@@ -151,6 +151,26 @@ export const ChevronDownIcon: React.FC<IconProps> = ({ size = 16, color = "#8a9b
   );
 };
 
+export const MapIcon: React.FC<IconProps> = ({ size = 20, color = "#94a3b8" }) => {
+  return (
+    <View style={[styles.mapContainer, { width: size, height: size }]}>
+      <View style={[styles.mapFold, { borderColor: color, borderRightWidth: 1 }]} />
+      <View style={[styles.mapFold, { borderColor: color, borderRightWidth: 1, borderLeftWidth: 1 }]} />
+      <View style={[styles.mapFold, { borderColor: color, borderLeftWidth: 1 }]} />
+    </View>
+  );
+};
+
+export const NewsIcon: React.FC<IconProps> = ({ size = 20, color = "#94a3b8" }) => {
+  return (
+    <View style={[styles.newsContainer, { width: size, height: size, borderColor: color }]}>
+      <View style={[styles.newsHeaderLine, { backgroundColor: color }]} />
+      <View style={[styles.newsBodyLine, { backgroundColor: color }]} />
+      <View style={[styles.newsBodyLineShort, { backgroundColor: color }]} />
+    </View>
+  );
+};
+
 const styles = StyleSheet.create({
   center: {
     alignItems: "center",
@@ -247,5 +267,39 @@ const styles = StyleSheet.create({
     borderRightWidth: 2,
     transform: [{ rotate: "45deg" }],
     marginTop: -2,
+  },
+  mapContainer: {
+    flexDirection: "row",
+    alignItems: "stretch",
+    justifyContent: "space-between",
+    paddingVertical: 1,
+  },
+  mapFold: {
+    flex: 1,
+    borderTopWidth: 1.6,
+    borderBottomWidth: 1.6,
+  },
+  newsContainer: {
+    borderWidth: 1.6,
+    borderRadius: 4,
+    padding: 3,
+    justifyContent: "space-between",
+  },
+  newsHeaderLine: {
+    width: "60%",
+    height: 2.2,
+    borderRadius: 1,
+    marginBottom: 2,
+  },
+  newsBodyLine: {
+    width: "100%",
+    height: 1.8,
+    borderRadius: 1,
+    marginBottom: 2,
+  },
+  newsBodyLineShort: {
+    width: "75%",
+    height: 1.8,
+    borderRadius: 1,
   },
 });

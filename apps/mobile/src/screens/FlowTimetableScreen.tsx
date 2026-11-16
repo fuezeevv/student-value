@@ -24,6 +24,8 @@ import type {
 import { getTimetableRepository } from "../storage/repository";
 import {
   syncTimetableFromApi,
+  syncTeacherTimetableFromRuz,
+  syncGroupTimetableFromRuzId,
   getActiveApiOrigin,
   setActiveApiOrigin,
 } from "../api/client";
@@ -35,7 +37,10 @@ import {
 import { enqueueProgressUpdate, flushOutbox } from "../sync/outbox";
 import { FlowHeroCard } from "../components/FlowHeroCard";
 import { UpcomingLessonCard } from "../components/UpcomingLessonCard";
-import { GroupPickerModal } from "../components/GroupPickerModal";
+import { SchedulePickerModal } from "../components/SchedulePickerModal";
+import { DaySwitcher } from "../components/DaySwitcher";
+import { CampusMapModal } from "../components/CampusMapModal";
+import { NewsModal } from "../components/NewsModal";
 import { AuthModal } from "../components/AuthModal";
 import { TaskProgressCard } from "../components/TaskProgressCard";
 import { MaterialModal } from "../components/MaterialModal";
@@ -48,6 +53,7 @@ import { SpringPressable } from "../components/SpringPressable";
 import { WellbeingModal } from "../components/WellbeingModal";
 import { AppInfoModal } from "../components/AppInfoModal";
 import { AmbientBottomGlow } from "../components/AmbientBottomGlow";
+import { MapIcon, NewsIcon, ChevronDownIcon } from "../components/NativeIcons";
 import {
   scheduleDeadlineReminder,
   cancelDeadlineReminder,
@@ -84,6 +90,12 @@ function weekStartFor(dateStr: string): string {
   return monday.toISOString().slice(0, 10);
 }
 
+function addDaysTo(dateStr: string, count: number): string {
+  const d = new Date(dateStr + "T12:00:00Z");
+  const next = new Date(d.getTime() + count * 86400000);
+  return next.toISOString().slice(0, 10);
+}
+
 const RU_DAYS_FULL = [
   "Воскресенье",
   "Понедельник",
@@ -108,6 +120,26 @@ const RU_MONTHS_GENITIVE = [
   "ноября",
   "декабря",
 ];
+
+const RU_MONTHS_NAMES = [
+  "Январь",
+  "Февраль",
+  "Март",
+  "Апрель",
+  "Май",
+  "Июнь",
+  "Июль",
+  "Август",
+  "Сентябрь",
+  "Октябрь",
+  "Ноябрь",
+  "Декабрь",
+];
+
+function getMonthYearLabel(dateStr: string): string {
+  const [y, m] = dateStr.split("-").map(Number);
+  return `${RU_MONTHS_NAMES[m - 1]} ${y}`;
+}
 
 function formatFlowDate(dateStr: string): string {
   const [y, m, d] = dateStr.split("-").map(Number);
@@ -140,6 +172,9 @@ export const FlowTimetableScreen: React.FC = () => {
   });
   const [containerHeight, setContainerHeight] = useState<number>(0);
   const [selectedGroup, setSelectedGroup] = useState<string>("5130901/40102");
+  const [scheduleType, setScheduleType] = useState<"group" | "teacher">("group");
+  const [selectedTeacherId, setSelectedTeacherId] = useState<number | null>(null);
+  const [selectedRuzGroupId, setSelectedRuzGroupId] = useState<number | null>(45591);
   const [todayStr, setTodayStr] = useState<string>(() => getMoscowDateString());
   const [nowMoscowMin, setNowMoscowMin] = useState<number>(() => getMoscowNowMinutes());
   const [selectedDate, setSelectedDate] = useState<string>(() => getMoscowDateString());
@@ -164,7 +199,9 @@ export const FlowTimetableScreen: React.FC = () => {
   const [updatingTaskId, setUpdatingTaskId] = useState<string | null>(null);
 
   // Modals
-  const [groupPickerVisible, setGroupPickerVisible] = useState<boolean>(false);
+  const [schedulePickerVisible, setSchedulePickerVisible] = useState<boolean>(false);
+  const [mapModalVisible, setMapModalVisible] = useState<boolean>(false);
+  const [newsModalVisible, setNewsModalVisible] = useState<boolean>(false);
   const [authModalVisible, setAuthModalVisible] = useState<boolean>(false);
   const [wellbeingModalVisible, setWellbeingModalVisible] = useState<boolean>(false);
   const [appInfoModalVisible, setAppInfoModalVisible] = useState<boolean>(false);
@@ -198,7 +235,7 @@ export const FlowTimetableScreen: React.FC = () => {
   }, []);
 
   const handleOpenGroupPicker = useCallback(() => {
-    setGroupPickerVisible(true);
+    setSchedulePickerVisible(true);
   }, []);
 
   // Load API origin and notification channels
@@ -340,7 +377,14 @@ export const FlowTimetableScreen: React.FC = () => {
     loadFromSqlite().then(() => {
       if (currentGen !== reqGenRef.current) return;
       setIsSyncing(true);
-      syncTimetableFromApi(selectedGroup, selectedDate).then((result) => {
+      const syncPromise =
+        scheduleType === "teacher" && selectedTeacherId
+          ? syncTeacherTimetableFromRuz(selectedTeacherId, selectedGroup, selectedDate)
+          : selectedRuzGroupId && selectedRuzGroupId !== 45591 && !selectedGroup.startsWith("5130901/40102")
+            ? syncGroupTimetableFromRuzId(selectedRuzGroupId, selectedGroup, selectedDate)
+            : syncTimetableFromApi(selectedGroup, selectedDate);
+
+      syncPromise.then((result) => {
         if (currentGen !== reqGenRef.current) return;
         setIsSyncing(false);
         if (result.success) {
@@ -351,7 +395,7 @@ export const FlowTimetableScreen: React.FC = () => {
         }
       });
     });
-  }, [loadFromSqlite, selectedGroup, selectedDate]);
+  }, [loadFromSqlite, selectedGroup, selectedDate, scheduleType, selectedTeacherId, selectedRuzGroupId]);
 
   // Live timer for clock and midnight rollover
   useEffect(() => {
@@ -379,11 +423,22 @@ export const FlowTimetableScreen: React.FC = () => {
     };
   }, []);
 
-  // Restore group preference
+  // Restore group and schedule preferences
   useEffect(() => {
-    repo.getPreference("selected_group_code").then((saved) => {
-      if (saved) {
-        setSelectedGroup(saved);
+    Promise.all([
+      repo.getPreference("selected_group_code"),
+      repo.getPreference("selected_schedule_type"),
+      repo.getPreference("selected_teacher_id"),
+      repo.getPreference("selected_ruz_group_id"),
+    ]).then(([savedGroup, savedType, savedTeacherId, savedRuzId]) => {
+      if (savedGroup) {
+        setSelectedGroup(savedGroup);
+      }
+      if (savedType === "teacher" && savedTeacherId) {
+        setScheduleType("teacher");
+        setSelectedTeacherId(Number(savedTeacherId));
+      } else if (savedRuzId) {
+        setSelectedRuzGroupId(Number(savedRuzId));
       }
     });
   }, [repo]);
@@ -393,7 +448,15 @@ export const FlowTimetableScreen: React.FC = () => {
     setIsSyncing(true);
     setSyncMessage(null);
 
-    const result = await syncTimetableFromApi(selectedGroup, selectedDate);
+    let result;
+    if (scheduleType === "teacher" && selectedTeacherId) {
+      result = await syncTeacherTimetableFromRuz(selectedTeacherId, selectedGroup, selectedDate);
+    } else if (selectedRuzGroupId && selectedRuzGroupId !== 45591 && !selectedGroup.startsWith("5130901/40102")) {
+      result = await syncGroupTimetableFromRuzId(selectedRuzGroupId, selectedGroup, selectedDate);
+    } else {
+      result = await syncTimetableFromApi(selectedGroup, selectedDate);
+    }
+
     setIsSyncing(false);
 
     if (result.success) {
@@ -408,16 +471,34 @@ export const FlowTimetableScreen: React.FC = () => {
     await loadTasks(selectedGroup, u);
   };
 
-  const handleSelectGroup = (code: string) => {
+  const handleSelectGroup = (code: string, ruzId?: number) => {
     setSelectedGroup(code);
+    setScheduleType("group");
+    setSelectedTeacherId(null);
+    setSelectedRuzGroupId(ruzId || null);
     repo.setPreference("selected_group_code", code);
-    setGroupPickerVisible(false);
+    repo.setPreference("selected_schedule_type", "group");
+    if (ruzId) {
+      repo.setPreference("selected_ruz_group_id", String(ruzId));
+    }
+    setSchedulePickerVisible(false);
+  };
+
+  const handleSelectTeacher = (teacherId: number, teacherName: string) => {
+    setSelectedGroup(teacherName);
+    setScheduleType("teacher");
+    setSelectedTeacherId(teacherId);
+    setSelectedRuzGroupId(null);
+    repo.setPreference("selected_group_code", teacherName);
+    repo.setPreference("selected_schedule_type", "teacher");
+    repo.setPreference("selected_teacher_id", String(teacherId));
+    setSchedulePickerVisible(false);
   };
 
   const handleSelectOrigin = async (newOrigin: string) => {
     setApiOrigin(newOrigin);
     await setActiveApiOrigin(newOrigin);
-    setGroupPickerVisible(false);
+    setSchedulePickerVisible(false);
     setIsSyncing(true);
     setSyncMessage(null);
     const result = await syncTimetableFromApi(selectedGroup, selectedDate, newOrigin);
@@ -430,6 +511,62 @@ export const FlowTimetableScreen: React.FC = () => {
       await loadFromSqlite();
     }
   };
+
+  const handlePrevDay = useCallback(() => {
+    setSelectedDate((prev) => addDaysTo(prev, -1));
+  }, []);
+
+  const handleNextDay = useCallback(() => {
+    setSelectedDate((prev) => addDaysTo(prev, 1));
+  }, []);
+
+  const handlePrevWeek = useCallback(() => {
+    setSelectedDate((prev) => addDaysTo(prev, -7));
+  }, []);
+
+  const handleNextWeek = useCallback(() => {
+    setSelectedDate((prev) => addDaysTo(prev, 7));
+  }, []);
+
+  const handleResetToday = useCallback(() => {
+    setSelectedDate(todayStr);
+  }, [todayStr]);
+
+  const monthYearLabel = useMemo(() => {
+    return getMonthYearLabel(selectedDate);
+  }, [selectedDate]);
+
+  const weekParityLabel = useMemo(() => {
+    const weekStart = weekStartFor(selectedDate);
+    const start = new Date(weekStart + "T12:00:00Z");
+    const semStart = new Date("2026-09-01T12:00:00Z");
+    const semStartMonday = new Date(
+      semStart.getTime() - ((semStart.getUTCDay() + 6) % 7) * 86400000,
+    );
+    const diffWeeks = Math.max(
+      1,
+      Math.floor((start.getTime() - semStartMonday.getTime()) / (7 * 86400000)) + 1,
+    );
+    const isEven = diffWeeks % 2 === 0;
+    return `${diffWeeks}-я неделя · ${isEven ? "Чётная" : "Нечётная"}`;
+  }, [selectedDate]);
+
+  const daySwitcherDays = useMemo(() => {
+    const weekStart = weekStartFor(selectedDate);
+    const labels = ["ПН", "ВТ", "СР", "ЧТ", "ПТ", "СБ", "ВС"];
+    return Array.from({ length: 7 }, (_, i) => {
+      const dStr = addDaysTo(weekStart, i);
+      const dayNum = String(parseInt(dStr.slice(8), 10));
+      const isToday = dStr === todayStr;
+      return {
+        date: dStr,
+        dayNumber: dayNum,
+        dayLabel: labels[i],
+        isToday,
+        hasLessons: weekLessons.length > 0,
+      };
+    });
+  }, [selectedDate, todayStr, weekLessons]);
 
   // Task self-completion toggle
   const handleToggleTaskStatus = useCallback(
@@ -621,7 +758,44 @@ export const FlowTimetableScreen: React.FC = () => {
           />
         </TouchableOpacity>
 
-        {/* Circular Wellbeing / Focus Badge (matches '0' in user's design) */}
+        {/* Schedule Selector Chip (current group or teacher) */}
+        <TouchableOpacity
+          style={styles.headerScheduleChip}
+          onPress={() => setSchedulePickerVisible(true)}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel={`Расписание: ${selectedGroup}. Нажмите для смены группы или преподавателя.`}
+        >
+          <Text style={styles.headerScheduleText} numberOfLines={1}>
+            {selectedGroup}
+          </Text>
+          <ChevronDownIcon size={12} color="#93c5fd" />
+        </TouchableOpacity>
+
+        {/* Right header actions: Campus Map, News, Wellbeing badge */}
+        <View style={styles.topHeaderRight}>
+          <TouchableOpacity
+            style={styles.headerIconBtn}
+            onPress={() => setMapModalVisible(true)}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Карта кампуса СПбПУ"
+          >
+            <MapIcon size={18} color="#cbd5e1" />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.headerIconBtn}
+            onPress={() => setNewsModalVisible(true)}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Новости и анонсы"
+          >
+            <NewsIcon size={18} color="#cbd5e1" />
+            <View style={styles.newsIndicatorDot} />
+          </TouchableOpacity>
+
+          {/* Circular Wellbeing / Focus Badge (matches '0' in user's design) */}
         <TouchableOpacity
           onPress={() => setWellbeingModalVisible(true)}
           style={[
@@ -644,6 +818,7 @@ export const FlowTimetableScreen: React.FC = () => {
           </Text>
           {pendingOpsCount > 0 && <View style={styles.pendingDot} />}
         </TouchableOpacity>
+        </View>
       </View>
 
       {/* Main Tab Screen View with Retained Tabs */}
@@ -689,8 +864,11 @@ export const FlowTimetableScreen: React.FC = () => {
               allDoneToday={allDoneToday}
               nowMoscowMinutes={nowMoscowMin}
               containerHeight={containerHeight}
-              onSelectGroup={handleOpenGroupPicker}
+              onSelectGroup={() => setSchedulePickerVisible(true)}
               onOpenSubject={handleOpenLesson}
+              onPrevDay={handlePrevDay}
+              onNextDay={handleNextDay}
+              onResetToday={handleResetToday}
               onScrollCuePress={() => {
                 const targetY = containerHeight > 0 ? containerHeight : 560;
                 scrollRef.current?.scrollTo({
@@ -707,6 +885,20 @@ export const FlowTimetableScreen: React.FC = () => {
                 containerHeight > 0 ? { minHeight: containerHeight } : undefined,
               ]}
             >
+              {/* Day & Week Switcher at top of schedule view */}
+              <DaySwitcher
+                days={daySwitcherDays}
+                selectedDate={selectedDate}
+                onSelectDate={setSelectedDate}
+                onPrevDay={handlePrevDay}
+                onNextDay={handleNextDay}
+                onPrevWeek={handlePrevWeek}
+                onNextWeek={handleNextWeek}
+                onResetToday={handleResetToday}
+                monthYearLabel={monthYearLabel}
+                weekParity={weekParityLabel}
+                isTodaySelected={selectedDate === todayStr}
+              />
               {remainingLessons.length > 0 && (
                 <View style={styles.upcomingSection}>
                   <View style={styles.page2HeaderRow}>
@@ -827,7 +1019,9 @@ export const FlowTimetableScreen: React.FC = () => {
               cachedTasksCount={tasks.length}
               apiOrigin={apiOrigin}
               isStale={isStale}
-              onOpenGroupPicker={handleOpenGroupPicker}
+              onOpenGroupPicker={() => setSchedulePickerVisible(true)}
+              onOpenCampusMap={() => setMapModalVisible(true)}
+              onOpenNews={() => setNewsModalVisible(true)}
               onOpenLogin={handleOpenLogin}
               onLogout={handleLogout}
               onSelectOrigin={handleSelectOrigin}
@@ -846,14 +1040,27 @@ export const FlowTimetableScreen: React.FC = () => {
         onSelectTab={handleSelectTab}
       />
 
-      {/* Group Picker Modal */}
-      <GroupPickerModal
-        visible={groupPickerVisible}
-        selectedGroup={selectedGroup}
+      {/* Schedule Picker Modal (Groups, Teachers, Favorites) */}
+      <SchedulePickerModal
+        visible={schedulePickerVisible}
+        selectedSchedule={selectedGroup}
         onSelectGroup={handleSelectGroup}
+        onSelectTeacher={handleSelectTeacher}
         currentOrigin={apiOrigin}
         onSelectOrigin={handleSelectOrigin}
-        onClose={() => setGroupPickerVisible(false)}
+        onClose={() => setSchedulePickerVisible(false)}
+      />
+
+      {/* Campus Map Modal */}
+      <CampusMapModal
+        visible={mapModalVisible}
+        onClose={() => setMapModalVisible(false)}
+      />
+
+      {/* University News Modal */}
+      <NewsModal
+        visible={newsModalVisible}
+        onClose={() => setNewsModalVisible(false)}
       />
 
       {/* Subject Detail Modal */}
@@ -919,7 +1126,7 @@ export const FlowTimetableScreen: React.FC = () => {
         }}
         onOpenGroupPicker={() => {
           setAppInfoModalVisible(false);
-          setGroupPickerVisible(true);
+          setSchedulePickerVisible(true);
         }}
         onSelectOrigin={handleSelectOrigin}
       />
@@ -945,7 +1152,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 18,
+    paddingHorizontal: 16,
     paddingVertical: 10,
     backgroundColor: "#0b1322",
   },
@@ -956,6 +1163,47 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 8,
+  },
+  headerScheduleChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.08)",
+    maxWidth: 165,
+  },
+  headerScheduleText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#f8fafc",
+    fontFamily: "monospace",
+  },
+  topHeaderRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  headerIconBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.04)",
+    position: "relative",
+  },
+  newsIndicatorDot: {
+    position: "absolute",
+    top: 5,
+    right: 5,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "#38bdf8",
   },
   wellbeingBadge: {
     width: 34,

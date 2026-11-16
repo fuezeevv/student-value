@@ -25,6 +25,9 @@ export type FlowHeroCardProps = {
   onOpenSubject?: (lesson: MobileLesson) => void;
   onSelectGroup?: () => void;
   onScrollCuePress?: () => void;
+  onPrevDay?: () => void;
+  onNextDay?: () => void;
+  onResetToday?: () => void;
 };
 
 const BUILDING_NAMES: Record<string, string> = {
@@ -74,6 +77,9 @@ export const FlowHeroCard: React.FC<FlowHeroCardProps> = ({
   onOpenSubject,
   onSelectGroup,
   onScrollCuePress,
+  onPrevDay,
+  onNextDay,
+  onResetToday,
 }) => {
   const cardHeight = containerHeight && containerHeight > 300 ? containerHeight : 560;
 
@@ -92,9 +98,45 @@ export const FlowHeroCard: React.FC<FlowHeroCardProps> = ({
     return (
       <View style={[styles.stateContainer, { height: cardHeight }]}>
         <SpringPressable onPress={onSelectGroup} activeScale={0.94}>
-          <Text style={styles.groupCodeEyebrow}>{groupCode}</Text>
+          <View style={styles.groupCodeRow}>
+            <Text style={styles.groupCodeEyebrow}>{groupCode}</Text>
+            <ChevronDownIcon size={13} color="#94a3b8" />
+          </View>
         </SpringPressable>
-        <Text style={styles.dateEyebrow}>{dateLabel}</Text>
+        <View style={styles.dateNavRow}>
+          {onPrevDay && (
+            <TouchableOpacity
+              onPress={onPrevDay}
+              style={styles.heroDayArrow}
+              accessibilityRole="button"
+              accessibilityLabel="Предыдущий день"
+            >
+              <Text style={styles.heroDayArrowText}>‹</Text>
+            </TouchableOpacity>
+          )}
+          <Text style={styles.dateEyebrow}>{dateLabel}</Text>
+          {onNextDay && (
+            <TouchableOpacity
+              onPress={onNextDay}
+              style={styles.heroDayArrow}
+              accessibilityRole="button"
+              accessibilityLabel="Следующий день"
+            >
+              <Text style={styles.heroDayArrowText}>›</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+        {!isToday && onResetToday && (
+          <TouchableOpacity
+            onPress={onResetToday}
+            style={styles.heroTodayChip}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Вернуться к сегодняшнему дню"
+          >
+            <Text style={styles.heroTodayChipText}>Сегодня</Text>
+          </TouchableOpacity>
+        )}
         <Text style={styles.bigEmptyTime}>—:—</Text>
         <Text style={styles.stateTitle}>В этот день пар нет</Text>
         <Text style={styles.stateSubtitle}>
@@ -108,9 +150,45 @@ export const FlowHeroCard: React.FC<FlowHeroCardProps> = ({
     return (
       <View style={[styles.stateContainer, { height: cardHeight }]}>
         <SpringPressable onPress={onSelectGroup} activeScale={0.94}>
-          <Text style={styles.groupCodeEyebrow}>{groupCode}</Text>
+          <View style={styles.groupCodeRow}>
+            <Text style={styles.groupCodeEyebrow}>{groupCode}</Text>
+            <ChevronDownIcon size={13} color="#94a3b8" />
+          </View>
         </SpringPressable>
-        <Text style={styles.dateEyebrow}>{dateLabel}</Text>
+        <View style={styles.dateNavRow}>
+          {onPrevDay && (
+            <TouchableOpacity
+              onPress={onPrevDay}
+              style={styles.heroDayArrow}
+              accessibilityRole="button"
+              accessibilityLabel="Предыдущий день"
+            >
+              <Text style={styles.heroDayArrowText}>‹</Text>
+            </TouchableOpacity>
+          )}
+          <Text style={styles.dateEyebrow}>{dateLabel}</Text>
+          {onNextDay && (
+            <TouchableOpacity
+              onPress={onNextDay}
+              style={styles.heroDayArrow}
+              accessibilityRole="button"
+              accessibilityLabel="Следующий день"
+            >
+              <Text style={styles.heroDayArrowText}>›</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+        {!isToday && onResetToday && (
+          <TouchableOpacity
+            onPress={onResetToday}
+            style={styles.heroTodayChip}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Вернуться к сегодняшнему дню"
+          >
+            <Text style={styles.heroTodayChipText}>Сегодня</Text>
+          </TouchableOpacity>
+        )}
         <Text style={styles.bigEmptyTime}>✓</Text>
         <Text style={styles.stateTitle}>Занятия на сегодня завершены</Text>
         <Text style={styles.stateSubtitle}>
@@ -148,17 +226,55 @@ export const FlowHeroCard: React.FC<FlowHeroCardProps> = ({
 
   return (
     <View style={[styles.heroFullscreenContainer, { height: cardHeight }]}>
-      {/* Top section: Group and Date */}
+      {/* Top section: Group and Date with day arrows and return to today */}
       <View style={styles.heroTopGroup}>
         <SpringPressable
           onPress={onSelectGroup}
           activeScale={0.95}
           accessibilityRole="button"
-          accessibilityLabel={`Группа ${groupCode}. Нажмите для выбора.`}
+          accessibilityLabel={`Расписание ${groupCode}. Нажмите для выбора группы или преподавателя.`}
         >
-          <Text style={styles.groupCodeEyebrow}>{groupCode}</Text>
+          <View style={styles.groupCodeRow}>
+            <Text style={styles.groupCodeEyebrow}>{groupCode}</Text>
+            <ChevronDownIcon size={13} color="#94a3b8" />
+          </View>
         </SpringPressable>
-        <Text style={styles.dateEyebrow}>{dateLabel}</Text>
+        <View style={styles.dateNavRow}>
+          {onPrevDay && (
+            <TouchableOpacity
+              onPress={onPrevDay}
+              style={styles.heroDayArrow}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              accessibilityRole="button"
+              accessibilityLabel="Предыдущий день"
+            >
+              <Text style={styles.heroDayArrowText}>‹</Text>
+            </TouchableOpacity>
+          )}
+          <Text style={styles.dateEyebrow}>{dateLabel}</Text>
+          {onNextDay && (
+            <TouchableOpacity
+              onPress={onNextDay}
+              style={styles.heroDayArrow}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              accessibilityRole="button"
+              accessibilityLabel="Следующий день"
+            >
+              <Text style={styles.heroDayArrowText}>›</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+        {!isToday && onResetToday && (
+          <TouchableOpacity
+            onPress={onResetToday}
+            style={styles.heroTodayChip}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Вернуться к сегодняшнему дню"
+          >
+            <Text style={styles.heroTodayChipText}>Сегодня</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Center section: Clock, Progress breakdown, Title, Format, Room, Teacher, Link */}
@@ -291,7 +407,50 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#64748b",
     letterSpacing: 0.8,
+  },
+  groupCodeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
     marginBottom: 4,
+    paddingVertical: 2,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    backgroundColor: "rgba(255, 255, 255, 0.03)",
+  },
+  dateNavRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+  },
+  heroDayArrow: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
+  },
+  heroDayArrowText: {
+    fontSize: 18,
+    color: "#94a3b8",
+    fontWeight: "700",
+    lineHeight: 20,
+  },
+  heroTodayChip: {
+    marginTop: 6,
+    paddingVertical: 3,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    backgroundColor: "rgba(59, 130, 246, 0.15)",
+    borderWidth: 1,
+    borderColor: "rgba(147, 197, 253, 0.3)",
+  },
+  heroTodayChipText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#93c5fd",
   },
   dateEyebrow: {
     fontSize: 15,

@@ -212,3 +212,284 @@ export async function syncTimetableFromApi(
     };
   }
 }
+
+export type RuzSearchTeacher = {
+  id: number;
+  full_name: string;
+  chair?: string;
+};
+
+export type RuzSearchGroup = {
+  id: number;
+  name: string;
+  faculty?: {
+    id: number;
+    name: string;
+    abbr?: string;
+  };
+};
+
+export async function searchRuzTeachers(query: string): Promise<RuzSearchTeacher[]> {
+  const trimmed = query.trim();
+  if (!trimmed || trimmed.length < 2) return [];
+
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 6000);
+    const res = await fetch(
+      `https://ruz.spbstu.ru/api/v1/ruz/search/teachers?q=${encodeURIComponent(trimmed)}`,
+      {
+        signal: controller.signal,
+        headers: { Accept: "application/json" },
+      },
+    );
+    clearTimeout(timer);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return (data.teachers || []).map((t: any) => ({
+      id: t.id,
+      full_name: t.full_name,
+      chair: t.chair || "",
+    }));
+  } catch (err) {
+    console.warn("Error searching RUZ teachers:", err);
+    return [];
+  }
+}
+
+export async function searchRuzGroups(query: string): Promise<RuzSearchGroup[]> {
+  const trimmed = query.trim();
+  if (!trimmed || trimmed.length < 2) return [];
+
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 6000);
+    const res = await fetch(
+      `https://ruz.spbstu.ru/api/v1/ruz/search/groups?q=${encodeURIComponent(trimmed)}`,
+      {
+        signal: controller.signal,
+        headers: { Accept: "application/json" },
+      },
+    );
+    clearTimeout(timer);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return (data.groups || []).map((g: any) => ({
+      id: g.id,
+      name: g.name,
+      faculty: g.faculty
+        ? {
+            id: g.faculty.id,
+            name: g.faculty.name,
+            abbr: g.faculty.abbr,
+          }
+        : undefined,
+    }));
+  } catch (err) {
+    console.warn("Error searching RUZ groups:", err);
+    return [];
+  }
+}
+
+function calculateWeekStart(dateStr: string): string {
+  const d = new Date(dateStr + "T12:00:00Z");
+  const day = (d.getUTCDay() + 6) % 7; // Monday = 0
+  const monday = new Date(d.getTime() - day * 86400000);
+  return monday.toISOString().slice(0, 10);
+}
+
+function addDaysTo(dateStr: string, count: number): string {
+  const d = new Date(dateStr + "T12:00:00Z");
+  const next = new Date(d.getTime() + count * 86400000);
+  return next.toISOString().slice(0, 10);
+}
+
+export async function syncTeacherTimetableFromRuz(
+  teacherId: number,
+  teacherDisplayName: string,
+  date?: string,
+): Promise<SyncResult> {
+  const repo = getTimetableRepository();
+  const targetDate = date || new Date().toISOString().slice(0, 10);
+  const weekStart = calculateWeekStart(targetDate);
+
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 8000);
+    const res = await fetch(
+      `https://ruz.spbstu.ru/api/v1/ruz/teachers/${teacherId}/scheduler?date=${weekStart}`,
+      {
+        signal: controller.signal,
+        headers: { Accept: "application/json" },
+      },
+    );
+    clearTimeout(timer);
+
+    if (!res.ok) {
+      return {
+        success: false,
+        reason: "UNAVAILABLE",
+        message: `РУЗ вернул ошибку HTTP ${res.status}`,
+      };
+    }
+
+    const ruzData = await res.json();
+    const ruzDays = ruzData.days || [];
+
+    const days = Array.from({ length: 7 }, (_, i) => {
+      const dayDate = addDaysTo(weekStart, i);
+      const ruzDay = ruzDays.find((d: any) => d.date === dayDate);
+
+      const lessons = (ruzDay?.lessons || []).map((l: any, idx: number) => ({
+        id: `occ-teacher-${teacherId}-${dayDate}-${(l.time_start || "").replace(":", "")}-${idx}`,
+        subject: l.subject || "Занятие",
+        start: l.time_start || "00:00",
+        scheduledEnd: l.time_end || "00:00",
+        type: l.typeObj?.abbr || l.typeObj?.name || "Пара",
+        teachers: [teacherDisplayName],
+        rooms: (l.auditories || []).map(
+          (a: any) =>
+            `${a.name || "Ауд"}${a.building?.name ? ` (${a.building.name})` : ""}`,
+        ),
+        note: (l.groups || []).map((g: any) => g.name).join(", "),
+      }));
+
+      return {
+        date: dayDate,
+        lessons,
+      };
+    });
+
+    const dto: MobileTimetable = {
+      schemaVersion: 1,
+      group: {
+        code: teacherDisplayName,
+        ruzId: teacherId,
+      },
+      weekStart,
+      state: "FRESH",
+      sourceFetchedAt: new Date().toISOString(),
+      sourceUrl: `https://ruz.spbstu.ru/teachers/${teacherId}?date=${weekStart}`,
+      data: {
+        days: days as any,
+      },
+    };
+
+    const validated = mobileTimetableSchema.parse(dto);
+    await repo.saveSnapshot(validated);
+
+    return {
+      success: true,
+      state: "FRESH",
+      timetable: validated,
+    };
+  } catch (err: any) {
+    if (err.name === "AbortError") {
+      return {
+        success: false,
+        reason: "TIMEOUT",
+        message: "Таймаут подключения к РУЗ (более 8 сек)",
+      };
+    }
+    return {
+      success: false,
+      reason: "OFFLINE",
+      message: "Нет подключения к официальному источнику РУЗ",
+    };
+  }
+}
+
+export async function syncGroupTimetableFromRuzId(
+  groupId: number,
+  groupCode: string,
+  date?: string,
+): Promise<SyncResult> {
+  const repo = getTimetableRepository();
+  const targetDate = date || new Date().toISOString().slice(0, 10);
+  const weekStart = calculateWeekStart(targetDate);
+
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 8000);
+    const res = await fetch(
+      `https://ruz.spbstu.ru/api/v1/ruz/scheduler/${groupId}?date=${weekStart}`,
+      {
+        signal: controller.signal,
+        headers: { Accept: "application/json" },
+      },
+    );
+    clearTimeout(timer);
+
+    if (!res.ok) {
+      return {
+        success: false,
+        reason: "UNAVAILABLE",
+        message: `РУЗ вернул ошибку HTTP ${res.status}`,
+      };
+    }
+
+    const ruzData = await res.json();
+    const ruzDays = ruzData.days || [];
+
+    const days = Array.from({ length: 7 }, (_, i) => {
+      const dayDate = addDaysTo(weekStart, i);
+      const ruzDay = ruzDays.find((d: any) => d.date === dayDate);
+
+      const lessons = (ruzDay?.lessons || []).map((l: any, idx: number) => ({
+        id: `occ-group-${groupId}-${dayDate}-${(l.time_start || "").replace(":", "")}-${idx}`,
+        subject: l.subject || "Занятие",
+        start: l.time_start || "00:00",
+        scheduledEnd: l.time_end || "00:00",
+        type: l.typeObj?.abbr || l.typeObj?.name || "Пара",
+        teachers: (l.teachers || []).map((t: any) => t.full_name),
+        rooms: (l.auditories || []).map(
+          (a: any) =>
+            `${a.name || "Ауд"}${a.building?.name ? ` (${a.building.name})` : ""}`,
+        ),
+        note: l.additional_info ? l.additional_info.trim() : null,
+      }));
+
+      return {
+        date: dayDate,
+        lessons,
+      };
+    });
+
+    const dto: MobileTimetable = {
+      schemaVersion: 1,
+      group: {
+        code: groupCode,
+        ruzId: groupId,
+      },
+      weekStart,
+      state: "FRESH",
+      sourceFetchedAt: new Date().toISOString(),
+      sourceUrl: `https://ruz.spbstu.ru/faculty/125/groups/${groupId}?date=${weekStart}`,
+      data: {
+        days: days as any,
+      },
+    };
+
+    const validated = mobileTimetableSchema.parse(dto);
+    await repo.saveSnapshot(validated);
+
+    return {
+      success: true,
+      state: "FRESH",
+      timetable: validated,
+    };
+  } catch (err: any) {
+    if (err.name === "AbortError") {
+      return {
+        success: false,
+        reason: "TIMEOUT",
+        message: "Таймаут подключения к РУЗ (более 8 сек)",
+      };
+    }
+    return {
+      success: false,
+      reason: "OFFLINE",
+      message: "Нет подключения к официальному источнику РУЗ",
+    };
+  }
+}

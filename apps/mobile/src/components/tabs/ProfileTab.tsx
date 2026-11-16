@@ -15,6 +15,8 @@ export interface ProfileTabProps {
   onLogout: () => void;
   onSelectOrigin: (origin: string) => void;
   onRefreshData: () => void;
+  onOpenCampusMap?: () => void;
+  onOpenNews?: () => void;
 }
 
 export const ProfileTab = React.memo<ProfileTabProps>(({
@@ -29,6 +31,8 @@ export const ProfileTab = React.memo<ProfileTabProps>(({
   onLogout,
   onSelectOrigin,
   onRefreshData,
+  onOpenCampusMap,
+  onOpenNews,
 }) => {
   return (
     <ScrollView
@@ -109,6 +113,53 @@ export const ProfileTab = React.memo<ProfileTabProps>(({
             <Text style={styles.changeGroupText}>Сменить</Text>
           </SpringPressable>
         </View>
+      </View>
+
+      {/* Campus Services Card */}
+      <View style={styles.card}>
+        <Text style={styles.cardSectionTitle}>Сервисы Политеха</Text>
+
+        {onOpenCampusMap && (
+          <SpringPressable
+            style={styles.serviceActionRow}
+            activeScale={0.97}
+            onPress={onOpenCampusMap}
+            accessibilityRole="button"
+            accessibilityLabel="Открыть карту кампуса"
+          >
+            <View style={styles.serviceIconBadge}>
+              <Text style={styles.serviceIconText}>🗺️</Text>
+            </View>
+            <View style={styles.serviceTextCol}>
+              <Text style={styles.serviceTitle}>Карта корпусов кампуса</Text>
+              <Text style={styles.serviceSubtitle}>
+                Входы, этажи, аудитории и столовые Политеха
+              </Text>
+            </View>
+            <Text style={styles.serviceArrow}>›</Text>
+          </SpringPressable>
+        )}
+
+        {onOpenNews && (
+          <SpringPressable
+            style={[styles.serviceActionRow, { marginTop: 8 }]}
+            activeScale={0.97}
+            onPress={onOpenNews}
+            accessibilityRole="button"
+            accessibilityLabel="Открыть новости"
+          >
+            <View style={[styles.serviceIconBadge, { backgroundColor: "rgba(34, 158, 217, 0.15)" }]}>
+              <Text style={styles.serviceIconText}>📢</Text>
+            </View>
+            <View style={styles.serviceTextCol}>
+              <Text style={styles.serviceTitle}>Новости и анонсы</Text>
+              <Text style={styles.serviceSubtitle}>
+                Официальные события СПбПУ и канал @studentvalue
+              </Text>
+            </View>
+            <Text style={styles.serviceArrow}>›</Text>
+          </SpringPressable>
+        )}
       </View>
 
       {/* Offline Storage Card */}
@@ -371,6 +422,46 @@ const styles = StyleSheet.create({
   },
   originChipTextActive: {
     color: "#93c5fd",
+    fontWeight: "700",
+  },
+  serviceActionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.03)",
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.06)",
+    gap: 12,
+  },
+  serviceIconBadge: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: "rgba(59, 130, 246, 0.15)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  serviceIconText: {
+    fontSize: 18,
+  },
+  serviceTextCol: {
+    flex: 1,
+  },
+  serviceTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#f8fafc",
+    marginBottom: 2,
+  },
+  serviceSubtitle: {
+    fontSize: 11,
+    color: "#8a9bb5",
+    lineHeight: 15,
+  },
+  serviceArrow: {
+    fontSize: 20,
+    color: "#64748b",
     fontWeight: "700",
   },
 });

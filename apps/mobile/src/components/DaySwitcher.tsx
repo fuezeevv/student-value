@@ -15,8 +15,12 @@ export type DaySwitcherProps = {
   onSelectDate: (date: string) => void;
   onPrevDay: () => void;
   onNextDay: () => void;
+  onPrevWeek?: () => void;
+  onNextWeek?: () => void;
+  onResetToday?: () => void;
   monthYearLabel: string;
   weekParity: string;
+  isTodaySelected?: boolean;
 };
 
 export const DaySwitcher: React.FC<DaySwitcherProps> = ({
@@ -25,35 +29,63 @@ export const DaySwitcher: React.FC<DaySwitcherProps> = ({
   onSelectDate,
   onPrevDay,
   onNextDay,
+  onPrevWeek,
+  onNextWeek,
+  onResetToday,
   monthYearLabel,
   weekParity,
+  isTodaySelected,
 }) => {
   return (
     <View style={styles.container}>
-      {/* Month, Parity and Day navigation arrows */}
+      {/* Month, Parity and Week navigation */}
       <View style={styles.headerRow}>
-        <TouchableOpacity
-          onPress={onPrevDay}
-          style={styles.navArrow}
-          accessibilityLabel="Предыдущий день"
-          accessibilityRole="button"
-        >
-          <Text style={styles.arrowText}>←</Text>
-        </TouchableOpacity>
+        <View style={styles.arrowGroup}>
+          {onPrevWeek && (
+            <TouchableOpacity
+              onPress={onPrevWeek}
+              style={styles.weekArrow}
+              accessibilityLabel="Предыдущая неделя"
+              accessibilityRole="button"
+            >
+              <Text style={styles.weekArrowText}>«</Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity
+            onPress={onPrevDay}
+            style={styles.navArrow}
+            accessibilityLabel="Предыдущий день"
+            accessibilityRole="button"
+          >
+            <Text style={styles.arrowText}>‹</Text>
+          </TouchableOpacity>
+        </View>
 
         <View style={styles.headerCenter}>
           <Text style={styles.monthText}>{monthYearLabel}</Text>
           <Text style={styles.parityText}>{weekParity}</Text>
         </View>
 
-        <TouchableOpacity
-          onPress={onNextDay}
-          style={styles.navArrow}
-          accessibilityLabel="Следующий день"
-          accessibilityRole="button"
-        >
-          <Text style={styles.arrowText}>→</Text>
-        </TouchableOpacity>
+        <View style={styles.arrowGroup}>
+          <TouchableOpacity
+            onPress={onNextDay}
+            style={styles.navArrow}
+            accessibilityLabel="Следующий день"
+            accessibilityRole="button"
+          >
+            <Text style={styles.arrowText}>›</Text>
+          </TouchableOpacity>
+          {onNextWeek && (
+            <TouchableOpacity
+              onPress={onNextWeek}
+              style={styles.weekArrow}
+              accessibilityLabel="Следующая неделя"
+              accessibilityRole="button"
+            >
+              <Text style={styles.weekArrowText}>»</Text>
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
       {/* 7 Day Pills */}
@@ -67,6 +99,7 @@ export const DaySwitcher: React.FC<DaySwitcherProps> = ({
               style={[
                 styles.dayPill,
                 isSelected ? styles.dayPillActive : styles.dayPillInactive,
+                item.isToday && !isSelected && styles.dayPillToday,
               ]}
               accessibilityRole="button"
               accessibilityLabel={`${item.dayNumber} ${item.dayLabel}${
@@ -78,6 +111,7 @@ export const DaySwitcher: React.FC<DaySwitcherProps> = ({
                 style={[
                   styles.dayNumber,
                   isSelected ? styles.textActive : styles.textInactive,
+                  item.isToday && !isSelected && styles.textToday,
                 ]}
               >
                 {item.dayNumber}
@@ -108,33 +142,73 @@ export const DaySwitcher: React.FC<DaySwitcherProps> = ({
           );
         })}
       </View>
+
+      {/* Quick return to today button if viewing another day/week */}
+      {isTodaySelected === false && onResetToday && (
+        <TouchableOpacity
+          onPress={onResetToday}
+          style={styles.todayBar}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="Вернуться к сегодняшнему дню"
+        >
+          <Text style={styles.todayBarText}>Вернуться к сегодняшнему дню</Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
-    paddingVertical: 4,
+    paddingVertical: 8,
     paddingHorizontal: 8,
+    backgroundColor: "rgba(15, 23, 42, 0.4)",
+    borderRadius: 18,
+    marginHorizontal: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.04)",
   },
   headerRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 8,
+    marginBottom: 10,
+    paddingHorizontal: 4,
+  },
+  arrowGroup: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
   },
   navArrow: {
-    width: 44,
-    height: 44,
+    width: 36,
+    height: 36,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 22,
-    backgroundColor: "rgba(255, 255, 255, 0.04)",
+    borderRadius: 18,
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
+  },
+  weekArrow: {
+    width: 36,
+    height: 36,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 18,
+    backgroundColor: "rgba(147, 197, 253, 0.08)",
   },
   arrowText: {
-    fontSize: 18,
-    color: "#8a9bb5",
-    fontWeight: "600",
+    fontSize: 20,
+    color: "#cbd5e1",
+    fontWeight: "700",
+    lineHeight: 22,
+  },
+  weekArrowText: {
+    fontSize: 16,
+    color: "#93c5fd",
+    fontWeight: "700",
+    lineHeight: 18,
   },
   headerCenter: {
     alignItems: "center",
@@ -142,14 +216,15 @@ const styles = StyleSheet.create({
   monthText: {
     fontSize: 15,
     fontWeight: "700",
-    color: "#f0f4f8",
+    color: "#f8fafc",
     letterSpacing: -0.2,
     textTransform: "capitalize",
   },
   parityText: {
     fontSize: 11,
-    color: "#8a9bb5",
-    fontWeight: "500",
+    color: "#94a3b8",
+    fontWeight: "600",
+    marginTop: 1,
   },
   daysRow: {
     flexDirection: "row",
@@ -158,14 +233,19 @@ const styles = StyleSheet.create({
   },
   dayPill: {
     flex: 1,
-    minHeight: 48,
+    minHeight: 52,
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 14,
-    paddingVertical: 4,
+    paddingVertical: 6,
   },
   dayPillActive: {
     backgroundColor: "#cfc6ff",
+  },
+  dayPillToday: {
+    borderWidth: 1,
+    borderColor: "rgba(147, 197, 253, 0.4)",
+    backgroundColor: "rgba(59, 130, 246, 0.08)",
   },
   dayPillInactive: {
     backgroundColor: "transparent",
@@ -179,23 +259,26 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: "700",
     fontFamily: "monospace",
-    marginTop: 1,
+    marginTop: 2,
   },
   textActive: {
     color: "#0b1a2d",
   },
   textInactive: {
-    color: "#f0f4f8",
+    color: "#f1f5f9",
+  },
+  textToday: {
+    color: "#93c5fd",
   },
   labelActive: {
     color: "#0b1a2d",
   },
   labelInactive: {
-    color: "#8a9bb5",
+    color: "#64748b",
   },
   dotContainer: {
     height: 4,
-    marginTop: 2,
+    marginTop: 3,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -213,5 +296,19 @@ const styles = StyleSheet.create({
   dotSpacer: {
     width: 4,
     height: 4,
+  },
+  todayBar: {
+    marginTop: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 8,
+    backgroundColor: "rgba(147, 197, 253, 0.08)",
+  },
+  todayBarText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#93c5fd",
   },
 });

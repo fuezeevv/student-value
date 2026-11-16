@@ -24,13 +24,13 @@ const sourceUrl = z
         !url.username &&
         !url.password &&
         !url.hash &&
-        /^\/faculty\/\d+\/groups\/\d+$/.test(url.pathname) &&
+        /^\/(?:faculty\/\d+\/)?(?:groups|teachers)\/\d+$/.test(url.pathname) &&
         [...url.searchParams.keys()].every((key) => key === "date")
       );
     } catch {
       return false;
     }
-  }, "Expected official public RUZ group URL");
+  }, "Expected official public RUZ timetable URL");
 export const mobileLessonSchema = z
   .object({
     id: z.string().min(1).max(200), // Opaque occurrence ID; never a Task ID.
@@ -58,7 +58,7 @@ const base = {
   schemaVersion: z.literal(1),
   group: z
     .object({
-      code: z.string().regex(/^\d{7}\/\d{5}$/),
+      code: z.string().min(1).max(120),
       ruzId: z.number().int().positive().max(1000000),
     })
     .strict(),
