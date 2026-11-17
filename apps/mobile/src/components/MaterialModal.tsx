@@ -420,12 +420,12 @@ const createStyles = (colors: Palette) =>
     statusTextSuccess: {
       fontSize: 12,
       fontWeight: "700",
-      color: "#34d399",
+      color: colors.success,
     },
     shaText: {
       fontSize: 10,
       fontFamily: "monospace",
-      color: "#6ee7b7",
+      color: colors.success,
       marginTop: 4,
     },
     statusBoxPending: {
@@ -443,7 +443,7 @@ const createStyles = (colors: Palette) =>
     errorText: {
       marginTop: 10,
       fontSize: 12,
-      color: "#f87171",
+      color: colors.danger,
     },
     actionsContainer: {
       marginTop: 20,
@@ -473,7 +473,7 @@ const createStyles = (colors: Palette) =>
     deleteButtonText: {
       fontSize: 13,
       fontWeight: "600",
-      color: "#f87171",
+      color: colors.danger,
     },
     readerContainer: {
       flex: 1,

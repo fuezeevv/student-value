@@ -45,10 +45,12 @@ export function ManagementModal({
   visible,
   onClose,
   groupCode,
+  onChanged,
 }: {
   visible: boolean;
   onClose: () => void;
   groupCode: string;
+  onChanged?: () => void;
 }) {
   const { colors } = useTheme();
   const [data, setData] = useState<z.infer<typeof schema> | null>(null);
@@ -148,9 +150,10 @@ export function ManagementModal({
       if (isCurrentSession(generation)) {
         setNote("");
         setRevision((n) => n + 1);
+        onChanged?.();
         Alert.alert(
           "Сохранено",
-          "Изменение записано с основанием и аудитом. Обновите учебные данные после закрытия панели.",
+          "Изменение записано с основанием и аудитом. Учебные данные обновляются.",
         );
       }
     } catch (e) {
@@ -300,14 +303,18 @@ export function ManagementModal({
                 : null}
               {data?.canEditDeadlines ? (
                 <>
-                  <TextInput
-                    accessibilityLabel="Новая дата срока"
-                    placeholder="Новая дата: ГГГГ-ММ-ДД"
-                    placeholderTextColor={colors.subtle}
-                    style={inputStyle}
-                    value={day}
-                    onChangeText={setDay}
-                  />
+                  {item.deadlines.some(
+                    (deadline) => deadline.status === "ACTIVE",
+                  ) ? (
+                    <TextInput
+                      accessibilityLabel="Новая дата срока"
+                      placeholder="Новая дата: ГГГГ-ММ-ДД"
+                      placeholderTextColor={colors.subtle}
+                      style={inputStyle}
+                      value={day}
+                      onChangeText={setDay}
+                    />
+                  ) : null}
                   {item.deadlines.map((deadline) => (
                     <View
                       key={deadline.id}

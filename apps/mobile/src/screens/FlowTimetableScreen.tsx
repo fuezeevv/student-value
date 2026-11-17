@@ -1,3 +1,4 @@
+import { focusScope } from "../focus/storage";
 import { useNetInfo } from "@react-native-community/netinfo";
 import { BrandMark, OfflineMark } from "../components/BrandMark";
 import { ComparedSchedule } from "../components/ComparedSchedule";
@@ -79,6 +80,8 @@ import { AmbientBottomGlow } from "../components/AmbientBottomGlow";
 import { MapIcon, NewsIcon, ChevronDownIcon } from "../components/NativeIcons";
 import {
   scheduleDeadlineReminder,
+  activeReminderFlags,
+  reconcileTaskReminders,
   cancelDeadlineReminder,
   setupNotificationChannels,
 } from "../notifications/scheduler";
@@ -240,6 +243,13 @@ export const FlowTimetableScreen: React.FC = () => {
   const [taskProgress, setTaskProgress] = useState<
     Record<string, UserTaskProgress>
   >({});
+  const hasSelectedMembership = Boolean(
+    sessionUser?.groups?.some((group) => group.code === selectedGroup),
+  );
+  const readOnlyReason =
+    sessionUser && !hasSelectedMembership
+      ? "Общие работы доступны для просмотра. Личные отметки и напоминания — в вашей группе."
+      : undefined;
   const [pendingOpsCount, setPendingOpsCount] = useState<number>(0);
   const [tasks, setTasks] = useState<CachedTask[]>([]);
   const [scheduledReminders, setScheduledReminders] = useState<
@@ -320,13 +330,21 @@ export const FlowTimetableScreen: React.FC = () => {
       }
       setTaskLoadMessage("Обновляем задания…");
       const cacheOrigin = await getActiveApiOrigin();
+      let previousTasks: CachedTask[] = [];
       try {
         const cached = await repo.getCachedTasksForGroup(
           groupCode,
           user?.id,
           cacheOrigin,
         );
+        previousTasks = cached;
         if (current()) setTasks(cached);
+        if (user) {
+          const flags = await activeReminderFlags(user.id, cached).catch(
+            () => ({}),
+          );
+          if (current()) setScheduledReminders(flags);
+        }
       } catch (err) {
         console.warn("Could not read cached tasks from SQLite:", err);
       }
@@ -421,6 +439,24 @@ export const FlowTimetableScreen: React.FC = () => {
               for (const task of serverTasks) delete next[task.id];
               return { ...next, ...progressMap };
             });
+            await reconcileTaskReminders(
+              user.id,
+              previousTasks,
+              mapped,
+              new Set(
+                Object.values(progressMap)
+                  .filter((progress) =>
+                    ["READY", "SUBMITTED", "ACCEPTED"].includes(
+                      progress.status,
+                    ),
+                  )
+                  .map((progress) => progress.taskId),
+              ),
+            ).catch(() => {});
+            const flags = await activeReminderFlags(user.id, mapped).catch(
+              () => ({}),
+            );
+            if (current()) setScheduledReminders(flags);
           }
         }
       } catch (err) {
@@ -803,6 +839,13 @@ export const FlowTimetableScreen: React.FC = () => {
         return;
       }
 
+      if (!sessionUser.groups?.some((group) => group.code === selectedGroup)) {
+        Alert.alert(
+          "Просмотр другой группы",
+          "Личные отметки доступны только в группе, в которой вы состоите.",
+        );
+        return;
+      }
       setUpdatingTaskId(taskId);
       const nextStatus: "READY" | "NOT_STARTED" =
         currentStatus === "READY" || currentStatus === "SUBMITTED"
@@ -845,51 +888,71 @@ export const FlowTimetableScreen: React.FC = () => {
         setUpdatingTaskId(null);
       }
     },
-    [sessionUser, taskProgress, repo, tasks],
+    [sessionUser, taskProgress, repo, tasks, selectedGroup],
   );
 
   // Toggle reminder for task
   const handleToggleReminderForTask = useCallback(
     async (task: CachedTask) => {
-      if (!sessionUser) {
-        setAuthModalVisible(true);
-        return;
-      }
-      if (!task.deadlineId || !task.deadlineDate) {
-        Alert.alert(
-          "Дедлайн не найден",
-          "У этого задания нет подтверждённого срока.",
-        );
-        return;
-      }
-
-      const isCurrentScheduled = Boolean(scheduledReminders[task.id]);
-
-      if (isCurrentScheduled) {
-        await cancelDeadlineReminder(sessionUser.id, task.id, task.deadlineId);
-        setScheduledReminders((prev) => ({ ...prev, [task.id]: false }));
-        Alert.alert("Напоминание", "Напоминание о дедлайне отключено.");
-      } else {
-        const scheduled = await scheduleDeadlineReminder({
-          userId: sessionUser.id,
-          taskId: task.id,
-          deadlineId: task.deadlineId,
-          taskTitle: task.title,
-          subjectName: task.subject,
-          deadlineDateStr: task.deadlineDate,
-        });
-        if (scheduled) {
-          setScheduledReminders((prev) => ({ ...prev, [task.id]: true }));
-          Alert.alert(
-            "Напоминание установлено",
-            `Напоминание: ${new Date(scheduled.triggerTime).toLocaleString("ru-RU", { timeZone: "Europe/Moscow" })} МСК.`,
-          );
-        } else {
-          Alert.alert(
-            "Не удалось установить напоминание",
-            "Дедлайн уже прошёл или дата не подтверждена.",
-          );
+      try {
+        if (!sessionUser) {
+          setAuthModalVisible(true);
+          return;
         }
+        if (
+          !sessionUser.groups?.some((group) => group.code === task.groupCode)
+        ) {
+          Alert.alert(
+            "Просмотр другой группы",
+            "Личные напоминания доступны только участникам этой группы.",
+          );
+          return;
+        }
+        if (!task.deadlineId || !task.deadlineDate) {
+          Alert.alert(
+            "Дедлайн не найден",
+            "У этого задания нет подтверждённого срока.",
+          );
+          return;
+        }
+
+        const isCurrentScheduled = Boolean(scheduledReminders[task.id]);
+
+        if (isCurrentScheduled) {
+          await cancelDeadlineReminder(
+            sessionUser.id,
+            task.id,
+            task.deadlineId,
+          );
+          setScheduledReminders((prev) => ({ ...prev, [task.id]: false }));
+          Alert.alert("Напоминание", "Напоминание о дедлайне отключено.");
+        } else {
+          const scheduled = await scheduleDeadlineReminder({
+            userId: sessionUser.id,
+            taskId: task.id,
+            deadlineId: task.deadlineId,
+            taskTitle: task.title,
+            subjectName: task.subject,
+            deadlineDateStr: task.deadlineDate,
+          });
+          if (scheduled) {
+            setScheduledReminders((prev) => ({ ...prev, [task.id]: true }));
+            Alert.alert(
+              "Напоминание установлено",
+              `Напоминание: ${new Date(scheduled.triggerTime).toLocaleString("ru-RU", { timeZone: "Europe/Moscow" })} МСК.`,
+            );
+          } else {
+            Alert.alert(
+              "Не удалось установить напоминание",
+              "Проверьте разрешение уведомлений и актуальность подтверждённого срока.",
+            );
+          }
+        }
+      } catch {
+        Alert.alert(
+          "Напоминание не сохранено",
+          "Проверьте разрешение уведомлений в настройках Android и повторите попытку.",
+        );
       }
     },
     [sessionUser, scheduledReminders],
@@ -1176,7 +1239,8 @@ export const FlowTimetableScreen: React.FC = () => {
                           : "Без установленного дедлайна"
                       }
                       progress={taskProgress[task.id] || null}
-                      isLoggedIn={Boolean(sessionUser)}
+                      isLoggedIn={Boolean(sessionUser) && hasSelectedMembership}
+                      readOnlyReason={readOnlyReason}
                       materialId={task.materialId}
                       materialTitle={task.materialTitle}
                       reminderScheduled={Boolean(scheduledReminders[task.id])}
@@ -1241,7 +1305,8 @@ export const FlowTimetableScreen: React.FC = () => {
               taskProgress={taskProgress}
               groupCode={selectedGroup}
               statusMessage={taskLoadMessage}
-              isLoggedIn={Boolean(sessionUser)}
+              isLoggedIn={Boolean(sessionUser) && hasSelectedMembership}
+              readOnlyReason={readOnlyReason}
               scheduledReminders={scheduledReminders}
               updatingTaskId={updatingTaskId}
               onToggleStatus={handleToggleTaskStatus}
@@ -1378,6 +1443,8 @@ export const FlowTimetableScreen: React.FC = () => {
 
       {/* Wellbeing & Focus Modal (opened by Circle with 0) */}
       <WellbeingModal
+        key={focusScope(apiOrigin, sessionUser?.id)}
+        storageScope={focusScope(apiOrigin, sessionUser?.id)}
         visible={wellbeingModalVisible}
         tasks={tasks}
         onClose={() => setWellbeingModalVisible(false)}
@@ -1480,7 +1547,7 @@ const createStyles = (colors: Palette) =>
       color: colors.link,
     },
     wellbeingTextCompleted: {
-      color: "#34d399",
+      color: colors.success,
     },
     pendingDot: {
       position: "absolute",

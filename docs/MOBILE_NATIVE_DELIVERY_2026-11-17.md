@@ -16,19 +16,28 @@
 
 ## Verification
 
-- 47 suites / 284 tests pass on separate local studentvalue_test_native_delivery_20261117; fresh 12-migration replay passed. Test rerun fixture collisions were fixed with per-user unique identifiers.
+- 49 suites / 291 tests pass on separate local studentvalue_test_native_delivery_20261117; fresh 12-migration replay passed. Test rerun fixture collisions were fixed with per-user unique identifiers.
 - 24 isolated web E2E scenarios pass; working database unchanged.
 - Root/mobile typecheck and root lint passed; production build/auth rejection checks and function trace scan passed. No production academic writes or synthetic production sessions were used.
 - APK build and physical install succeeded during iteration. CUA observed native cold launch, absence of duplicate hero group/military focus, and actual dark-to-light appearance change on the phone. This is not proof of every gesture, map, Google-login or reminder scenario.
 
 ## Still requires acceptance/work
 
-- End-to-end real Google login on device; two-account and in-flight logout/download/reminder scenarios.
+- Real Google login completed by the owner and observed in the native profile; native management loaded actual group work and opened the RR3 editor without writes. Two-account and physical in-flight logout/download/reminder acceptance remain.
 - Physical swipe/pinch/route, campus map and overlay acceptance on the final APK. Automated interaction with the mirror was interrupted by window changes; no ADB tap/screenshot workaround was used.
 - VK API credential/allowed access; remaining verified institute channels. Catalog is not asserted exhaustive.
 - Additional buildings' sourced floor plans, current accessibility and routes.
 - Complete native parity for invitation/teacher/new-task/verification/Calendar tools.
-- Reminder restore/reschedule reconciliation across cold starts and account transitions, constant-memory large material hashing, admission-based daily minimum sourced per subject.
+- Reminder restore/reschedule and late-operation/account race guards are implemented and covered with fake-OS tests against the actual mobile module. Physical delivery after a killed app is not yet proved. Constant-memory large material hashing and admission-based daily minimum sourced per subject remain.
 - Android release signing/update policy and a distributable release candidate. Current APK remains a debug preview; do not replace the public release with an unverified build.
 
 The backend is the project's existing custom application/domain backend on Next.js/TypeScript, PostgreSQL and Prisma. No Go/Fiber rewrite or hosting migration is claimed. No paid resources were created.
+
+## Final reliability follow-up
+
+- Focus journal is now scoped to account + API origin in SecureStore. Per-scope writes and logout erasure are serialized; stale mounted sessions cannot repopulate cleared data. Legacy unscoped focus data is not guessed to belong to the current student.
+- Hidden running timers update the badge at a lower frequency and finish yesterday's session at Moscow midnight. Logout also dismisses app notifications already shown in the tray.
+- Notification IDs include account/session/request identity. Pending create/cancel/logout races cannot cancel a later login's alarm. Cold-start flags consult actual OS registrations; selected-group opt-ins follow changed deadline IDs without another permission prompt, and completed/removed works are reconciled.
+- Date-only API deadlines use effective Moscow end-of-day while retaining original DB timestamps. A regression test covers a legacy midnight row.
+- A logged-in visitor viewing a nonmember group gets explicit read-only work cards. Native management refreshes academic data after successful changes. Light-theme status/error text uses semantic contrast colors.
+- Privacy text now describes native local copies, public feed and the isolated university-published Yandex map.

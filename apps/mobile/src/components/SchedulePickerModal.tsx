@@ -295,7 +295,7 @@ export const SchedulePickerModal: React.FC<SchedulePickerModalProps> = ({
           {searchError && (
             <Text
               accessibilityRole="alert"
-              style={{ color: "#fda4af", padding: 16 }}
+              style={{ color: colors.danger, padding: 16 }}
             >
               {searchError}
             </Text>

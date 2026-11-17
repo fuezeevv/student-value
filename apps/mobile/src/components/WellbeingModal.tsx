@@ -3,7 +3,13 @@ import {
   useThemedStyles,
   type Palette,
 } from "../theme/ThemeProvider";
-import React, { useEffect, useState, useMemo, useCallback } from "react";
+import React, {
+  useEffect,
+  useState,
+  useMemo,
+  useCallback,
+  useRef,
+} from "react";
 import {
   Modal,
   View,
@@ -13,10 +19,9 @@ import {
   ScrollView,
   Platform,
 } from "react-native";
-import * as SecureStore from "expo-secure-store";
+import { focusStore } from "../focus/storage";
+import { sessionGeneration, isCurrentSession } from "../auth/session-lifecycle";
 import type { CachedTask } from "@studentvalue/mobile-contracts";
-
-const WELLBEING_STORAGE_KEY = "sv_wellbeing_focus_v1";
 
 export type WellbeingDay = {
   seconds: number;
@@ -68,6 +73,7 @@ function planningLabels(task: CachedTask): string[] {
 export interface WellbeingModalProps {
   visible: boolean;
   tasks: CachedTask[];
+  storageScope: string;
   onClose: () => void;
   onFocusPercentChange?: (percent: number) => void;
 }
@@ -75,11 +81,13 @@ export interface WellbeingModalProps {
 export const WellbeingModal: React.FC<WellbeingModalProps> = ({
   visible,
   tasks,
+  storageScope,
   onClose,
   onFocusPercentChange,
 }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
+  const mountedGeneration = useRef(sessionGeneration()).current;
 
   const [data, setData] = useState<WellbeingData>({
     days: {},
@@ -90,14 +98,14 @@ export const WellbeingModal: React.FC<WellbeingModalProps> = ({
   const [ready, setReady] = useState(false);
   const [tick, setTick] = useState(Date.now());
 
-  const today = useMemo(() => getMoscowDayKey(), []);
+  const today = getMoscowDayKey();
 
   // Load saved focus state from local storage
   useEffect(() => {
     let isMounted = true;
     async function load() {
       try {
-        const raw = await SecureStore.getItemAsync(WELLBEING_STORAGE_KEY);
+        const raw = await focusStore.load(storageScope);
         if (raw && isMounted) {
           const parsed = JSON.parse(raw);
           if (parsed && typeof parsed === "object") {
@@ -123,24 +131,58 @@ export const WellbeingModal: React.FC<WellbeingModalProps> = ({
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [storageScope]);
+
+  // Finish the previous Moscow day at midnight rather than leaving a stale
+  // running timer attached to yesterday after a long background interval.
+  useEffect(() => {
+    if (!data.running) return;
+    const startedDay = getMoscowDayKey(new Date(data.running));
+    if (startedDay === today) return;
+    setData((previous) => {
+      if (!previous.running) return previous;
+      const key = getMoscowDayKey(new Date(previous.running));
+      const old = previous.days[key] ?? { seconds: 0, steps: [] };
+      const midnight = Date.parse(`${key}T21:00:00Z`);
+      const elapsed = Math.max(
+        0,
+        Math.floor((Math.min(Date.now(), midnight) - previous.running) / 1000),
+      );
+      return {
+        ...previous,
+        running: null,
+        days: {
+          ...previous.days,
+          [key]: {
+            ...old,
+            seconds: Math.min(previous.goal * 60, old.seconds + elapsed),
+            goal: previous.goal,
+          },
+        },
+      };
+    });
+  }, [data.running, today]);
 
   // Save changes to local storage
   useEffect(() => {
     if (!ready) return;
-    try {
-      SecureStore.setItemAsync(WELLBEING_STORAGE_KEY, JSON.stringify(data));
-    } catch {
-      // Storage error ignored
-    }
-  }, [data, ready]);
+    const generation = mountedGeneration;
+    void focusStore
+      .save(storageScope, JSON.stringify(data), () =>
+        isCurrentSession(generation),
+      )
+      .catch(() => {});
+  }, [data, ready, storageScope, mountedGeneration]);
 
   // Tick timer every second only when modal is visible and timer is running
   useEffect(() => {
-    if (!visible || !data.running) return;
-    const timer = setInterval(() => {
-      setTick(Date.now());
-    }, 1000);
+    if (!data.running) return;
+    const timer = setInterval(
+      () => {
+        setTick(Date.now());
+      },
+      visible ? 1000 : 15000,
+    );
     return () => clearInterval(timer);
   }, [visible, data.running]);
 

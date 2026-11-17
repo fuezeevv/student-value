@@ -550,7 +550,7 @@ const createStyles = (colors: Palette) =>
     lessonTypeHero: {
       fontSize: 14,
       fontWeight: "600",
-      color: "#fda4af",
+      color: colors.danger,
       textAlign: "center",
       marginBottom: 6,
       letterSpacing: 0.3,

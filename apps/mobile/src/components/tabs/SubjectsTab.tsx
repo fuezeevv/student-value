@@ -216,7 +216,7 @@ const createStyles = (colors: Palette) =>
     typeBadgeText: {
       fontSize: 11,
       fontWeight: "700",
-      color: "#fda4af",
+      color: colors.danger,
       textTransform: "uppercase",
     },
     subjectTitle: {

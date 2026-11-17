@@ -20,6 +20,7 @@ interface TaskProgressCardProps {
   deadlineText: string;
   progress: UserTaskProgress | null;
   isLoggedIn: boolean;
+  readOnlyReason?: string;
   materialId?: string | null;
   materialTitle?: string | null;
   reminderScheduled?: boolean;
@@ -37,6 +38,7 @@ export const TaskProgressCard: React.FC<TaskProgressCardProps> = ({
   deadlineText,
   progress,
   isLoggedIn,
+  readOnlyReason,
   materialId,
   materialTitle,
   reminderScheduled = false,
@@ -109,6 +111,8 @@ export const TaskProgressCard: React.FC<TaskProgressCardProps> = ({
           <TouchableOpacity
             style={styles.reminderButton}
             onPress={onToggleReminder}
+            disabled={isReady}
+            accessibilityState={{ disabled: isReady }}
             accessibilityRole="button"
             accessibilityLabel={`Напоминание о дедлайне: ${reminderScheduled ? "Включено" : "Выключено"}`}
           >
@@ -128,7 +132,11 @@ export const TaskProgressCard: React.FC<TaskProgressCardProps> = ({
 
       {/* Progress Action Area */}
       <View style={styles.actionRow}>
-        {!isLoggedIn ? (
+        {readOnlyReason ? (
+          <Text style={{ color: colors.muted, lineHeight: 20 }}>
+            {readOnlyReason}
+          </Text>
+        ) : !isLoggedIn ? (
           <TouchableOpacity
             style={styles.guestButton}
             onPress={onOpenLogin}
@@ -338,7 +346,7 @@ const createStyles = (colors: Palette) =>
     readyBadgeText: {
       fontSize: 14,
       fontWeight: "700",
-      color: "#10b981",
+      color: colors.success,
     },
     readySubtext: {
       fontSize: 12,

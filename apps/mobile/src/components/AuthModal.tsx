@@ -289,7 +289,7 @@ const createStyles = (colors: Palette) =>
       marginBottom: 10,
     },
     logoutText: {
-      color: "#f87171",
+      color: colors.danger,
       fontSize: 14,
       fontWeight: "600",
     },
@@ -310,7 +310,7 @@ const createStyles = (colors: Palette) =>
       lineHeight: 18,
     },
     errorText: {
-      color: "#f87171",
+      color: colors.danger,
       fontSize: 13,
       marginBottom: 12,
       textAlign: "center",

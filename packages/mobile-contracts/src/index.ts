@@ -10,3 +10,4 @@ export * from "./day-gesture";
 export * from "./indoor-route";
 export * from "./reminder-time";
 export * from "./schedule-display";
+export * from "./scoped-store";

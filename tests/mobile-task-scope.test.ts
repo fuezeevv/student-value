@@ -37,6 +37,36 @@ beforeAll(async () => {
       audiences: { create: { targetType: "GROUP", groupId: "test-group" } },
     },
   });
+  const deadlineId = randomUUID();
+  const source = await prisma.source.create({
+    data: {
+      groupId: "test-group",
+      type: "HEADMAN_RECORD",
+      title: "[TEST] deadline evidence",
+    },
+  });
+  const reference = await prisma.sourceReference.create({
+    data: {
+      sourceId: source.id,
+      entityType: "DEADLINE",
+      entityId: deadlineId,
+      quoteText: "[TEST] Confirmed date-only source",
+      confidence: "CONFIRMED",
+      createdById: "user-dev-owner",
+    },
+  });
+  await prisma.deadline.create({
+    data: {
+      id: deadlineId,
+      taskId: ownTask,
+      courseOfferingId: "test-course",
+      createdById: "user-dev-owner",
+      date: new Date("2026-12-01T00:00:00Z"),
+      isTimeStrict: false,
+      provenance: "HEADMAN_CONFIRMED",
+      sourceReferenceId: reference.id,
+    },
+  });
   const group = await prisma.studyGroup.upsert({
     where: { code: publicGroupCode },
     update: {},
@@ -119,6 +149,17 @@ describe("Mobile task API respects selected group and public projection", () => 
     expect(task.materialTitles).toEqual(["[TEST] Public material title"]);
     expect(JSON.stringify(task)).not.toContain("private.pdf");
     expect(JSON.stringify(task)).not.toContain("example.invalid");
+  });
+  it("exports date-only deadlines at the Moscow end of day without rewriting the source row", async () => {
+    const response = await handleGetMobileTasks(request("TEST-ONLY", token));
+    const task = (await response.json()).tasks.find(
+      (row: { id: string }) => row.id === ownTask,
+    );
+    expect(task.deadline.date).toBe("2026-12-01T20:59:59.999Z");
+    const stored = await prisma.deadline.findFirstOrThrow({
+      where: { taskId: ownTask },
+    });
+    expect(stored.date.toISOString()).toBe("2026-12-01T00:00:00.000Z");
   });
   it("does not silently downgrade an invalid bearer to a guest", async () => {
     expect(

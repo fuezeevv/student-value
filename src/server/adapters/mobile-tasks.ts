@@ -1,3 +1,4 @@
+import { effectiveDeadline } from "@/server/domain/deadline-date";
 import { confirmedDeadlineWhere } from "@/server/domain/deadline-visibility";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
@@ -160,7 +161,10 @@ export async function handleGetMobileTasks(
         deadline: activeDl
           ? {
               id: activeDl.id,
-              date: activeDl.date.toISOString(),
+              date: effectiveDeadline(
+                activeDl.date,
+                activeDl.isTimeStrict,
+              ).toISOString(),
               dateMoscowStr: formatMoscowDate(
                 activeDl.date,
                 activeDl.isTimeStrict,
@@ -279,7 +283,10 @@ export async function handleGetMobileTasks(
       deadline: activeDl
         ? {
             id: activeDl.id,
-            date: activeDl.date.toISOString(),
+            date: effectiveDeadline(
+              activeDl.date,
+              activeDl.isTimeStrict,
+            ).toISOString(),
             dateMoscowStr: formatMoscowDate(
               activeDl.date,
               activeDl.isTimeStrict,

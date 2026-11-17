@@ -132,7 +132,7 @@ const createStyles = (colors: Palette) =>
     },
     noteText: {
       fontSize: 11,
-      color: "#fca5a5",
+      color: colors.danger,
       fontStyle: "italic",
       marginTop: 4,
     },

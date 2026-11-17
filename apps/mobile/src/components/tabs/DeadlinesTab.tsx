@@ -18,6 +18,7 @@ export interface DeadlinesTabProps {
   groupCode: string;
   statusMessage?: string | null;
   isLoggedIn: boolean;
+  readOnlyReason?: string;
   scheduledReminders: Record<string, boolean>;
   updatingTaskId: string | null;
   onToggleStatus: (taskId: string, currentStatus: string) => void;
@@ -33,6 +34,7 @@ export const DeadlinesTab = React.memo<DeadlinesTabProps>(
     groupCode,
     statusMessage,
     isLoggedIn,
+    readOnlyReason,
     scheduledReminders,
     updatingTaskId,
     onToggleStatus,
@@ -147,6 +149,7 @@ export const DeadlinesTab = React.memo<DeadlinesTabProps>(
               }
               progress={taskProgress[task.id] || null}
               isLoggedIn={isLoggedIn}
+              readOnlyReason={readOnlyReason}
               materialId={task.materialId}
               materialTitle={task.materialTitle}
               reminderScheduled={Boolean(scheduledReminders[task.id])}

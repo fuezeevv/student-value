@@ -158,6 +158,7 @@ export const ProfileTab = React.memo<ProfileTabProps>(
           visible={managementOpen && Boolean(sessionUser)}
           onClose={() => setManagementOpen(false)}
           groupCode={groupCode}
+          onChanged={onRefreshData}
         />
         {/* Account Card */}
         <View style={styles.card}>
@@ -468,7 +469,7 @@ const createStyles = (colors: Palette) =>
     logoutButtonText: {
       fontSize: 13,
       fontWeight: "600",
-      color: "#fda4af",
+      color: colors.danger,
     },
     cardSectionTitle: {
       fontSize: 15,
@@ -520,7 +521,7 @@ const createStyles = (colors: Palette) =>
       color: colors.text,
     },
     statWarning: {
-      color: "#fca5a5",
+      color: colors.danger,
     },
     refreshSyncButton: {
       backgroundColor: "rgba(51, 120, 255, 0.12)",

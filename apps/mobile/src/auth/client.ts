@@ -139,6 +139,11 @@ export async function logoutMobile(
   const { purgeAllUserMaterials } = await import("../materials/downloader");
   const Notifications = await import("expo-notifications");
   await Notifications.cancelAllScheduledNotificationsAsync();
+  await Notifications.dismissAllNotificationsAsync();
+  if (user) {
+    const { focusScope, focusStore } = await import("../focus/storage");
+    await focusStore.clear(focusScope(baseUrl, user.id));
+  }
   if (user) await purgeAllUserMaterials(user.id);
   if (onCleanCache) await onCleanCache();
   if (token) {

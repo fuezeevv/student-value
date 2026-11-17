@@ -198,7 +198,7 @@ const createStyles = (colors: Palette) =>
     typeEyebrow: {
       fontSize: 12,
       fontWeight: "700",
-      color: "#fda4af",
+      color: colors.danger,
       textTransform: "uppercase",
       letterSpacing: 0.5,
       marginBottom: 4,
@@ -262,7 +262,7 @@ const createStyles = (colors: Palette) =>
     },
     infoValueNote: {
       fontSize: 13,
-      color: "#fca5a5",
+      color: colors.danger,
       fontStyle: "italic",
       width: "65%",
       textAlign: "right",
