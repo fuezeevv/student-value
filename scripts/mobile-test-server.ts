@@ -3,17 +3,12 @@ import { randomBytes, createHash } from "node:crypto";
 import { prepareTestDatabase } from "./test-db.mjs";
 
 async function main() {
-  if (process.env.SV_TEST_ISOLATED === "1") {
-    const env = prepareTestDatabase();
-    for (const [k, v] of Object.entries(env)) {
-      process.env[k] = v;
-    }
-  } else {
-    const { loadEnv } = await import("./test-db.mjs");
-    loadEnv();
+  // This server issues synthetic identities and seeds fixtures. It must never
+  // use the academic working database, even during a physical-device demo.
+  const env = prepareTestDatabase();
+  for (const [k, v] of Object.entries(env)) {
+    process.env[k] = v;
   }
-  // Allow real public RUZ schedule loading for live classes
-  delete process.env.SV_TEST_ISOLATED;
   process.env.ALLOW_DEV_AUTH = "true";
   (process.env as Record<string, string | undefined>).NODE_ENV = "development";
   process.env.NEXT_SERVER_ACTIONS_ENCRYPTION_KEY ||= Buffer.alloc(32, 1).toString("base64");
@@ -47,10 +42,7 @@ async function main() {
   let testUser: any = null;
   const testGroup = await prisma.studyGroup.findFirst({
     where: {
-      OR: [
-        { code: "5130901/40102" },
-        { id: "test-group" },
-      ],
+      id: "test-group",
     },
   });
 
@@ -124,7 +116,7 @@ async function main() {
         title: "Методические указания: SystemVerilog Lab1",
         url: "/api/v1/materials/material-otu-lab1/file",
         type: "METHODOLOGY",
-        sourceNote: "Официальное пособие",
+        sourceNote: "[TEST] Synthetic fixture; not an academic source",
       },
       create: {
         id: "material-otu-lab1",
@@ -132,7 +124,7 @@ async function main() {
         title: "Методические указания: SystemVerilog Lab1",
         type: "METHODOLOGY",
         url: "/api/v1/materials/material-otu-lab1/file",
-        sourceNote: "Официальное пособие",
+        sourceNote: "[TEST] Synthetic fixture; not an academic source",
       },
     });
 
@@ -187,7 +179,7 @@ async function main() {
         title: "Руководство к выполнению (PDF, 1.4 МБ)",
         url: "/api/v1/materials/material-binary-guide/file",
         type: "METHODOLOGY",
-        sourceNote: "Официальное пособие (PDF)",
+        sourceNote: "[TEST] Synthetic PDF fixture; not an academic source",
       },
       create: {
         id: "material-binary-guide",
@@ -195,7 +187,7 @@ async function main() {
         title: "Руководство к выполнению (PDF, 1.4 МБ)",
         type: "METHODOLOGY",
         url: "/api/v1/materials/material-binary-guide/file",
-        sourceNote: "Официальное пособие (PDF)",
+        sourceNote: "[TEST] Synthetic PDF fixture; not an academic source",
       },
     });
 
