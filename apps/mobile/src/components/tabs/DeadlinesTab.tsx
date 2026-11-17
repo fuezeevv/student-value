@@ -1,3 +1,8 @@
+import {
+  useTheme,
+  useThemedStyles,
+  type Palette,
+} from "../../theme/ThemeProvider";
 import React, { useState, useMemo } from "react";
 import { View, Text, StyleSheet, ScrollView } from "react-native";
 import type {
@@ -35,6 +40,9 @@ export const DeadlinesTab = React.memo<DeadlinesTabProps>(
     onOpenMaterial,
     onOpenLogin,
   }) => {
+    const { colors } = useTheme();
+    const styles = useThemedStyles(createStyles);
+
     const [filter, setFilter] = useState<"all" | "pending" | "done">("all");
 
     const filteredTasks = useMemo(() => {
@@ -164,68 +172,69 @@ export const DeadlinesTab = React.memo<DeadlinesTabProps>(
   },
 );
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#0b1322",
-  },
-  contentContainer: {
-    padding: 20,
-    paddingBottom: 40,
-  },
-  header: {
-    marginBottom: 16,
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: "800",
-    color: "#f8fafc",
-    marginBottom: 4,
-  },
-  headerSubtitle: {
-    fontSize: 13,
-    color: "#8a9bb5",
-  },
-  filterRow: {
-    flexDirection: "row",
-    gap: 8,
-    marginBottom: 18,
-  },
-  filterChip: {
-    backgroundColor: "#16253d",
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "#223554",
-  },
-  filterChipActive: {
-    backgroundColor: "#3378ff",
-    borderColor: "#60a5fa",
-  },
-  filterChipText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#8a9bb5",
-  },
-  filterChipTextActive: {
-    color: "#ffffff",
-  },
-  emptyContainer: {
-    padding: 30,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  emptyTitle: {
-    fontSize: 17,
-    fontWeight: "700",
-    color: "#f8fafc",
-    marginBottom: 6,
-  },
-  emptySubtitle: {
-    fontSize: 13,
-    color: "#8a9bb5",
-    textAlign: "center",
-    lineHeight: 18,
-  },
-});
+const createStyles = (colors: Palette) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.canvas,
+    },
+    contentContainer: {
+      padding: 20,
+      paddingBottom: 40,
+    },
+    header: {
+      marginBottom: 16,
+    },
+    headerTitle: {
+      fontSize: 24,
+      fontWeight: "800",
+      color: colors.text,
+      marginBottom: 4,
+    },
+    headerSubtitle: {
+      fontSize: 13,
+      color: colors.muted,
+    },
+    filterRow: {
+      flexDirection: "row",
+      gap: 8,
+      marginBottom: 18,
+    },
+    filterChip: {
+      backgroundColor: colors.surface,
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: "#223554",
+    },
+    filterChipActive: {
+      backgroundColor: "#3378ff",
+      borderColor: colors.link,
+    },
+    filterChipText: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: colors.muted,
+    },
+    filterChipTextActive: {
+      color: colors.text,
+    },
+    emptyContainer: {
+      padding: 30,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    emptyTitle: {
+      fontSize: 17,
+      fontWeight: "700",
+      color: colors.text,
+      marginBottom: 6,
+    },
+    emptySubtitle: {
+      fontSize: 13,
+      color: colors.muted,
+      textAlign: "center",
+      lineHeight: 18,
+    },
+  });

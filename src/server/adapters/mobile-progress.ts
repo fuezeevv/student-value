@@ -12,6 +12,7 @@ import { prisma } from "@/lib/db/prisma";
 
 const progressSchema = z.object({
   operationId: z.string().uuid(),
+  groupCode: z.string().min(1).max(100).optional(),
   taskId: z.string().min(1).max(100),
   status: z.enum(["NOT_STARTED", "IN_PROGRESS", "READY", "SUBMITTED"]),
   notes: z.string().max(10000).optional(),
@@ -32,7 +33,7 @@ export async function handleMobileProgress(
   }
 
   const token = authHeader.slice("Bearer ".length).trim();
-  const user = await getMobileSessionUser(token);
+  let user = await getMobileSessionUser(token);
   if (!user) {
     return NextResponse.json(
       { error: "UNAUTHORIZED", message: "Invalid or expired session" },
@@ -65,11 +66,23 @@ export async function handleMobileProgress(
     dependsOnOperationId,
   } = parsed.data;
 
+  if (parsed.data.groupCode) {
+    const membership = user.groups?.find(
+      (group) => group.code === parsed.data.groupCode,
+    );
+    if (!membership)
+      return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
+    user = await getMobileSessionUser(token, membership.id);
+    if (!user)
+      return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
+  }
+  const actor = user;
   const requestHash = createHash("sha256")
     .update(
       JSON.stringify({
         taskId,
         status,
+        ...(parsed.data.groupCode ? { groupCode: parsed.data.groupCode } : {}),
         notes: notes ?? null,
         baseUpdatedAt,
         dependsOnOperationId,
@@ -82,16 +95,16 @@ export async function handleMobileProgress(
       async (tx) => {
         // Same lock as the domain mutation: serialize web and mobile writes per
         // student, including receipt lookup/creation, so a crash rolls back both.
-        await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${user.id} FOR UPDATE`;
-        await requireTaskAudience(user, taskId, tx);
+        await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${actor.id} FOR UPDATE`;
+        await requireTaskAudience(actor, taskId, tx);
         const receipt = await tx.auditLog.findUnique({
           where: { id: operationId },
         });
         const current = await tx.studentTaskProgress.findUnique({
-          where: { taskId_userId: { taskId, userId: user.id } },
+          where: { taskId_userId: { taskId, userId: actor.id } },
         });
         if (receipt) {
-          if (receipt.userId !== user.id) {
+          if (receipt.userId !== actor.id) {
             return { error: "OPERATION_USER_MISMATCH", status: 403 } as const;
           }
           const details = receipt.details as { requestHash?: string } | null;
@@ -115,7 +128,7 @@ export async function handleMobileProgress(
           });
           if (
             !predecessor ||
-            predecessor.userId !== user.id ||
+            predecessor.userId !== actor.id ||
             predecessor.entityId !== taskId ||
             predecessor.action !== "MOBILE_PROGRESS_OPERATION"
           ) {
@@ -147,11 +160,11 @@ export async function handleMobileProgress(
         );
         const progress = superseded
           ? current
-          : await updateOwnProgressTx(tx, user, taskId, status, notes);
+          : await updateOwnProgressTx(tx, actor, taskId, status, notes);
         await tx.auditLog.create({
           data: {
             id: operationId,
-            userId: user.id,
+            userId: actor.id,
             action: "MOBILE_PROGRESS_OPERATION",
             entityType: "Task",
             entityId: taskId,
@@ -221,11 +234,20 @@ export async function handleGetMobileProgress(
   }
 
   const token = authHeader.slice("Bearer ".length).trim();
-  const user = await getMobileSessionUser(token);
+  let user = await getMobileSessionUser(token);
   if (!user) {
     return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
   }
 
+  const code = request.nextUrl.searchParams.get("group");
+  if (code) {
+    const membership = user.groups?.find((group) => group.code === code);
+    if (!membership)
+      return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
+    user = await getMobileSessionUser(token, membership.id);
+    if (!user)
+      return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
+  }
   const visibleTasksWhere = await taskVisibilityWhere(user);
 
   const taskId = request.nextUrl.searchParams.get("taskId");

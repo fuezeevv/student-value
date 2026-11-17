@@ -1,3 +1,13 @@
+import { useNetInfo } from "@react-native-community/netinfo";
+import { BrandMark, OfflineMark } from "../components/BrandMark";
+import { ComparedSchedule } from "../components/ComparedSchedule";
+import { showStudentScheduleSubject } from "@studentvalue/mobile-contracts";
+import {
+  useTheme,
+  useThemedStyles,
+  type Palette,
+} from "../theme/ThemeProvider";
+import { useDaySwipe } from "../schedule/useDaySwipe";
 import { logoutMobile } from "../auth/client";
 import {
   sessionGeneration,
@@ -176,6 +186,11 @@ function formatAge(isoString: string | null): string {
 }
 
 export const FlowTimetableScreen: React.FC = () => {
+  const { colors, isDark } = useTheme();
+  const connection = useNetInfo();
+  const isOffline = connection.isConnected === false;
+  const styles = useThemedStyles(createStyles);
+
   const [activeTab, setActiveTab] = useState<NavTab>("flow");
   const [visitedTabs, setVisitedTabs] = useState<Record<NavTab, boolean>>({
     flow: true,
@@ -206,6 +221,9 @@ export const FlowTimetableScreen: React.FC = () => {
   const [isLoaded, setIsLoaded] = useState<boolean>(false);
   const [lessons, setLessons] = useState<MobileLesson[]>([]);
   const [weekLessons, setWeekLessons] = useState<MobileLesson[]>([]);
+  const [daysWithLessons, setDaysWithLessons] = useState<
+    Record<string, boolean>
+  >({});
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [sourceFetchedAt, setSourceFetchedAt] = useState<string | null>(null);
   const [isStale, setIsStale] = useState<boolean>(false);
@@ -301,8 +319,13 @@ export const FlowTimetableScreen: React.FC = () => {
         return;
       }
       setTaskLoadMessage("Обновляем задания…");
+      const cacheOrigin = await getActiveApiOrigin();
       try {
-        const cached = await repo.getCachedTasksForGroup(groupCode, user?.id);
+        const cached = await repo.getCachedTasksForGroup(
+          groupCode,
+          user?.id,
+          cacheOrigin,
+        );
         if (current()) setTasks(cached);
       } catch (err) {
         console.warn("Could not read cached tasks from SQLite:", err);
@@ -353,14 +376,19 @@ export const FlowTimetableScreen: React.FC = () => {
             updatedAt: new Date().toISOString(),
           }));
           if (!current()) return;
-          await repo.saveCachedTasksForGroup(groupCode, mapped, user?.id);
+          await repo.saveCachedTasksForGroup(
+            groupCode,
+            mapped,
+            user?.id,
+            cacheOrigin,
+          );
           if (!current()) return;
           setTasks(mapped);
 
           if (user) {
             const progressMap: Record<string, UserTaskProgress> = {};
             const pendingTasks = new Set(
-              (await repo.getPendingOperations(user.id)).filter(operation => operation.status !== "FAILED").map(
+              (await repo.getPendingOperations(user.id)).map(
                 (operation) => operation.taskId,
               ),
             );
@@ -388,9 +416,11 @@ export const FlowTimetableScreen: React.FC = () => {
               }
             }
             if (!current()) return;
-            if (Object.keys(progressMap).length > 0) {
-              setTaskProgress((prev) => ({ ...prev, ...progressMap }));
-            }
+            setTaskProgress((previous) => {
+              const next = { ...previous };
+              for (const task of serverTasks) delete next[task.id];
+              return { ...next, ...progressMap };
+            });
           }
         }
       } catch (err) {
@@ -416,7 +446,9 @@ export const FlowTimetableScreen: React.FC = () => {
       if (generation !== reqGenRef.current) return;
       if (res.status === "loaded") {
         setIsLoaded(true);
-        setLessons(res.lessons);
+        setLessons(
+          res.lessons.filter((l) => showStudentScheduleSubject(l.subject)),
+        );
         setSavedAt(res.savedAt);
         setSourceFetchedAt(res.sourceFetchedAt);
         setIsStale(
@@ -434,11 +466,22 @@ export const FlowTimetableScreen: React.FC = () => {
       const stored = await repo.getSnapshot(selectedGroup, weekStart);
       if (generation !== reqGenRef.current) return;
       setWeekLessons([]);
+      setDaysWithLessons({});
       if (stored?.snapshot?.data?.days) {
         const allWkLessons = stored.snapshot.data.days.flatMap(
           (d: { lessons: MobileLesson[] }) => d.lessons,
         );
-        setWeekLessons(allWkLessons);
+        setWeekLessons(
+          allWkLessons.filter((l) => showStudentScheduleSubject(l.subject)),
+        );
+        setDaysWithLessons(
+          Object.fromEntries(
+            stored.snapshot.data.days.map((day) => [
+              day.date,
+              day.lessons.some((l) => showStudentScheduleSubject(l.subject)),
+            ]),
+          ),
+        );
       }
     } catch {
       if (generation !== reqGenRef.current) return;
@@ -700,6 +743,8 @@ export const FlowTimetableScreen: React.FC = () => {
     setSelectedDate((prev) => addDaysTo(prev, 1));
   }, []);
 
+  const daySwipe = useDaySwipe(handlePrevDay, handleNextDay);
+
   const handlePrevWeek = useCallback(() => {
     setSelectedDate((prev) => addDaysTo(prev, -7));
   }, []);
@@ -745,10 +790,10 @@ export const FlowTimetableScreen: React.FC = () => {
         dayNumber: dayNum,
         dayLabel: labels[i],
         isToday,
-        hasLessons: weekLessons.length > 0,
+        hasLessons: Boolean(daysWithLessons[dStr]),
       };
     });
-  }, [selectedDate, todayStr, weekLessons]);
+  }, [selectedDate, todayStr, daysWithLessons]);
 
   // Task self-completion toggle
   const handleToggleTaskStatus = useCallback(
@@ -770,6 +815,7 @@ export const FlowTimetableScreen: React.FC = () => {
           taskId,
           nextStatus,
           cur?.studentNotes ?? undefined,
+          tasks.find((task) => task.id === taskId)?.groupCode,
         );
 
         setTaskProgress((prev) => ({ ...prev, [taskId]: optimisticProgress }));
@@ -836,7 +882,7 @@ export const FlowTimetableScreen: React.FC = () => {
           setScheduledReminders((prev) => ({ ...prev, [task.id]: true }));
           Alert.alert(
             "Напоминание установлено",
-            `Напоминание сработает за 24 часа до дедлайна (${task.deadlineMoscowStr || "по расписанию"}).`,
+            `Напоминание: ${new Date(scheduled.triggerTime).toLocaleString("ru-RU", { timeZone: "Europe/Moscow" })} МСК.`,
           );
         } else {
           Alert.alert(
@@ -898,7 +944,7 @@ export const FlowTimetableScreen: React.FC = () => {
 
     const ongoing = lessons.find((l) => {
       const s = parseMin(l.start);
-      const e = parseMin(l.scheduledEnd);
+      const e = s + 90;
       return nowMoscowMin >= s && nowMoscowMin < e;
     });
     if (ongoing) return ongoing;
@@ -912,7 +958,7 @@ export const FlowTimetableScreen: React.FC = () => {
   const allDoneToday = useMemo(() => {
     if (lessons.length === 0 || !isSelectedToday) return false;
     const last = lessons[lessons.length - 1];
-    return nowMoscowMin >= parseMin(last.scheduledEnd);
+    return nowMoscowMin >= parseMin(last.start) + 90;
   }, [lessons, isSelectedToday, nowMoscowMin]);
 
   const remainingLessons = useMemo(() => {
@@ -920,24 +966,13 @@ export const FlowTimetableScreen: React.FC = () => {
     return lessons.filter((l) => l.id !== heroLesson.id);
   }, [lessons, heroLesson]);
 
-  const totalXp = useMemo(() => {
-    if (!sessionUser) return 0;
-    const completedCount = Object.values(taskProgress).filter(
-      (p) =>
-        p.status === "READY" ||
-        p.status === "SUBMITTED" ||
-        p.status === "ACCEPTED",
-    ).length;
-    return completedCount * 50;
-  }, [sessionUser, taskProgress]);
-
   const dateFullLabel = useMemo(() => {
     return formatFlowDate(selectedDate);
   }, [selectedDate]);
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar style="light" />
+      <StatusBar style={isDark ? "light" : "dark"} />
 
       {/* Top Header - clean, minimal, camera notch protected */}
       <View style={styles.topHeader}>
@@ -953,11 +988,7 @@ export const FlowTimetableScreen: React.FC = () => {
           accessibilityRole="button"
           accessibilityLabel="О приложении и статус сети"
         >
-          <Image
-            source={require("../../assets/brand-mark.png")}
-            style={styles.brandLogoImage}
-            resizeMode="contain"
-          />
+          <BrandMark size={34} />
         </TouchableOpacity>
 
         {/* Schedule Selector Chip (current group or teacher) */}
@@ -971,11 +1002,21 @@ export const FlowTimetableScreen: React.FC = () => {
           <Text style={styles.headerScheduleText} numberOfLines={1}>
             {selectedGroup}
           </Text>
-          <ChevronDownIcon size={12} color="#93c5fd" />
+          <ChevronDownIcon size={12} color={colors.link} />
         </TouchableOpacity>
 
         {/* Right header actions: Campus Map, News, Wellbeing badge */}
         <View style={styles.topHeaderRight}>
+          {isOffline ? (
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel={`Нет подключения к сети. Сохранённые данные: ${formatAge(sourceFetchedAt)}`}
+              onPress={() => setAppInfoModalVisible(true)}
+              style={styles.headerIconBtn}
+            >
+              <OfflineMark color={colors.muted} />
+            </TouchableOpacity>
+          ) : null}
           <TouchableOpacity
             style={styles.headerIconBtn}
             onPress={() => setMapModalVisible(true)}
@@ -983,7 +1024,7 @@ export const FlowTimetableScreen: React.FC = () => {
             accessibilityRole="button"
             accessibilityLabel="Карта кампуса СПбПУ"
           >
-            <MapIcon size={18} color="#cbd5e1" />
+            <MapIcon size={18} color={colors.muted} />
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -993,8 +1034,7 @@ export const FlowTimetableScreen: React.FC = () => {
             accessibilityRole="button"
             accessibilityLabel="Новости и анонсы"
           >
-            <NewsIcon size={18} color="#cbd5e1" />
-            <View style={styles.newsIndicatorDot} />
+            <NewsIcon size={18} color={colors.muted} />
           </TouchableOpacity>
 
           {/* Circular Wellbeing / Focus Badge (matches '0' in user's design) */}
@@ -1041,6 +1081,7 @@ export const FlowTimetableScreen: React.FC = () => {
           pointerEvents={activeTab === "flow" ? "auto" : "none"}
         >
           <ScrollView
+            {...daySwipe.panHandlers}
             ref={scrollRef}
             style={styles.scrollArea}
             contentContainerStyle={styles.scrollContent}
@@ -1054,7 +1095,7 @@ export const FlowTimetableScreen: React.FC = () => {
               <RefreshControl
                 refreshing={isSyncing}
                 onRefresh={handleManualSync}
-                tintColor="#93c5fd"
+                tintColor={colors.link}
                 colors={["#3378ff"]}
               />
             }
@@ -1107,36 +1148,12 @@ export const FlowTimetableScreen: React.FC = () => {
                 weekParity={weekParityLabel}
                 isTodaySelected={selectedDate === todayStr}
               />
-              {remainingLessons.length > 0 && (
-                <View style={styles.upcomingSection}>
-                  <View style={styles.page2HeaderRow}>
-                    <Text style={styles.sectionHeaderTitle}>Далее сегодня</Text>
-                    <TouchableOpacity
-                      onPress={() =>
-                        scrollRef.current?.scrollTo({ y: 0, animated: true })
-                      }
-                      style={styles.backToHeroButton}
-                      activeOpacity={0.7}
-                      accessibilityRole="button"
-                      accessibilityLabel="Вернуться к текущей паре"
-                    >
-                      <Text style={styles.backToHeroText}>
-                        ↑ К текущей паре
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                  {remainingLessons.map((l) => (
-                    <UpcomingLessonCard
-                      key={l.id}
-                      lesson={l}
-                      onPress={() => {
-                        setSelectedLessonForModal(l);
-                        setSubjectModalVisible(true);
-                      }}
-                    />
-                  ))}
-                </View>
-              )}
+              <ComparedSchedule
+                date={selectedDate}
+                primaryLabel={selectedGroup}
+                primaryLessons={lessons}
+                loaded={isLoaded}
+              />
 
               {/* Deadlines and Tasks section */}
               <View style={styles.tasksSection}>
@@ -1343,6 +1360,7 @@ export const FlowTimetableScreen: React.FC = () => {
         visible={appInfoModalVisible}
         groupCode={selectedGroup}
         isSyncing={isSyncing}
+        isOffline={connection.isConnected === null ? undefined : isOffline}
         isStale={isStale}
         apiOrigin={apiOrigin}
         cachedAgeLabel={formatAge(savedAt || sourceFetchedAt)}
@@ -1369,176 +1387,177 @@ export const FlowTimetableScreen: React.FC = () => {
   );
 };
 
-const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: "#0b1322",
-    paddingTop:
-      Platform.OS === "android" ? (RNStatusBar.currentHeight || 28) + 4 : 0,
-  },
-  topHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    backgroundColor: "#0b1322",
-  },
-  logoButton: {
-    padding: 4,
-  },
-  brandLogoImage: {
-    width: 34,
-    height: 34,
-    borderRadius: 8,
-  },
-  headerScheduleChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    backgroundColor: "rgba(255, 255, 255, 0.05)",
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.08)",
-    maxWidth: 165,
-  },
-  headerScheduleText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#f8fafc",
-    fontFamily: "monospace",
-  },
-  topHeaderRight: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  headerIconBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(255, 255, 255, 0.04)",
-    position: "relative",
-  },
-  newsIndicatorDot: {
-    position: "absolute",
-    top: 5,
-    right: 5,
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: "#38bdf8",
-  },
-  wellbeingBadge: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    borderWidth: 1.5,
-    borderColor: "rgba(255, 255, 255, 0.2)",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(255, 255, 255, 0.04)",
-    position: "relative",
-  },
-  wellbeingText: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#cbd5e1",
-  },
-  wellbeingBadgeActive: {
-    borderColor: "#60a5fa",
-    backgroundColor: "rgba(59, 130, 246, 0.15)",
-  },
-  wellbeingBadgeCompleted: {
-    borderColor: "#10b981",
-    backgroundColor: "rgba(16, 185, 129, 0.2)",
-  },
-  wellbeingTextActive: {
-    color: "#93c5fd",
-  },
-  wellbeingTextCompleted: {
-    color: "#34d399",
-  },
-  pendingDot: {
-    position: "absolute",
-    top: 2,
-    right: 2,
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
-    backgroundColor: "#f59e0b",
-  },
-  bodyContainer: {
-    flex: 1,
-  },
-  tabPane: {
-    flex: 1,
-  },
-  hiddenPane: {
-    display: "none",
-  },
-  scrollArea: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingBottom: 40,
-  },
-  page2Container: {
-    paddingTop: 8,
-  },
-  page2HeaderRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 12,
-  },
-  backToHeroButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 14,
-    backgroundColor: "rgba(51, 120, 255, 0.1)",
-    borderWidth: 1,
-    borderColor: "rgba(96, 165, 250, 0.2)",
-  },
-  backToHeroText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#93c5fd",
-  },
-  upcomingSection: {
-    paddingHorizontal: 20,
-    marginTop: 12,
-    marginBottom: 20,
-  },
-  sectionHeaderTitle: {
-    fontSize: 14,
-    fontWeight: "800",
-    color: "#64748b",
-    letterSpacing: 0.8,
-    textTransform: "uppercase",
-    marginBottom: 12,
-  },
-  tasksSection: {
-    paddingHorizontal: 20,
-    marginBottom: 24,
-  },
-  emptyTasksBox: {
-    backgroundColor: "rgba(255, 255, 255, 0.02)",
-    borderRadius: 16,
-    padding: 20,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.04)",
-  },
-  emptyTasksText: {
-    fontSize: 13,
-    color: "#64748b",
-    textAlign: "center",
-    lineHeight: 18,
-  },
-});
+const createStyles = (colors: Palette) =>
+  StyleSheet.create({
+    safeArea: {
+      flex: 1,
+      backgroundColor: colors.canvas,
+      paddingTop:
+        Platform.OS === "android" ? (RNStatusBar.currentHeight || 28) + 4 : 0,
+    },
+    topHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+      backgroundColor: colors.canvas,
+    },
+    logoButton: {
+      padding: 4,
+    },
+    brandLogoImage: {
+      width: 34,
+      height: 34,
+      borderRadius: 8,
+    },
+    headerScheduleChip: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      backgroundColor: colors.soft,
+      paddingVertical: 6,
+      paddingHorizontal: 12,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: colors.line,
+      maxWidth: 165,
+    },
+    headerScheduleText: {
+      fontSize: 12,
+      fontWeight: "700",
+      color: colors.text,
+      fontFamily: "monospace",
+    },
+    topHeaderRight: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+    },
+    headerIconBtn: {
+      width: 34,
+      height: 34,
+      borderRadius: 17,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: colors.soft,
+      position: "relative",
+    },
+    newsIndicatorDot: {
+      position: "absolute",
+      top: 5,
+      right: 5,
+      width: 6,
+      height: 6,
+      borderRadius: 3,
+      backgroundColor: colors.link,
+    },
+    wellbeingBadge: {
+      width: 34,
+      height: 34,
+      borderRadius: 17,
+      borderWidth: 1.5,
+      borderColor: "rgba(255, 255, 255, 0.2)",
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: colors.soft,
+      position: "relative",
+    },
+    wellbeingText: {
+      fontSize: 13,
+      fontWeight: "700",
+      color: colors.muted,
+    },
+    wellbeingBadgeActive: {
+      borderColor: colors.link,
+      backgroundColor: "rgba(59, 130, 246, 0.15)",
+    },
+    wellbeingBadgeCompleted: {
+      borderColor: "#10b981",
+      backgroundColor: "rgba(16, 185, 129, 0.2)",
+    },
+    wellbeingTextActive: {
+      color: colors.link,
+    },
+    wellbeingTextCompleted: {
+      color: "#34d399",
+    },
+    pendingDot: {
+      position: "absolute",
+      top: 2,
+      right: 2,
+      width: 7,
+      height: 7,
+      borderRadius: 3.5,
+      backgroundColor: "#f59e0b",
+    },
+    bodyContainer: {
+      flex: 1,
+    },
+    tabPane: {
+      flex: 1,
+    },
+    hiddenPane: {
+      display: "none",
+    },
+    scrollArea: {
+      flex: 1,
+    },
+    scrollContent: {
+      paddingBottom: 40,
+    },
+    page2Container: {
+      paddingTop: 8,
+    },
+    page2HeaderRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: 12,
+    },
+    backToHeroButton: {
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 14,
+      backgroundColor: "rgba(51, 120, 255, 0.1)",
+      borderWidth: 1,
+      borderColor: "rgba(96, 165, 250, 0.2)",
+    },
+    backToHeroText: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: colors.link,
+    },
+    upcomingSection: {
+      paddingHorizontal: 20,
+      marginTop: 12,
+      marginBottom: 20,
+    },
+    sectionHeaderTitle: {
+      fontSize: 14,
+      fontWeight: "800",
+      color: colors.subtle,
+      letterSpacing: 0.8,
+      textTransform: "uppercase",
+      marginBottom: 12,
+    },
+    tasksSection: {
+      paddingHorizontal: 20,
+      marginBottom: 24,
+    },
+    emptyTasksBox: {
+      backgroundColor: colors.soft,
+      borderRadius: 16,
+      padding: 20,
+      alignItems: "center",
+      justifyContent: "center",
+      borderWidth: 1,
+      borderColor: colors.line,
+    },
+    emptyTasksText: {
+      fontSize: 13,
+      color: colors.subtle,
+      textAlign: "center",
+      lineHeight: 18,
+    },
+  });

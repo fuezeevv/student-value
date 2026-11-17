@@ -1,3 +1,8 @@
+import {
+  useTheme,
+  useThemedStyles,
+  type Palette,
+} from "../theme/ThemeProvider";
 import React from "react";
 import {
   Modal,
@@ -15,6 +20,7 @@ export interface AppInfoModalProps {
   groupCode: string;
   isSyncing: boolean;
   isStale: boolean;
+  isOffline?: boolean;
   apiOrigin: string;
   cachedAgeLabel: string;
   onClose: () => void;
@@ -28,6 +34,7 @@ export const AppInfoModal: React.FC<AppInfoModalProps> = ({
   groupCode,
   isSyncing,
   isStale,
+  isOffline,
   apiOrigin,
   cachedAgeLabel,
   onClose,
@@ -35,7 +42,13 @@ export const AppInfoModal: React.FC<AppInfoModalProps> = ({
   onOpenGroupPicker,
   onSelectOrigin,
 }) => {
-  const isDevOrigin = apiOrigin.includes("192.168.") || apiOrigin.includes("127.0.0.1") || apiOrigin.includes("localhost");
+  const { colors } = useTheme();
+  const styles = useThemedStyles(createStyles);
+
+  const isDevOrigin =
+    apiOrigin.includes("192.168.") ||
+    apiOrigin.includes("127.0.0.1") ||
+    apiOrigin.includes("localhost");
 
   return (
     <Modal
@@ -58,7 +71,9 @@ export const AppInfoModal: React.FC<AppInfoModalProps> = ({
                 <Text style={styles.brandTitle}>
                   Student Value <Text style={styles.brandAccent}>1.984</Text>
                 </Text>
-                <Text style={styles.brandSub}>Мобильный компаньон студента</Text>
+                <Text style={styles.brandSub}>
+                  Мобильный компаньон студента
+                </Text>
               </View>
             </View>
             <TouchableOpacity
@@ -80,11 +95,11 @@ export const AppInfoModal: React.FC<AppInfoModalProps> = ({
                 <View
                   style={[
                     styles.statusDot,
-                    { backgroundColor: isStale ? "#f59e0b" : "#10b981" },
+                    { backgroundColor: isOffline ? "#f59e0b" : "#10b981" },
                   ]}
                 />
                 <Text style={styles.statusPillText}>
-                  {isStale ? "Автономный кэш" : "Подключено к сети"}
+                  {isOffline === undefined ? "Проверяем подключение" : isOffline ? "Нет подключения" : "Сеть подключена"}
                 </Text>
               </View>
             </View>
@@ -93,7 +108,9 @@ export const AppInfoModal: React.FC<AppInfoModalProps> = ({
             <View style={styles.infoRow}>
               <Text style={styles.infoLabel}>Кэш данных:</Text>
               <Text style={styles.infoValue}>
-                {cachedAgeLabel ? `Обновлено ${cachedAgeLabel}` : "Только что"}
+                {cachedAgeLabel
+                  ? `${isStale ? "Сохранённая копия · " : ""}${cachedAgeLabel}`
+                  : "Нет сохранённой копии"}
               </Text>
             </View>
 
@@ -180,173 +197,174 @@ export const AppInfoModal: React.FC<AppInfoModalProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.7)",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 20,
-  },
-  modalCard: {
-    width: "100%",
-    maxWidth: 380,
-    backgroundColor: "#0f172a",
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.1)",
-    padding: 20,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 10,
-    elevation: 8,
-  },
-  headerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 16,
-    paddingBottom: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(255, 255, 255, 0.08)",
-  },
-  brandRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  brandLogo: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-  },
-  brandTitle: {
-    fontSize: 16,
-    fontWeight: "800",
-    color: "#f8fafc",
-    letterSpacing: -0.3,
-  },
-  brandAccent: {
-    color: "#60a5fa",
-    fontWeight: "700",
-  },
-  brandSub: {
-    fontSize: 11,
-    color: "#64748b",
-  },
-  closeButton: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: "rgba(255, 255, 255, 0.06)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  closeButtonText: {
-    color: "#94a3b8",
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  body: {
-    gap: 12,
-  },
-  infoRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  infoLabel: {
-    fontSize: 13,
-    color: "#94a3b8",
-  },
-  infoValue: {
-    fontSize: 13,
-    color: "#e2e8f0",
-    fontWeight: "500",
-  },
-  statusPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    backgroundColor: "rgba(255, 255, 255, 0.04)",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  statusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  statusPillText: {
-    fontSize: 12,
-    color: "#cbd5e1",
-    fontWeight: "500",
-  },
-  groupBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    backgroundColor: "rgba(59, 130, 246, 0.15)",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "rgba(59, 130, 246, 0.3)",
-  },
-  groupBadgeText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#93c5fd",
-  },
-  editIconText: {
-    fontSize: 10,
-    color: "#60a5fa",
-  },
-  serverCodeText: {
-    fontSize: 12,
-    fontFamily: "monospace",
-    color: "#a5b4fc",
-    maxWidth: 180,
-  },
-  serverButtonsRow: {
-    flexDirection: "row",
-    gap: 8,
-    marginTop: 4,
-  },
-  serverSwitchButton: {
-    flex: 1,
-    paddingVertical: 8,
-    borderRadius: 8,
-    backgroundColor: "rgba(255, 255, 255, 0.04)",
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.08)",
-    alignItems: "center",
-  },
-  serverSwitchButtonActive: {
-    backgroundColor: "rgba(59, 130, 246, 0.2)",
-    borderColor: "#3b82f6",
-  },
-  serverSwitchText: {
-    fontSize: 11,
-    color: "#94a3b8",
-    fontWeight: "600",
-  },
-  serverSwitchTextActive: {
-    color: "#60a5fa",
-  },
-  syncActionButton: {
-    marginTop: 8,
-    backgroundColor: "#2563eb",
-    paddingVertical: 12,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  syncActionButtonText: {
-    color: "#ffffff",
-    fontSize: 14,
-    fontWeight: "700",
-  },
-});
+const createStyles = (colors: Palette) =>
+  StyleSheet.create({
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: "rgba(0, 0, 0, 0.7)",
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: 20,
+    },
+    modalCard: {
+      width: "100%",
+      maxWidth: 380,
+      backgroundColor: colors.canvas,
+      borderRadius: 20,
+      borderWidth: 1,
+      borderColor: "rgba(255, 255, 255, 0.1)",
+      padding: 20,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.4,
+      shadowRadius: 10,
+      elevation: 8,
+    },
+    headerRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: 16,
+      paddingBottom: 14,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.line,
+    },
+    brandRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+    },
+    brandLogo: {
+      width: 32,
+      height: 32,
+      borderRadius: 8,
+    },
+    brandTitle: {
+      fontSize: 16,
+      fontWeight: "800",
+      color: colors.text,
+      letterSpacing: -0.3,
+    },
+    brandAccent: {
+      color: colors.link,
+      fontWeight: "700",
+    },
+    brandSub: {
+      fontSize: 11,
+      color: colors.subtle,
+    },
+    closeButton: {
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      backgroundColor: colors.soft,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    closeButtonText: {
+      color: colors.muted,
+      fontSize: 14,
+      fontWeight: "600",
+    },
+    body: {
+      gap: 12,
+    },
+    infoRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+    },
+    infoLabel: {
+      fontSize: 13,
+      color: colors.muted,
+    },
+    infoValue: {
+      fontSize: 13,
+      color: colors.text,
+      fontWeight: "500",
+    },
+    statusPill: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      backgroundColor: colors.soft,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 12,
+    },
+    statusDot: {
+      width: 6,
+      height: 6,
+      borderRadius: 3,
+    },
+    statusPillText: {
+      fontSize: 12,
+      color: colors.muted,
+      fontWeight: "500",
+    },
+    groupBadge: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      backgroundColor: "rgba(59, 130, 246, 0.15)",
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: "rgba(59, 130, 246, 0.3)",
+    },
+    groupBadgeText: {
+      fontSize: 12,
+      fontWeight: "700",
+      color: colors.link,
+    },
+    editIconText: {
+      fontSize: 10,
+      color: colors.link,
+    },
+    serverCodeText: {
+      fontSize: 12,
+      fontFamily: "monospace",
+      color: colors.link,
+      maxWidth: 180,
+    },
+    serverButtonsRow: {
+      flexDirection: "row",
+      gap: 8,
+      marginTop: 4,
+    },
+    serverSwitchButton: {
+      flex: 1,
+      paddingVertical: 8,
+      borderRadius: 8,
+      backgroundColor: colors.soft,
+      borderWidth: 1,
+      borderColor: colors.line,
+      alignItems: "center",
+    },
+    serverSwitchButtonActive: {
+      backgroundColor: "rgba(59, 130, 246, 0.2)",
+      borderColor: "#3b82f6",
+    },
+    serverSwitchText: {
+      fontSize: 11,
+      color: colors.muted,
+      fontWeight: "600",
+    },
+    serverSwitchTextActive: {
+      color: colors.link,
+    },
+    syncActionButton: {
+      marginTop: 8,
+      backgroundColor: "#2563eb",
+      paddingVertical: 12,
+      borderRadius: 12,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    syncActionButtonText: {
+      color: colors.onAccent,
+      fontSize: 14,
+      fontWeight: "700",
+    },
+  });

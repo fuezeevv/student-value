@@ -1,511 +1,265 @@
-import React, { useState, useMemo } from "react";
+import {
+  useTheme,
+  useThemedStyles,
+  type Palette,
+} from "../theme/ThemeProvider";
+import React, { useEffect, useState } from "react";
 import {
   Modal,
   View,
   Text,
-  TouchableOpacity,
-  StyleSheet,
   Pressable,
+  StyleSheet,
   ScrollView,
-  TextInput,
   Linking,
+  RefreshControl,
 } from "react-native";
+import { z } from "zod";
+import { getActiveApiOrigin } from "../api/client";
+import { getTimetableRepository } from "../storage/repository";
 
-export type NewsItem = {
-  id: string;
-  title: string;
-  date: string;
-  category: "all" | "session" | "academic" | "events" | "scholarship";
-  categoryLabel: string;
-  preview: string;
-  fullText: string;
-  source: string;
-  channelUrl?: string;
-};
-
-// Only project information confirmed by this repository belongs here.
-// University announcements require an exact publication URL and date;
-// generated stories must never be presented as institutional statements.
-export const NEWS_ITEMS: NewsItem[] = [
-  {
-    id: "news-sv-development",
-    title: "Разработка нативного Student Value",
-    date: "17 ноября 2026",
-    category: "events",
-    categoryLabel: "Проект",
-    preview: "В приложении появились навигация по дням и неделям и выбор расписания групп и преподавателей.",
-    fullText:
-      "Продолжается разработка нативного приложения Student Value. Реализованы выбор расписания групп и преподавателей и навигация по дням и неделям.\n\nЭто предварительная версия приложения. Возможности, ещё не перенесённые в нативный интерфейс, доступны через раздел «Возможности сайта» в профиле. Вопросы и новости проекта — в канале @studentvalue.",
-    source: "Student Value · информация проекта",
-    channelUrl: "https://t.me/studentvalue",
-  },
-];
-
-export type NewsModalProps = {
+const telegramUrl = z
+  .string()
+  .regex(/^https:\/\/t\.me\/(studentvalue|sss_iccs|polyctf)\/[1-9][0-9]*$/);
+const feedSchema = z.object({
+  fetchedAt: z.iso.datetime(),
+  posts: z
+    .array(
+      z.object({
+        id: z.string().max(100),
+        sourceId: z.enum(["studentvalue", "sss_iccs", "polyctf"]),
+        url: telegramUrl,
+        publishedAt: z.iso.datetime(),
+        text: z.string().max(12000),
+      }),
+    )
+    .max(100),
+  sources: z
+    .array(
+      z.object({
+        id: z.string().max(100),
+        label: z.string().max(120),
+        status: z.enum(["OK", "UNAVAILABLE", "NOT_CONFIGURED"]),
+      }),
+    )
+    .max(20),
+});
+type Feed = z.infer<typeof feedSchema>;
+export function NewsModal({
+  visible,
+  onClose,
+}: {
   visible: boolean;
   onClose: () => void;
-};
+}) {
+  const { colors } = useTheme();
+  const s = useThemedStyles(createStyles);
 
-export const NewsModal: React.FC<NewsModalProps> = ({ visible, onClose }) => {
-  const [selectedCategory, setSelectedCategory] = useState<string>("all");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [activeStory, setActiveStory] = useState<NewsItem | null>(null);
-
-  const filteredNews = useMemo(() => {
-    return NEWS_ITEMS.filter((item) => {
-      const matchCat =
-        selectedCategory === "all" || item.category === selectedCategory;
-      if (!matchCat) return false;
-
-      if (!searchQuery.trim()) return true;
-      const q = searchQuery.toLowerCase().trim();
-      return (
-        item.title.toLowerCase().includes(q) ||
-        item.preview.toLowerCase().includes(q) ||
-        item.fullText.toLowerCase().includes(q)
-      );
-    });
-  }, [selectedCategory, searchQuery]);
-
-  const handleOpenChannel = (url = "https://t.me/studentvalue") => {
-    Linking.openURL(url).catch(() => {});
-  };
-
+  const [feed, setFeed] = useState<Feed | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [selected, setSelected] = useState("all");
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const [reload, setReload] = useState(0);
+  useEffect(() => {
+    if (!visible) return;
+    let active = true;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 12000);
+    setBusy(true);
+    setError("");
+    (async () => {
+      const origin = await getActiveApiOrigin();
+      const key = `public_community_feed:${origin}`;
+      const repo = getTimetableRepository();
+      const saved = await repo.getPreference(key);
+      if (saved && active) {
+        try {
+          setFeed(feedSchema.parse(JSON.parse(saved)));
+        } catch {
+          /* Ignore invalid cache. */
+        }
+      }
+      const response = await fetch(`${origin}/api/v1/feed`, {
+        signal: controller.signal,
+        headers: { Accept: "application/json" },
+      });
+      if (!response.ok) throw new Error("Источник временно недоступен");
+      const raw = await response.text();
+      if (raw.length > 2_000_000) throw new Error("Ответ слишком велик");
+      const value = feedSchema.parse(JSON.parse(raw));
+      if (active) {
+        setFeed(value);
+        await repo.setPreference(key, JSON.stringify(value));
+      }
+    })()
+      .catch(() => {
+        if (active)
+          setError(
+            "Обновить ленту не удалось. Сохранённые публикации остаются доступны.",
+          );
+      })
+      .finally(() => {
+        clearTimeout(timer);
+        if (active) setBusy(false);
+      });
+    return () => {
+      active = false;
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [visible, reload]);
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={onClose}
-    >
-      <Pressable style={styles.backdrop} onPress={onClose}>
-        <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
-          <View style={styles.handle} />
-
-          {/* Header */}
-          <View style={styles.headerRow}>
-            <View>
-              <Text style={styles.title}>Новости и анонсы</Text>
-              <Text style={styles.subtitle}>
-                Официальные события СПбПУ и канал @studentvalue
-              </Text>
-            </View>
-            <TouchableOpacity
-              onPress={onClose}
-              style={styles.closeBtn}
-              accessibilityRole="button"
-              accessibilityLabel="Закрыть новости"
+    <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
+      <View style={s.page}>
+        <View style={s.heading}>
+          <Text style={s.title}>Лента сообщества</Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Закрыть ленту"
+            onPress={onClose}
+            style={s.button}
+          >
+            <Text style={s.link}>Закрыть</Text>
+          </Pressable>
+        </View>
+        <Text style={s.caption}>
+          Публичные посты источников. Это не объявления преподавателей и не
+          новые дедлайны.
+        </Text>
+        <ScrollView
+          horizontal
+          style={{ flexGrow: 0 }}
+          contentContainerStyle={s.filters}
+        >
+          {[
+            { id: "all", label: "Все" },
+            ...(feed?.sources ?? []).filter((source) => source.status === "OK"),
+          ].map((source) => (
+            <Pressable
+              key={source.id}
+              onPress={() => setSelected(source.id)}
+              style={[s.chip, selected === source.id && s.chosen]}
             >
-              <Text style={styles.closeBtnText}>✕</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Search Bar */}
-          <View style={styles.searchBarContainer}>
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Поиск новостей (сессия, САПР, стипендия)..."
-              placeholderTextColor="#64748b"
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              autoCorrect={false}
-              clearButtonMode="while-editing"
+              <Text style={s.text}>{source.label}</Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+        <ScrollView
+          refreshControl={
+            <RefreshControl
+              refreshing={busy}
+              onRefresh={() => setReload((n) => n + 1)}
+              tintColor={colors.link}
             />
-          </View>
-
-          {/* Category Filter Chips */}
-          <View style={styles.categoriesRow}>
-            {[
-              { id: "all", label: "Все" },
-              { id: "session", label: "Сессия" },
-              { id: "academic", label: "Учёба" },
-              { id: "events", label: "События" },
-              { id: "scholarship", label: "Стипендии" },
-            ].map((cat) => {
-              const isActive = selectedCategory === cat.id;
-              return (
-                <TouchableOpacity
-                  key={cat.id}
-                  onPress={() => setSelectedCategory(cat.id)}
-                  style={[
-                    styles.catChip,
-                    isActive && styles.catChipActive,
-                  ]}
-                  accessibilityRole="button"
+          }
+          contentContainerStyle={{ paddingBottom: 40 }}
+        >
+          {error ? <Text style={s.warning}>{error}</Text> : null}
+          {feed ? (
+            <Text style={s.caption}>
+              Обновлено {new Date(feed.fetchedAt).toLocaleString("ru-RU")}
+            </Text>
+          ) : (
+            <Text style={s.caption}>
+              {busy
+                ? "Загружаем реальные публикации…"
+                : "Публикации пока не загружены"}
+            </Text>
+          )}
+          {feed?.posts
+            .filter((p) => selected === "all" || selected === p.sourceId)
+            .map((post) => (
+              <View key={post.id} style={s.post}>
+                <Text style={s.source}>
+                  {
+                    feed.sources.find((source) => source.id === post.sourceId)
+                      ?.label
+                  }{" "}
+                  · {new Date(post.publishedAt).toLocaleDateString("ru-RU")}
+                </Text>
+                <Pressable
+                  onPress={() =>
+                    setExpanded(expanded === post.id ? null : post.id)
+                  }
                 >
                   <Text
-                    style={[
-                      styles.catChipText,
-                      isActive && styles.catChipTextActive,
-                    ]}
+                    style={s.text}
+                    numberOfLines={expanded === post.id ? undefined : 7}
                   >
-                    {cat.label}
+                    {post.text}
                   </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-
-          {/* Telegram Channel Banner */}
-          <TouchableOpacity
-            style={styles.tgBanner}
-            onPress={() => handleOpenChannel("https://t.me/studentvalue")}
-            activeOpacity={0.8}
-            accessibilityRole="link"
-          >
-            <View style={styles.tgBannerIcon}>
-              <Text style={styles.tgIconText}>✈</Text>
-            </View>
-            <View style={styles.tgBannerContent}>
-              <Text style={styles.tgBannerTitle}>Канал t.me/studentvalue</Text>
-              <Text style={styles.tgBannerSub}>
-                Оперативные новости, учебные материалы и обсуждения
-              </Text>
-            </View>
-            <Text style={styles.tgArrow}>→</Text>
-          </TouchableOpacity>
-
-          {/* News List */}
-          <ScrollView
-            style={styles.newsListScroll}
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.newsListContent}
-          >
-            {filteredNews.map((item) => (
-              <TouchableOpacity
-                key={item.id}
-                style={styles.newsCard}
-                onPress={() => setActiveStory(item)}
-                activeOpacity={0.7}
-              >
-                <View style={styles.cardHeaderRow}>
-                  <View style={styles.tagBadge}>
-                    <Text style={styles.tagText}>{item.categoryLabel}</Text>
-                  </View>
-                  <Text style={styles.dateText}>{item.date}</Text>
-                </View>
-
-                <Text style={styles.newsTitle}>{item.title}</Text>
-                <Text style={styles.newsPreview}>{item.preview}</Text>
-
-                <View style={styles.cardFooterRow}>
-                  <Text style={styles.sourceText}>Источник: {item.source}</Text>
-                  <Text style={styles.readMoreText}>Подробнее →</Text>
-                </View>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-
-          {/* Story Detail View Modal */}
-          {activeStory && (
-            <Modal
-              visible={Boolean(activeStory)}
-              transparent
-              animationType="slide"
-              onRequestClose={() => setActiveStory(null)}
-            >
-              <Pressable
-                style={styles.storyBackdrop}
-                onPress={() => setActiveStory(null)}
-              >
-                <Pressable
-                  style={styles.storySheet}
-                  onPress={(e) => e.stopPropagation()}
-                >
-                  <View style={styles.handle} />
-
-                  <View style={styles.cardHeaderRow}>
-                    <View style={styles.tagBadge}>
-                      <Text style={styles.tagText}>
-                        {activeStory.categoryLabel}
-                      </Text>
-                    </View>
-                    <Text style={styles.dateText}>{activeStory.date}</Text>
-                  </View>
-
-                  <Text style={styles.storyTitle}>{activeStory.title}</Text>
-
-                  <ScrollView style={styles.storyBodyScroll}>
-                    <Text style={styles.storyBodyText}>
-                      {activeStory.fullText}
-                    </Text>
-                  </ScrollView>
-
-                  <View style={styles.storyFooter}>
-                    <Text style={styles.storySource}>
-                      {activeStory.source}
-                    </Text>
-                    {activeStory.channelUrl && (
-                      <TouchableOpacity
-                        style={styles.storyChannelBtn}
-                        onPress={() => handleOpenChannel(activeStory.channelUrl)}
-                      >
-                        <Text style={styles.storyChannelBtnText}>
-                          Открыть в Telegram ↗
-                        </Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
                 </Pressable>
-              </Pressable>
-            </Modal>
-          )}
-        </Pressable>
-      </Pressable>
+                <Pressable
+                  style={s.button}
+                  accessibilityRole="link"
+                  onPress={() =>
+                    Linking.openURL(post.url).catch(() =>
+                      setError("Не удалось открыть оригинал"),
+                    )
+                  }
+                >
+                  <Text style={s.link}>Оригинал публикации ↗</Text>
+                </Pressable>
+              </View>
+            ))}
+          {feed?.sources
+            .filter((source) => source.status !== "OK")
+            .map((source) => (
+              <Text key={source.id} style={s.warning}>
+                {source.label}:{" "}
+                {source.status === "NOT_CONFIGURED"
+                  ? "автоматическое получение постов пока не подключено"
+                  : "источник временно недоступен"}
+                .
+              </Text>
+            ))}
+          <Text style={s.caption}>
+            Подключены проверенные публичные страницы. Каталог источников пока
+            не охватывает все сообщества ИКНК. Потяните вниз для обновления.
+          </Text>
+        </ScrollView>
+      </View>
     </Modal>
   );
-};
-
-const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.65)",
-    justifyContent: "flex-end",
-  },
-  sheet: {
-    backgroundColor: "#0d1829",
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    paddingTop: 12,
-    paddingBottom: 36,
-    paddingHorizontal: 20,
-    borderWidth: 1,
-    borderColor: "#1e293b",
-    maxHeight: "92%",
-  },
-  handle: {
-    width: 44,
-    height: 5,
-    backgroundColor: "rgba(255, 255, 255, 0.2)",
-    borderRadius: 3,
-    alignSelf: "center",
-    marginBottom: 14,
-  },
-  headerRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    marginBottom: 12,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: "#f8fafc",
-    letterSpacing: -0.3,
-  },
-  subtitle: {
-    fontSize: 13,
-    color: "#8a9bb5",
-    marginTop: 2,
-  },
-  closeBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: "rgba(255, 255, 255, 0.06)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  closeBtnText: {
-    fontSize: 16,
-    color: "#94a3b8",
-    fontWeight: "700",
-  },
-  searchBarContainer: {
-    marginBottom: 10,
-  },
-  searchInput: {
-    backgroundColor: "rgba(255, 255, 255, 0.06)",
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    color: "#f8fafc",
-    fontSize: 14,
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.08)",
-  },
-  categoriesRow: {
-    flexDirection: "row",
-    gap: 6,
-    marginBottom: 12,
-  },
-  catChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    backgroundColor: "rgba(255, 255, 255, 0.04)",
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.06)",
-  },
-  catChipActive: {
-    backgroundColor: "rgba(59, 130, 246, 0.2)",
-    borderColor: "#3b82f6",
-  },
-  catChipText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#8a9bb5",
-  },
-  catChipTextActive: {
-    color: "#93c5fd",
-    fontWeight: "700",
-  },
-  tgBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "rgba(34, 158, 217, 0.12)",
-    borderWidth: 1,
-    borderColor: "rgba(34, 158, 217, 0.25)",
-    borderRadius: 16,
-    padding: 12,
-    marginBottom: 12,
-    gap: 10,
-  },
-  tgBannerIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: "#229ed9",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  tgIconText: {
-    color: "#ffffff",
-    fontSize: 18,
-  },
-  tgBannerContent: {
-    flex: 1,
-  },
-  tgBannerTitle: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#f8fafc",
-  },
-  tgBannerSub: {
-    fontSize: 11,
-    color: "#93c5fd",
-    marginTop: 1,
-  },
-  tgArrow: {
-    fontSize: 18,
-    color: "#93c5fd",
-    fontWeight: "700",
-  },
-  newsListScroll: {
-    maxHeight: 340,
-  },
-  newsListContent: {
-    gap: 10,
-    paddingBottom: 16,
-  },
-  newsCard: {
-    backgroundColor: "rgba(255, 255, 255, 0.03)",
-    borderRadius: 16,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.06)",
-  },
-  cardHeaderRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  tagBadge: {
-    backgroundColor: "rgba(147, 197, 253, 0.1)",
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 8,
-  },
-  tagText: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#93c5fd",
-  },
-  dateText: {
-    fontSize: 11,
-    color: "#64748b",
-  },
-  newsTitle: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#f8fafc",
-    lineHeight: 20,
-    marginBottom: 4,
-  },
-  newsPreview: {
-    fontSize: 13,
-    color: "#94a3b8",
-    lineHeight: 18,
-    marginBottom: 10,
-  },
-  cardFooterRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  sourceText: {
-    fontSize: 11,
-    color: "#64748b",
-  },
-  readMoreText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#3b82f6",
-  },
-  storyBackdrop: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.7)",
-    justifyContent: "flex-end",
-  },
-  storySheet: {
-    backgroundColor: "#0d1829",
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    paddingTop: 12,
-    paddingBottom: 40,
-    paddingHorizontal: 20,
-    borderWidth: 1,
-    borderColor: "#1e293b",
-    maxHeight: "85%",
-  },
-  storyTitle: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: "#f8fafc",
-    lineHeight: 24,
-    marginVertical: 10,
-  },
-  storyBodyScroll: {
-    maxHeight: 260,
-    marginVertical: 10,
-  },
-  storyBodyText: {
-    fontSize: 14,
-    color: "#cbd5e1",
-    lineHeight: 22,
-  },
-  storyFooter: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: "rgba(255, 255, 255, 0.08)",
-  },
-  storySource: {
-    fontSize: 12,
-    color: "#64748b",
-  },
-  storyChannelBtn: {
-    backgroundColor: "#2563eb",
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 14,
-  },
-  storyChannelBtnText: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#ffffff",
-  },
-});
+}
+const createStyles = (colors: Palette) =>
+  StyleSheet.create({
+    page: {
+      flex: 1,
+      backgroundColor: colors.canvas,
+      paddingHorizontal: 20,
+      paddingTop: 32,
+    },
+    heading: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 12,
+    },
+    title: { color: colors.text, fontSize: 25, fontWeight: "700", flex: 1 },
+    text: { color: colors.text, fontSize: 15, lineHeight: 23 },
+    caption: {
+      color: colors.muted,
+      fontSize: 12,
+      lineHeight: 18,
+      marginVertical: 12,
+    },
+    source: { color: colors.link, fontSize: 12, marginBottom: 10 },
+    post: {
+      paddingVertical: 20,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.line,
+    },
+    button: { minHeight: 48, justifyContent: "center" },
+    link: { color: colors.link, fontSize: 14 },
+    warning: { color: "#e5b9a9", lineHeight: 20, marginVertical: 12 },
+    filters: { gap: 8, paddingVertical: 8 },
+    chip: {
+      borderRadius: 18,
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      backgroundColor: colors.surface,
+    },
+    chosen: { backgroundColor: colors.raised },
+  });

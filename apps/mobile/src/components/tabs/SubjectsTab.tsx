@@ -1,3 +1,8 @@
+import {
+  useTheme,
+  useThemedStyles,
+  type Palette,
+} from "../../theme/ThemeProvider";
 import React, { useMemo } from "react";
 import { View, Text, StyleSheet, ScrollView } from "react-native";
 import type { MobileLesson, CachedTask } from "@studentvalue/mobile-contracts";
@@ -24,6 +29,9 @@ interface SubjectSummary {
 
 export const SubjectsTab = React.memo<SubjectsTabProps>(
   ({ lessons, tasks, groupCode, onOpenLesson, onOpenSubjectTasks }) => {
+    const { colors } = useTheme();
+    const styles = useThemedStyles(createStyles);
+
     // Aggregate subjects from timetable lessons (memoized)
     const subjects = useMemo(() => {
       const subjectMap = new Map<string, SubjectSummary>();
@@ -116,7 +124,7 @@ export const SubjectsTab = React.memo<SubjectsTabProps>(
                     </View>
                   ))}
                 </View>
-                <ArrowUpRightIcon size={14} color="#93c5fd" />
+                <ArrowUpRightIcon size={14} color={colors.link} />
               </View>
 
               <Text style={styles.subjectTitle}>{s.title}</Text>
@@ -155,111 +163,112 @@ export const SubjectsTab = React.memo<SubjectsTabProps>(
   },
 );
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#0b1322",
-  },
-  contentContainer: {
-    padding: 20,
-    paddingBottom: 40,
-  },
-  header: {
-    marginBottom: 20,
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: "800",
-    color: "#f8fafc",
-    marginBottom: 4,
-  },
-  headerSubtitle: {
-    fontSize: 13,
-    color: "#8a9bb5",
-  },
-  subjectCard: {
-    backgroundColor: "#111d33",
-    borderRadius: 20,
-    padding: 18,
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.07)",
-  },
-  cardHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 8,
-  },
-  typeRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 6,
-  },
-  typeBadge: {
-    backgroundColor: "rgba(253, 164, 175, 0.12)",
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: "rgba(253, 164, 175, 0.25)",
-  },
-  typeBadgeText: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#fda4af",
-    textTransform: "uppercase",
-  },
-  subjectTitle: {
-    fontSize: 17,
-    fontWeight: "700",
-    color: "#ffffff",
-    lineHeight: 23,
-    marginBottom: 6,
-  },
-  teacherText: {
-    fontSize: 13,
-    color: "#94a3b8",
-    marginBottom: 12,
-  },
-  cardFooter: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    borderTopWidth: 1,
-    borderTopColor: "rgba(255, 255, 255, 0.05)",
-    paddingTop: 10,
-  },
-  footerInfoText: {
-    fontSize: 12,
-    color: "#64748b",
-  },
-  taskCountBadge: {
-    backgroundColor: "rgba(51, 120, 255, 0.15)",
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 8,
-  },
-  taskCountText: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: "#93c5fd",
-  },
-  emptyContainer: {
-    padding: 30,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#f8fafc",
-    marginBottom: 6,
-  },
-  emptySubtitle: {
-    fontSize: 14,
-    color: "#8a9bb5",
-    textAlign: "center",
-    lineHeight: 20,
-  },
-});
+const createStyles = (colors: Palette) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.canvas,
+    },
+    contentContainer: {
+      padding: 20,
+      paddingBottom: 40,
+    },
+    header: {
+      marginBottom: 20,
+    },
+    headerTitle: {
+      fontSize: 24,
+      fontWeight: "800",
+      color: colors.text,
+      marginBottom: 4,
+    },
+    headerSubtitle: {
+      fontSize: 13,
+      color: colors.muted,
+    },
+    subjectCard: {
+      backgroundColor: colors.surface,
+      borderRadius: 20,
+      padding: 18,
+      marginBottom: 14,
+      borderWidth: 1,
+      borderColor: "rgba(255, 255, 255, 0.07)",
+    },
+    cardHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: 8,
+    },
+    typeRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 6,
+    },
+    typeBadge: {
+      backgroundColor: "rgba(253, 164, 175, 0.12)",
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      borderRadius: 6,
+      borderWidth: 1,
+      borderColor: "rgba(253, 164, 175, 0.25)",
+    },
+    typeBadgeText: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: "#fda4af",
+      textTransform: "uppercase",
+    },
+    subjectTitle: {
+      fontSize: 17,
+      fontWeight: "700",
+      color: colors.text,
+      lineHeight: 23,
+      marginBottom: 6,
+    },
+    teacherText: {
+      fontSize: 13,
+      color: colors.muted,
+      marginBottom: 12,
+    },
+    cardFooter: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      borderTopWidth: 1,
+      borderTopColor: colors.line,
+      paddingTop: 10,
+    },
+    footerInfoText: {
+      fontSize: 12,
+      color: colors.subtle,
+    },
+    taskCountBadge: {
+      backgroundColor: "rgba(51, 120, 255, 0.15)",
+      paddingHorizontal: 8,
+      paddingVertical: 2,
+      borderRadius: 8,
+    },
+    taskCountText: {
+      fontSize: 11,
+      fontWeight: "600",
+      color: colors.link,
+    },
+    emptyContainer: {
+      padding: 30,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    emptyTitle: {
+      fontSize: 18,
+      fontWeight: "700",
+      color: colors.text,
+      marginBottom: 6,
+    },
+    emptySubtitle: {
+      fontSize: 14,
+      color: colors.muted,
+      textAlign: "center",
+      lineHeight: 20,
+    },
+  });

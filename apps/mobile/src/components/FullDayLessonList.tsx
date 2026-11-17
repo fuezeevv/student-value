@@ -1,3 +1,9 @@
+import { lessonTypeLabel } from "@studentvalue/mobile-contracts";
+import {
+  useTheme,
+  useThemedStyles,
+  type Palette,
+} from "../theme/ThemeProvider";
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
 import type { MobileLesson } from "@studentvalue/mobile-contracts";
@@ -11,6 +17,9 @@ export const FullDayLessonList: React.FC<FullDayLessonListProps> = ({
   lessons,
   isLoaded,
 }) => {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(createStyles);
+
   if (!isLoaded) {
     return (
       <View style={styles.emptyContainer}>
@@ -42,7 +51,7 @@ export const FullDayLessonList: React.FC<FullDayLessonListProps> = ({
               {lesson.start} — {lesson.scheduledEnd}
             </Text>
             <View style={styles.typeBadge}>
-              <Text style={styles.typeText}>{lesson.type}</Text>
+              <Text style={styles.typeText}>{lessonTypeLabel(lesson.type)}</Text>
             </View>
           </View>
 
@@ -65,81 +74,82 @@ export const FullDayLessonList: React.FC<FullDayLessonListProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
-  listContainer: {
-    paddingVertical: 8,
-    gap: 10,
-  },
-  card: {
-    backgroundColor: "#0f1a2e",
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "#1d2d47",
-    padding: 14,
-  },
-  timeAndTypeRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 6,
-  },
-  timeText: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#93c5fd",
-    fontFamily: "monospace",
-  },
-  typeBadge: {
-    backgroundColor: "#16253d",
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 5,
-    borderWidth: 1,
-    borderColor: "#223554",
-  },
-  typeText: {
-    fontSize: 10,
-    fontWeight: "700",
-    color: "#bfdbfe",
-    textTransform: "uppercase",
-  },
-  subjectText: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#ffffff",
-    lineHeight: 20,
-    marginBottom: 6,
-  },
-  roomText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#e2e8f0",
-    marginBottom: 2,
-  },
-  teacherText: {
-    fontSize: 12,
-    color: "#8a9bb5",
-  },
-  noteText: {
-    fontSize: 11,
-    color: "#fca5a5",
-    fontStyle: "italic",
-    marginTop: 4,
-  },
-  emptyContainer: {
-    paddingVertical: 24,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  emptyTitle: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#f0f4f8",
-    marginBottom: 4,
-  },
-  emptySubtitle: {
-    fontSize: 12,
-    color: "#8a9bb5",
-    textAlign: "center",
-  },
-});
+const createStyles = (colors: Palette) =>
+  StyleSheet.create({
+    listContainer: {
+      paddingVertical: 8,
+      gap: 10,
+    },
+    card: {
+      backgroundColor: "#0f1a2e",
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: "#1d2d47",
+      padding: 14,
+    },
+    timeAndTypeRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: 6,
+    },
+    timeText: {
+      fontSize: 13,
+      fontWeight: "700",
+      color: colors.link,
+      fontFamily: "monospace",
+    },
+    typeBadge: {
+      backgroundColor: colors.surface,
+      paddingHorizontal: 7,
+      paddingVertical: 2,
+      borderRadius: 5,
+      borderWidth: 1,
+      borderColor: "#223554",
+    },
+    typeText: {
+      fontSize: 10,
+      fontWeight: "700",
+      color: colors.link,
+      textTransform: "uppercase",
+    },
+    subjectText: {
+      fontSize: 15,
+      fontWeight: "700",
+      color: colors.text,
+      lineHeight: 20,
+      marginBottom: 6,
+    },
+    roomText: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: colors.text,
+      marginBottom: 2,
+    },
+    teacherText: {
+      fontSize: 12,
+      color: colors.muted,
+    },
+    noteText: {
+      fontSize: 11,
+      color: "#fca5a5",
+      fontStyle: "italic",
+      marginTop: 4,
+    },
+    emptyContainer: {
+      paddingVertical: 24,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    emptyTitle: {
+      fontSize: 15,
+      fontWeight: "700",
+      color: "#f0f4f8",
+      marginBottom: 4,
+    },
+    emptySubtitle: {
+      fontSize: 12,
+      color: colors.muted,
+      textAlign: "center",
+    },
+  });

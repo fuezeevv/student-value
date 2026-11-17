@@ -1,3 +1,8 @@
+import {
+  useTheme,
+  useThemedStyles,
+  type Palette,
+} from "../theme/ThemeProvider";
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 
@@ -36,6 +41,9 @@ export const DaySwitcher: React.FC<DaySwitcherProps> = ({
   weekParity,
   isTodaySelected,
 }) => {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(createStyles);
+
   return (
     <View style={styles.container}>
       {/* Month, Parity and Week navigation */}
@@ -159,156 +167,157 @@ export const DaySwitcher: React.FC<DaySwitcherProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    paddingVertical: 8,
-    paddingHorizontal: 8,
-    backgroundColor: "rgba(15, 23, 42, 0.4)",
-    borderRadius: 18,
-    marginHorizontal: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.04)",
-  },
-  headerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 10,
-    paddingHorizontal: 4,
-  },
-  arrowGroup: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-  },
-  navArrow: {
-    width: 36,
-    height: 36,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 18,
-    backgroundColor: "rgba(255, 255, 255, 0.05)",
-  },
-  weekArrow: {
-    width: 36,
-    height: 36,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 18,
-    backgroundColor: "rgba(147, 197, 253, 0.08)",
-  },
-  arrowText: {
-    fontSize: 20,
-    color: "#cbd5e1",
-    fontWeight: "700",
-    lineHeight: 22,
-  },
-  weekArrowText: {
-    fontSize: 16,
-    color: "#93c5fd",
-    fontWeight: "700",
-    lineHeight: 18,
-  },
-  headerCenter: {
-    alignItems: "center",
-  },
-  monthText: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#f8fafc",
-    letterSpacing: -0.2,
-    textTransform: "capitalize",
-  },
-  parityText: {
-    fontSize: 11,
-    color: "#94a3b8",
-    fontWeight: "600",
-    marginTop: 1,
-  },
-  daysRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    gap: 4,
-  },
-  dayPill: {
-    flex: 1,
-    minHeight: 52,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 14,
-    paddingVertical: 6,
-  },
-  dayPillActive: {
-    backgroundColor: "#cfc6ff",
-  },
-  dayPillToday: {
-    borderWidth: 1,
-    borderColor: "rgba(147, 197, 253, 0.4)",
-    backgroundColor: "rgba(59, 130, 246, 0.08)",
-  },
-  dayPillInactive: {
-    backgroundColor: "transparent",
-  },
-  dayNumber: {
-    fontSize: 16,
-    fontWeight: "800",
-    fontFamily: "monospace",
-  },
-  dayLabel: {
-    fontSize: 10,
-    fontWeight: "700",
-    fontFamily: "monospace",
-    marginTop: 2,
-  },
-  textActive: {
-    color: "#0b1a2d",
-  },
-  textInactive: {
-    color: "#f1f5f9",
-  },
-  textToday: {
-    color: "#93c5fd",
-  },
-  labelActive: {
-    color: "#0b1a2d",
-  },
-  labelInactive: {
-    color: "#64748b",
-  },
-  dotContainer: {
-    height: 4,
-    marginTop: 3,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  dot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-  },
-  dotActive: {
-    backgroundColor: "#0b1a2d",
-  },
-  dotInactive: {
-    backgroundColor: "#818cf8",
-  },
-  dotSpacer: {
-    width: 4,
-    height: 4,
-  },
-  todayBar: {
-    marginTop: 8,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 8,
-    backgroundColor: "rgba(147, 197, 253, 0.08)",
-  },
-  todayBarText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#93c5fd",
-  },
-});
+const createStyles = (colors: Palette) =>
+  StyleSheet.create({
+    container: {
+      paddingVertical: 8,
+      paddingHorizontal: 8,
+      backgroundColor: "rgba(15, 23, 42, 0.4)",
+      borderRadius: 18,
+      marginHorizontal: 16,
+      marginBottom: 16,
+      borderWidth: 1,
+      borderColor: colors.line,
+    },
+    headerRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: 10,
+      paddingHorizontal: 4,
+    },
+    arrowGroup: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+    },
+    navArrow: {
+      width: 36,
+      height: 36,
+      alignItems: "center",
+      justifyContent: "center",
+      borderRadius: 18,
+      backgroundColor: colors.soft,
+    },
+    weekArrow: {
+      width: 36,
+      height: 36,
+      alignItems: "center",
+      justifyContent: "center",
+      borderRadius: 18,
+      backgroundColor: "rgba(147, 197, 253, 0.08)",
+    },
+    arrowText: {
+      fontSize: 20,
+      color: colors.muted,
+      fontWeight: "700",
+      lineHeight: 22,
+    },
+    weekArrowText: {
+      fontSize: 16,
+      color: colors.link,
+      fontWeight: "700",
+      lineHeight: 18,
+    },
+    headerCenter: {
+      alignItems: "center",
+    },
+    monthText: {
+      fontSize: 15,
+      fontWeight: "700",
+      color: colors.text,
+      letterSpacing: -0.2,
+      textTransform: "capitalize",
+    },
+    parityText: {
+      fontSize: 11,
+      color: colors.muted,
+      fontWeight: "600",
+      marginTop: 1,
+    },
+    daysRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      gap: 4,
+    },
+    dayPill: {
+      flex: 1,
+      minHeight: 52,
+      alignItems: "center",
+      justifyContent: "center",
+      borderRadius: 14,
+      paddingVertical: 6,
+    },
+    dayPillActive: {
+      backgroundColor: "#cfc6ff",
+    },
+    dayPillToday: {
+      borderWidth: 1,
+      borderColor: "rgba(147, 197, 253, 0.4)",
+      backgroundColor: "rgba(59, 130, 246, 0.08)",
+    },
+    dayPillInactive: {
+      backgroundColor: "transparent",
+    },
+    dayNumber: {
+      fontSize: 16,
+      fontWeight: "800",
+      fontFamily: "monospace",
+    },
+    dayLabel: {
+      fontSize: 10,
+      fontWeight: "700",
+      fontFamily: "monospace",
+      marginTop: 2,
+    },
+    textActive: {
+      color: "#0b1a2d",
+    },
+    textInactive: {
+      color: colors.text,
+    },
+    textToday: {
+      color: colors.link,
+    },
+    labelActive: {
+      color: "#0b1a2d",
+    },
+    labelInactive: {
+      color: colors.subtle,
+    },
+    dotContainer: {
+      height: 4,
+      marginTop: 3,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    dot: {
+      width: 4,
+      height: 4,
+      borderRadius: 2,
+    },
+    dotActive: {
+      backgroundColor: "#0b1a2d",
+    },
+    dotInactive: {
+      backgroundColor: "#818cf8",
+    },
+    dotSpacer: {
+      width: 4,
+      height: 4,
+    },
+    todayBar: {
+      marginTop: 8,
+      paddingVertical: 6,
+      paddingHorizontal: 12,
+      alignItems: "center",
+      justifyContent: "center",
+      borderRadius: 8,
+      backgroundColor: "rgba(147, 197, 253, 0.08)",
+    },
+    todayBarText: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: colors.link,
+    },
+  });

@@ -1,3 +1,8 @@
+import {
+  useTheme,
+  useThemedStyles,
+  type Palette,
+} from "../theme/ThemeProvider";
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import {
   Modal,
@@ -52,6 +57,9 @@ export const SchedulePickerModal: React.FC<SchedulePickerModalProps> = ({
   onSelectOrigin,
   onClose,
 }) => {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(createStyles);
+
   const [activeTab, setActiveTab] = useState<
     "groups" | "teachers" | "favorites"
   >("groups");
@@ -267,7 +275,7 @@ export const SchedulePickerModal: React.FC<SchedulePickerModalProps> = ({
                     ? "Поиск группы (40102, ИВТ, 3530201)..."
                     : "Поиск преподавателя (Сиднев, Тарасов)..."
                 }
-                placeholderTextColor="#64748b"
+                placeholderTextColor={colors.subtle}
                 value={searchQuery}
                 onChangeText={setSearchQuery}
                 autoCorrect={false}
@@ -276,7 +284,7 @@ export const SchedulePickerModal: React.FC<SchedulePickerModalProps> = ({
               {isSearching && (
                 <ActivityIndicator
                   size="small"
-                  color="#93c5fd"
+                  color={colors.link}
                   style={styles.searchSpinner}
                 />
               )}
@@ -699,272 +707,273 @@ export const SchedulePickerModal: React.FC<SchedulePickerModalProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.65)",
-    justifyContent: "flex-end",
-  },
-  sheet: {
-    backgroundColor: "#0d1829",
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    paddingTop: 12,
-    paddingBottom: 36,
-    paddingHorizontal: 20,
-    borderWidth: 1,
-    borderColor: "#1e293b",
-    maxHeight: "88%",
-  },
-  handle: {
-    width: 44,
-    height: 5,
-    backgroundColor: "rgba(255, 255, 255, 0.2)",
-    borderRadius: 3,
-    alignSelf: "center",
-    marginBottom: 16,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: "#f8fafc",
-    letterSpacing: -0.3,
-  },
-  subtitle: {
-    fontSize: 13,
-    color: "#8a9bb5",
-    marginTop: 2,
-    marginBottom: 14,
-  },
-  segmentedRow: {
-    flexDirection: "row",
-    backgroundColor: "rgba(255, 255, 255, 0.05)",
-    borderRadius: 14,
-    padding: 3,
-    marginBottom: 12,
-  },
-  segmentButton: {
-    flex: 1,
-    paddingVertical: 8,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 11,
-  },
-  segmentButtonActive: {
-    backgroundColor: "#2563eb",
-  },
-  segmentText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#94a3b8",
-  },
-  segmentTextActive: {
-    color: "#ffffff",
-    fontWeight: "700",
-  },
-  searchContainer: {
-    position: "relative",
-    marginBottom: 12,
-  },
-  searchInput: {
-    backgroundColor: "rgba(255, 255, 255, 0.06)",
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    color: "#f8fafc",
-    fontSize: 14,
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.08)",
-  },
-  searchSpinner: {
-    position: "absolute",
-    right: 12,
-    top: 12,
-  },
-  scrollArea: {
-    maxHeight: 340,
-  },
-  scrollContent: {
-    paddingBottom: 12,
-  },
-  sectionHeader: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#64748b",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    marginBottom: 8,
-    marginTop: 4,
-  },
-  grid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  gridCardWrapper: {
-    width: "48%",
-    position: "relative",
-  },
-  groupButton: {
-    width: "100%",
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    borderRadius: 14,
-    backgroundColor: "rgba(255, 255, 255, 0.03)",
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.06)",
-  },
-  groupButtonSelected: {
-    backgroundColor: "rgba(37, 99, 235, 0.2)",
-    borderColor: "#3b82f6",
-  },
-  labelRow: {
-    flexDirection: "row",
-    alignItems: "baseline",
-    gap: 4,
-    marginBottom: 2,
-  },
-  trackText: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#93c5fd",
-  },
-  labelText: {
-    fontSize: 17,
-    fontWeight: "800",
-    color: "#f8fafc",
-  },
-  codeText: {
-    fontSize: 11,
-    color: "#64748b",
-    fontFamily: "monospace",
-  },
-  codeSelected: {
-    color: "#93c5fd",
-  },
-  textSelected: {
-    color: "#ffffff",
-  },
-  gridPinBtn: {
-    position: "absolute",
-    top: 6,
-    right: 6,
-    padding: 6,
-  },
-  pinIconSmall: {
-    fontSize: 14,
-    color: "#64748b",
-  },
-  searchResultRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 8,
-    gap: 8,
-  },
-  searchResultCard: {
-    flex: 1,
-    backgroundColor: "rgba(255, 255, 255, 0.03)",
-    borderRadius: 14,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.06)",
-  },
-  cardSelected: {
-    backgroundColor: "rgba(37, 99, 235, 0.2)",
-    borderColor: "#3b82f6",
-  },
-  resultTitle: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#f8fafc",
-    marginBottom: 2,
-  },
-  resultSubtext: {
-    fontSize: 12,
-    color: "#8a9bb5",
-    lineHeight: 16,
-  },
-  pinBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(255, 255, 255, 0.04)",
-  },
-  pinIcon: {
-    fontSize: 18,
-    color: "#64748b",
-  },
-  pinIconActive: {
-    color: "#f59e0b",
-  },
-  favoriteBadgeRow: {
-    marginBottom: 4,
-  },
-  badgePill: {
-    alignSelf: "flex-start",
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  badgeTeacher: {
-    backgroundColor: "rgba(168, 85, 247, 0.2)",
-  },
-  badgeGroup: {
-    backgroundColor: "rgba(59, 130, 246, 0.2)",
-  },
-  badgeText: {
-    fontSize: 10,
-    fontWeight: "700",
-    color: "#c084fc",
-  },
-  emptySearchBox: {
-    padding: 24,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  emptySearchText: {
-    fontSize: 13,
-    color: "#64748b",
-    textAlign: "center",
-    lineHeight: 18,
-  },
-  originSection: {
-    marginTop: 14,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: "rgba(255, 255, 255, 0.06)",
-  },
-  originTitle: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#64748b",
-    marginBottom: 8,
-  },
-  originRow: {
-    flexDirection: "row",
-    gap: 8,
-  },
-  originButton: {
-    flex: 1,
-    paddingVertical: 8,
-    borderRadius: 8,
-    backgroundColor: "rgba(255, 255, 255, 0.04)",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.06)",
-  },
-  originButtonSelected: {
-    borderColor: "#3b82f6",
-    backgroundColor: "rgba(59, 130, 246, 0.15)",
-  },
-  originButtonText: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: "#8a9bb5",
-  },
-  originButtonTextSelected: {
-    color: "#93c5fd",
-  },
-});
+const createStyles = (colors: Palette) =>
+  StyleSheet.create({
+    backdrop: {
+      flex: 1,
+      backgroundColor: "rgba(0, 0, 0, 0.65)",
+      justifyContent: "flex-end",
+    },
+    sheet: {
+      backgroundColor: colors.canvas,
+      borderTopLeftRadius: 28,
+      borderTopRightRadius: 28,
+      paddingTop: 12,
+      paddingBottom: 36,
+      paddingHorizontal: 20,
+      borderWidth: 1,
+      borderColor: colors.line,
+      maxHeight: "88%",
+    },
+    handle: {
+      width: 44,
+      height: 5,
+      backgroundColor: "rgba(255, 255, 255, 0.2)",
+      borderRadius: 3,
+      alignSelf: "center",
+      marginBottom: 16,
+    },
+    title: {
+      fontSize: 20,
+      fontWeight: "800",
+      color: colors.text,
+      letterSpacing: -0.3,
+    },
+    subtitle: {
+      fontSize: 13,
+      color: colors.muted,
+      marginTop: 2,
+      marginBottom: 14,
+    },
+    segmentedRow: {
+      flexDirection: "row",
+      backgroundColor: colors.soft,
+      borderRadius: 14,
+      padding: 3,
+      marginBottom: 12,
+    },
+    segmentButton: {
+      flex: 1,
+      paddingVertical: 8,
+      alignItems: "center",
+      justifyContent: "center",
+      borderRadius: 11,
+    },
+    segmentButtonActive: {
+      backgroundColor: "#2563eb",
+    },
+    segmentText: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: colors.muted,
+    },
+    segmentTextActive: {
+      color: colors.text,
+      fontWeight: "700",
+    },
+    searchContainer: {
+      position: "relative",
+      marginBottom: 12,
+    },
+    searchInput: {
+      backgroundColor: colors.soft,
+      borderRadius: 12,
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      color: colors.text,
+      fontSize: 14,
+      borderWidth: 1,
+      borderColor: colors.line,
+    },
+    searchSpinner: {
+      position: "absolute",
+      right: 12,
+      top: 12,
+    },
+    scrollArea: {
+      maxHeight: 340,
+    },
+    scrollContent: {
+      paddingBottom: 12,
+    },
+    sectionHeader: {
+      fontSize: 12,
+      fontWeight: "700",
+      color: colors.subtle,
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+      marginBottom: 8,
+      marginTop: 4,
+    },
+    grid: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 8,
+    },
+    gridCardWrapper: {
+      width: "48%",
+      position: "relative",
+    },
+    groupButton: {
+      width: "100%",
+      paddingVertical: 12,
+      paddingHorizontal: 12,
+      borderRadius: 14,
+      backgroundColor: colors.soft,
+      borderWidth: 1,
+      borderColor: colors.line,
+    },
+    groupButtonSelected: {
+      backgroundColor: "rgba(37, 99, 235, 0.2)",
+      borderColor: "#3b82f6",
+    },
+    labelRow: {
+      flexDirection: "row",
+      alignItems: "baseline",
+      gap: 4,
+      marginBottom: 2,
+    },
+    trackText: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: colors.link,
+    },
+    labelText: {
+      fontSize: 17,
+      fontWeight: "800",
+      color: colors.text,
+    },
+    codeText: {
+      fontSize: 11,
+      color: colors.subtle,
+      fontFamily: "monospace",
+    },
+    codeSelected: {
+      color: colors.link,
+    },
+    textSelected: {
+      color: colors.text,
+    },
+    gridPinBtn: {
+      position: "absolute",
+      top: 6,
+      right: 6,
+      padding: 6,
+    },
+    pinIconSmall: {
+      fontSize: 14,
+      color: colors.subtle,
+    },
+    searchResultRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginBottom: 8,
+      gap: 8,
+    },
+    searchResultCard: {
+      flex: 1,
+      backgroundColor: colors.soft,
+      borderRadius: 14,
+      padding: 12,
+      borderWidth: 1,
+      borderColor: colors.line,
+    },
+    cardSelected: {
+      backgroundColor: "rgba(37, 99, 235, 0.2)",
+      borderColor: "#3b82f6",
+    },
+    resultTitle: {
+      fontSize: 15,
+      fontWeight: "700",
+      color: colors.text,
+      marginBottom: 2,
+    },
+    resultSubtext: {
+      fontSize: 12,
+      color: colors.muted,
+      lineHeight: 16,
+    },
+    pinBtn: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: colors.soft,
+    },
+    pinIcon: {
+      fontSize: 18,
+      color: colors.subtle,
+    },
+    pinIconActive: {
+      color: "#f59e0b",
+    },
+    favoriteBadgeRow: {
+      marginBottom: 4,
+    },
+    badgePill: {
+      alignSelf: "flex-start",
+      paddingHorizontal: 8,
+      paddingVertical: 2,
+      borderRadius: 6,
+    },
+    badgeTeacher: {
+      backgroundColor: "rgba(168, 85, 247, 0.2)",
+    },
+    badgeGroup: {
+      backgroundColor: "rgba(59, 130, 246, 0.2)",
+    },
+    badgeText: {
+      fontSize: 10,
+      fontWeight: "700",
+      color: "#c084fc",
+    },
+    emptySearchBox: {
+      padding: 24,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    emptySearchText: {
+      fontSize: 13,
+      color: colors.subtle,
+      textAlign: "center",
+      lineHeight: 18,
+    },
+    originSection: {
+      marginTop: 14,
+      paddingTop: 12,
+      borderTopWidth: 1,
+      borderTopColor: colors.line,
+    },
+    originTitle: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: colors.subtle,
+      marginBottom: 8,
+    },
+    originRow: {
+      flexDirection: "row",
+      gap: 8,
+    },
+    originButton: {
+      flex: 1,
+      paddingVertical: 8,
+      borderRadius: 8,
+      backgroundColor: colors.soft,
+      alignItems: "center",
+      borderWidth: 1,
+      borderColor: colors.line,
+    },
+    originButtonSelected: {
+      borderColor: "#3b82f6",
+      backgroundColor: "rgba(59, 130, 246, 0.15)",
+    },
+    originButtonText: {
+      fontSize: 11,
+      fontWeight: "600",
+      color: colors.muted,
+    },
+    originButtonTextSelected: {
+      color: colors.link,
+    },
+  });

@@ -1,3 +1,8 @@
+import {
+  useTheme,
+  useThemedStyles,
+  type Palette,
+} from "../theme/ThemeProvider";
 import React from "react";
 import {
   View,
@@ -55,97 +60,94 @@ const TABS: TabDef[] = [
   },
 ];
 
-export const BottomNavBar = React.memo<BottomNavBarProps>(({
-  activeTab,
-  onSelectTab,
-  style,
-}) => {
-  return (
-    <View style={[styles.bottomBarContainer, style]}>
-      {TABS.map((tab) => {
-        const isActive = activeTab === tab.key;
-        return (
-          <TouchableOpacity
-            key={tab.key}
-            onPress={() => onSelectTab(tab.key)}
-            style={styles.tabItem}
-            activeOpacity={0.7}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: isActive }}
-            accessibilityLabel={`Вкладка ${tab.label}`}
-          >
-            <View
-              style={[
-                styles.iconWrapper,
-                isActive && styles.activePill,
-              ]}
-            >
-              {tab.renderIcon(isActive)}
-            </View>
-            <Text
-              style={[
-                styles.tabLabel,
-                isActive ? styles.activeLabel : styles.inactiveLabel,
-              ]}
-            >
-              {tab.label}
-            </Text>
-          </TouchableOpacity>
-        );
-      })}
-    </View>
-  );
-});
+export const BottomNavBar = React.memo<BottomNavBarProps>(
+  ({ activeTab, onSelectTab, style }) => {
+    const { colors } = useTheme();
+    const styles = useThemedStyles(createStyles);
 
-const styles = StyleSheet.create({
-  bottomBarContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-around",
-    backgroundColor: "rgba(11, 19, 34, 0.95)",
-    borderTopWidth: 1,
-    borderTopColor: "rgba(217, 133, 159, 0.12)",
-    paddingTop: 8,
-    paddingBottom: Platform.OS === "ios" ? 24 : 12,
-    paddingHorizontal: 8,
-    elevation: 8,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
+    return (
+      <View style={[styles.bottomBarContainer, style]}>
+        {TABS.map((tab) => {
+          const isActive = activeTab === tab.key;
+          return (
+            <TouchableOpacity
+              key={tab.key}
+              onPress={() => onSelectTab(tab.key)}
+              style={styles.tabItem}
+              activeOpacity={0.7}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: isActive }}
+              accessibilityLabel={`Вкладка ${tab.label}`}
+            >
+              <View style={[styles.iconWrapper, isActive && styles.activePill]}>
+                {tab.renderIcon(isActive)}
+              </View>
+              <Text
+                style={[
+                  styles.tabLabel,
+                  isActive ? styles.activeLabel : styles.inactiveLabel,
+                ]}
+              >
+                {tab.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    );
   },
-  tabItem: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  tabItemPressed: {
-    opacity: 0.75,
-  },
-  iconWrapper: {
-    width: 60,
-    height: 32,
-    borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 4,
-    overflow: "hidden",
-  },
-  activePill: {
-    backgroundColor: "#c7d2fe",
-    borderRadius: 16,
-    overflow: "hidden",
-  },
-  tabLabel: {
-    fontSize: 12,
-    letterSpacing: 0.2,
-  },
-  activeLabel: {
-    color: "#ffffff",
-    fontWeight: "700",
-  },
-  inactiveLabel: {
-    color: "#64748b",
-    fontWeight: "500",
-  },
-});
+);
+
+const createStyles = (colors: Palette) =>
+  StyleSheet.create({
+    bottomBarContainer: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-around",
+      backgroundColor: colors.navigation,
+      borderTopWidth: 1,
+      borderTopColor: "rgba(217, 133, 159, 0.12)",
+      paddingTop: 8,
+      paddingBottom: Platform.OS === "ios" ? 24 : 12,
+      paddingHorizontal: 8,
+      elevation: 8,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: -2 },
+      shadowOpacity: 0.3,
+      shadowRadius: 6,
+    },
+    tabItem: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    tabItemPressed: {
+      opacity: 0.75,
+    },
+    iconWrapper: {
+      width: 60,
+      height: 32,
+      borderRadius: 16,
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: 4,
+      overflow: "hidden",
+    },
+    activePill: {
+      backgroundColor: "#c7d2fe",
+      borderRadius: 16,
+      overflow: "hidden",
+    },
+    tabLabel: {
+      fontSize: 12,
+      letterSpacing: 0.2,
+    },
+    activeLabel: {
+      color: colors.text,
+      fontWeight: "700",
+    },
+    inactiveLabel: {
+      color: colors.subtle,
+      fontWeight: "500",
+    },
+  });

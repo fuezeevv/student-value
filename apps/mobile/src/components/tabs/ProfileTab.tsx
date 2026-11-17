@@ -1,4 +1,10 @@
-import React from "react";
+import {
+  useTheme,
+  useThemedStyles,
+  type Palette,
+} from "../../theme/ThemeProvider";
+import React, { useState } from "react";
+import { ManagementModal } from "../ManagementModal";
 import {
   View,
   Text,
@@ -42,6 +48,10 @@ export const ProfileTab = React.memo<ProfileTabProps>(
     onOpenCampusMap,
     onOpenNews,
   }) => {
+    const { colors, choice, setChoice } = useTheme();
+    const [managementOpen, setManagementOpen] = useState(false);
+    const styles = useThemedStyles(createStyles);
+
     const website = (path: string) => {
       Linking.openURL(`https://studentvalue1984.eu.cc${path}`).catch(() => {
         Alert.alert(
@@ -92,6 +102,62 @@ export const ProfileTab = React.memo<ProfileTabProps>(
           </Text>
         </View>
 
+        <View style={styles.card}>
+          <Text style={styles.cardSectionTitle}>Оформление приложения</Text>
+          <View
+            style={{
+              flexDirection: "row",
+              gap: 8,
+              flexWrap: "wrap",
+              marginTop: 12,
+            }}
+          >
+            {(
+              [
+                { id: "system", label: "Как в системе" },
+                { id: "light", label: "Светлая" },
+                { id: "dark", label: "Тёмная" },
+              ] as const
+            ).map((option) => (
+              <SpringPressable
+                key={option.id}
+                accessibilityRole="radio"
+                accessibilityState={{ checked: choice === option.id }}
+                onPress={() => setChoice(option.id)}
+                style={{
+                  padding: 12,
+                  minHeight: 48,
+                  borderRadius: 14,
+                  backgroundColor:
+                    choice === option.id ? colors.raised : colors.soft,
+                  borderWidth: 1,
+                  borderColor: choice === option.id ? colors.link : colors.line,
+                }}
+              >
+                <Text style={{ color: colors.text }}>{option.label}</Text>
+              </SpringPressable>
+            ))}
+          </View>
+        </View>
+        {canManage ? (
+          <SpringPressable
+            onPress={() => setManagementOpen(true)}
+            style={styles.card}
+            accessibilityRole="button"
+          >
+            <Text style={{ color: colors.link, fontSize: 18 }}>
+              Работы и сроки · панель старосты →
+            </Text>
+            <Text style={{ color: colors.muted, marginTop: 8 }}>
+              Редактировать, перенести срок или убрать ошибочное задание
+            </Text>
+          </SpringPressable>
+        ) : null}
+        <ManagementModal
+          visible={managementOpen && Boolean(sessionUser)}
+          onClose={() => setManagementOpen(false)}
+          groupCode={groupCode}
+        />
         {/* Account Card */}
         <View style={styles.card}>
           <View style={styles.accountRow}>
@@ -109,7 +175,7 @@ export const ProfileTab = React.memo<ProfileTabProps>(
               <Text style={styles.accountSubtitle}>
                 {sessionUser
                   ? `Студент · ${sessionUser.groupName || sessionUser.nickname}`
-                  : "Доступно только публичное расписание"}
+                  : "Публичные пары, предметы и работы"}
               </Text>
             </View>
           </View>
@@ -313,230 +379,231 @@ export const ProfileTab = React.memo<ProfileTabProps>(
   },
 );
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#0b1322",
-  },
-  contentContainer: {
-    padding: 20,
-    paddingBottom: 40,
-  },
-  header: {
-    marginBottom: 20,
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: "800",
-    color: "#f8fafc",
-    marginBottom: 4,
-  },
-  headerSubtitle: {
-    fontSize: 13,
-    color: "#8a9bb5",
-  },
-  card: {
-    backgroundColor: "#111d33",
-    borderRadius: 20,
-    padding: 18,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.07)",
-  },
-  accountRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 14,
-  },
-  avatarCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: "#3378ff",
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 14,
-  },
-  avatarInitials: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: "#ffffff",
-  },
-  accountDetails: {
-    flex: 1,
-  },
-  accountName: {
-    fontSize: 17,
-    fontWeight: "700",
-    color: "#f8fafc",
-    marginBottom: 2,
-  },
-  accountSubtitle: {
-    fontSize: 12,
-    color: "#8a9bb5",
-  },
-  loginButton: {
-    backgroundColor: "#3378ff",
-    paddingVertical: 12,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  loginButtonText: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#ffffff",
-  },
-  logoutButton: {
-    backgroundColor: "rgba(244, 63, 94, 0.12)",
-    borderWidth: 1,
-    borderColor: "rgba(244, 63, 94, 0.3)",
-    paddingVertical: 10,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  logoutButtonText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#fda4af",
-  },
-  cardSectionTitle: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#93c5fd",
-    marginBottom: 12,
-  },
-  groupInfoRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  groupCodeLarge: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: "#ffffff",
-    fontFamily: "monospace",
-    marginBottom: 2,
-  },
-  groupSubtext: {
-    fontSize: 13,
-    color: "#8a9bb5",
-  },
-  changeGroupButton: {
-    backgroundColor: "#16253d",
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "#223554",
-  },
-  changeGroupText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#93c5fd",
-  },
-  statRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 8,
-  },
-  statLabel: {
-    fontSize: 13,
-    color: "#8a9bb5",
-  },
-  statValue: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#f8fafc",
-  },
-  statWarning: {
-    color: "#fca5a5",
-  },
-  refreshSyncButton: {
-    backgroundColor: "rgba(51, 120, 255, 0.12)",
-    borderWidth: 1,
-    borderColor: "rgba(51, 120, 255, 0.3)",
-    paddingVertical: 10,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 10,
-  },
-  refreshSyncText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#93c5fd",
-  },
-  serverInfoText: {
-    fontSize: 12,
-    color: "#8a9bb5",
-    marginBottom: 10,
-    fontFamily: "monospace",
-  },
-  originButtonsRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  originChip: {
-    backgroundColor: "#16253d",
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#223554",
-  },
-  originChipActive: {
-    backgroundColor: "rgba(51, 120, 255, 0.25)",
-    borderColor: "#3378ff",
-  },
-  originChipText: {
-    fontSize: 12,
-    color: "#8a9bb5",
-  },
-  originChipTextActive: {
-    color: "#93c5fd",
-    fontWeight: "700",
-  },
-  serviceActionRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "rgba(255, 255, 255, 0.03)",
-    borderRadius: 14,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.06)",
-    gap: 12,
-  },
-  serviceIconBadge: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    backgroundColor: "rgba(59, 130, 246, 0.15)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  serviceIconText: {
-    fontSize: 18,
-  },
-  serviceTextCol: {
-    flex: 1,
-  },
-  serviceTitle: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#f8fafc",
-    marginBottom: 2,
-  },
-  serviceSubtitle: {
-    fontSize: 11,
-    color: "#8a9bb5",
-    lineHeight: 15,
-  },
-  serviceArrow: {
-    fontSize: 20,
-    color: "#64748b",
-    fontWeight: "700",
-  },
-});
+const createStyles = (colors: Palette) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.canvas,
+    },
+    contentContainer: {
+      padding: 20,
+      paddingBottom: 40,
+    },
+    header: {
+      marginBottom: 20,
+    },
+    headerTitle: {
+      fontSize: 24,
+      fontWeight: "800",
+      color: colors.text,
+      marginBottom: 4,
+    },
+    headerSubtitle: {
+      fontSize: 13,
+      color: colors.muted,
+    },
+    card: {
+      backgroundColor: colors.surface,
+      borderRadius: 20,
+      padding: 18,
+      marginBottom: 16,
+      borderWidth: 1,
+      borderColor: "rgba(255, 255, 255, 0.07)",
+    },
+    accountRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginBottom: 14,
+    },
+    avatarCircle: {
+      width: 48,
+      height: 48,
+      borderRadius: 24,
+      backgroundColor: "#3378ff",
+      alignItems: "center",
+      justifyContent: "center",
+      marginRight: 14,
+    },
+    avatarInitials: {
+      fontSize: 20,
+      fontWeight: "800",
+      color: colors.onAccent,
+    },
+    accountDetails: {
+      flex: 1,
+    },
+    accountName: {
+      fontSize: 17,
+      fontWeight: "700",
+      color: colors.text,
+      marginBottom: 2,
+    },
+    accountSubtitle: {
+      fontSize: 12,
+      color: colors.muted,
+    },
+    loginButton: {
+      backgroundColor: "#3378ff",
+      paddingVertical: 12,
+      borderRadius: 14,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    loginButtonText: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: colors.onAccent,
+    },
+    logoutButton: {
+      backgroundColor: "rgba(244, 63, 94, 0.12)",
+      borderWidth: 1,
+      borderColor: "rgba(244, 63, 94, 0.3)",
+      paddingVertical: 10,
+      borderRadius: 14,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    logoutButtonText: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: "#fda4af",
+    },
+    cardSectionTitle: {
+      fontSize: 15,
+      fontWeight: "700",
+      color: colors.link,
+      marginBottom: 12,
+    },
+    groupInfoRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+    },
+    groupCodeLarge: {
+      fontSize: 20,
+      fontWeight: "800",
+      color: colors.text,
+      fontFamily: "monospace",
+      marginBottom: 2,
+    },
+    groupSubtext: {
+      fontSize: 13,
+      color: colors.muted,
+    },
+    changeGroupButton: {
+      backgroundColor: colors.surface,
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: "#223554",
+    },
+    changeGroupText: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: colors.link,
+    },
+    statRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      marginBottom: 8,
+    },
+    statLabel: {
+      fontSize: 13,
+      color: colors.muted,
+    },
+    statValue: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: colors.text,
+    },
+    statWarning: {
+      color: "#fca5a5",
+    },
+    refreshSyncButton: {
+      backgroundColor: "rgba(51, 120, 255, 0.12)",
+      borderWidth: 1,
+      borderColor: "rgba(51, 120, 255, 0.3)",
+      paddingVertical: 10,
+      borderRadius: 14,
+      alignItems: "center",
+      justifyContent: "center",
+      marginTop: 10,
+    },
+    refreshSyncText: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: colors.link,
+    },
+    serverInfoText: {
+      fontSize: 12,
+      color: colors.muted,
+      marginBottom: 10,
+      fontFamily: "monospace",
+    },
+    originButtonsRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 8,
+    },
+    originChip: {
+      backgroundColor: colors.surface,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: "#223554",
+    },
+    originChipActive: {
+      backgroundColor: "rgba(51, 120, 255, 0.25)",
+      borderColor: "#3378ff",
+    },
+    originChipText: {
+      fontSize: 12,
+      color: colors.muted,
+    },
+    originChipTextActive: {
+      color: colors.link,
+      fontWeight: "700",
+    },
+    serviceActionRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: colors.soft,
+      borderRadius: 14,
+      padding: 12,
+      borderWidth: 1,
+      borderColor: colors.line,
+      gap: 12,
+    },
+    serviceIconBadge: {
+      width: 38,
+      height: 38,
+      borderRadius: 12,
+      backgroundColor: "rgba(59, 130, 246, 0.15)",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    serviceIconText: {
+      fontSize: 18,
+    },
+    serviceTextCol: {
+      flex: 1,
+    },
+    serviceTitle: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: colors.text,
+      marginBottom: 2,
+    },
+    serviceSubtitle: {
+      fontSize: 11,
+      color: colors.muted,
+      lineHeight: 15,
+    },
+    serviceArrow: {
+      fontSize: 20,
+      color: colors.subtle,
+      fontWeight: "700",
+    },
+  });

@@ -35,6 +35,10 @@ async function main() {
   const { handleGetMobileTasks } = await import(
     "../src/server/adapters/mobile-tasks"
   );
+  const { FEED_SOURCES } = await import("../src/server/community/feed");
+  const { handleMobileManagement } = await import(
+    "../src/server/adapters/mobile-management"
+  );
   const { prisma } = await import("../src/lib/db/prisma");
   const { hashToken } = await import("../src/lib/auth/google");
 
@@ -403,6 +407,16 @@ async function main() {
         } else {
           nextRes = await handleGetMobileProgress(nextReq);
         }
+      } else if (pathname === "/api/v1/feed") {
+        // Test-only broker never fetches real social providers.
+        const feed = { fetchedAt: new Date().toISOString(), posts: [], sources: FEED_SOURCES.map(source => ({...source, status: "UNAVAILABLE", fetchedAt: null})) };
+        res.statusCode = 503;
+        res.setHeader("Content-Type", "application/json");
+        res.setHeader("Cache-Control", "public, max-age=60, s-maxage=300");
+        res.end(JSON.stringify(feed));
+        return;
+      } else if (pathname === "/api/v1/manage") {
+        nextRes = await handleMobileManagement(nextReq);
       } else {
         res.statusCode = 404;
         res.setHeader("Content-Type", "application/json");

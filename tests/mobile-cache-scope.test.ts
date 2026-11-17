@@ -40,7 +40,58 @@ describe("Task cache audience isolation", () => {
       [{ ...task, title: "B" }],
       "user-b",
     );
+    await repo.saveCachedTasksForGroup(
+      task.groupCode,
+      [task],
+      "user-a",
+      "https://production.example",
+    );
+    await repo.saveCachedTasksForGroup(
+      task.groupCode,
+      [{ ...task, title: "Isolated local fixture" }],
+      "user-a",
+      "http://localhost:3000",
+    );
+    expect(
+      (
+        await repo.getCachedTasksForGroup(
+          task.groupCode,
+          "user-a",
+          "https://production.example",
+        )
+      )[0].title,
+    ).toBe(task.title);
+    expect(
+      (
+        await repo.getCachedTasksForGroup(
+          task.groupCode,
+          "user-a",
+          "http://localhost:3000",
+        )
+      )[0].title,
+    ).toBe("Isolated local fixture");
+    expect(
+      await repo.getCachedTasksForGroup(
+        task.groupCode,
+        "user-a",
+        "https://another.example",
+      ),
+    ).toEqual([]);
     await repo.clearUserData("user-a");
+    expect(
+      await repo.getCachedTasksForGroup(
+        task.groupCode,
+        "user-a",
+        "https://production.example",
+      ),
+    ).toEqual([]);
+    expect(
+      await repo.getCachedTasksForGroup(
+        task.groupCode,
+        "user-a",
+        "http://localhost:3000",
+      ),
+    ).toEqual([]);
     expect(await repo.getCachedTasksForGroup(task.groupCode, "user-a")).toEqual(
       [],
     );

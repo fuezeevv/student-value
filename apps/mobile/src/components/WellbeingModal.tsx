@@ -1,3 +1,8 @@
+import {
+  useTheme,
+  useThemedStyles,
+  type Palette,
+} from "../theme/ThemeProvider";
 import React, { useEffect, useState, useMemo, useCallback } from "react";
 import {
   Modal,
@@ -39,14 +44,17 @@ const GOALS = [25, 45, 60, 90, 120, 180];
 
 function planningLabels(task: CachedTask): string[] {
   if (task.type !== "LABORATORY") return ["Поработать над заданием"];
-  const range = /(Lab|ЛР)\s*(\d+)\s*[–—-]\s*(?:Lab|ЛР)?\s*(\d+)/i.exec(task.title);
+  const range = /(Lab|ЛР)\s*(\d+)\s*[–—-]\s*(?:Lab|ЛР)?\s*(\d+)/i.exec(
+    task.title,
+  );
   if (range) {
     const start = Number(range[2]);
     const end = Number(range[3]);
     if (end >= start && end - start < 20) {
       return Array.from(
         { length: (end - start + 1) * 3 },
-        (_, i) => `${range[1]}${start + Math.floor(i / 3)} · часть ${(i % 3) + 1}/3`,
+        (_, i) =>
+          `${range[1]}${start + Math.floor(i / 3)} · часть ${(i % 3) + 1}/3`,
       );
     }
   }
@@ -70,6 +78,9 @@ export const WellbeingModal: React.FC<WellbeingModalProps> = ({
   onClose,
   onFocusPercentChange,
 }) => {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(createStyles);
+
   const [data, setData] = useState<WellbeingData>({
     days: {},
     running: null,
@@ -93,7 +104,8 @@ export const WellbeingModal: React.FC<WellbeingModalProps> = ({
             setData({
               goal: GOALS.includes(parsed.goal) ? parsed.goal : 45,
               running:
-                typeof parsed.running === "number" && parsed.running <= Date.now()
+                typeof parsed.running === "number" &&
+                parsed.running <= Date.now()
                   ? parsed.running
                   : null,
               starts: parsed.starts || {},
@@ -146,7 +158,10 @@ export const WellbeingModal: React.FC<WellbeingModalProps> = ({
   }, [data.running, data.goal, day.seconds, tick, today]);
 
   const totalSeconds = day.seconds + liveSeconds;
-  const percent = Math.min(100, Math.floor((totalSeconds / (data.goal * 60)) * 100));
+  const percent = Math.min(
+    100,
+    Math.floor((totalSeconds / (data.goal * 60)) * 100),
+  );
 
   // Notify parent of focus percentage changes
   useEffect(() => {
@@ -241,12 +256,14 @@ export const WellbeingModal: React.FC<WellbeingModalProps> = ({
       const record = data.days[k];
       const isPast = k < today;
       const isCurrent = k === today;
-      const daySec = isCurrent ? totalSeconds : (record?.seconds || 0);
+      const daySec = isCurrent ? totalSeconds : record?.seconds || 0;
       const targetSec = (record?.goal || data.goal) * 60;
       const done = daySec >= targetSec;
       const partial = daySec > 0 && !done;
 
-      const shortDay = ["ВС", "ПН", "ВТ", "СР", "ЧТ", "ПТ", "СБ"][d.getUTCDay()];
+      const shortDay = ["ВС", "ПН", "ВТ", "СР", "ЧТ", "ПТ", "СБ"][
+        d.getUTCDay()
+      ];
       const dayNum = d.getDate();
 
       return {
@@ -288,7 +305,10 @@ export const WellbeingModal: React.FC<WellbeingModalProps> = ({
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.scrollArea} showsVerticalScrollIndicator={false}>
+          <ScrollView
+            style={styles.scrollArea}
+            showsVerticalScrollIndicator={false}
+          >
             {/* 7-Day Strip */}
             <View style={styles.weekStrip}>
               {weekDays.map((item) => (
@@ -312,7 +332,10 @@ export const WellbeingModal: React.FC<WellbeingModalProps> = ({
                       styles.dayDot,
                       item.done && styles.dayDotDone,
                       item.partial && styles.dayDotPartial,
-                      item.isCurrent && !item.done && !item.partial && styles.dayDotCurrent,
+                      item.isCurrent &&
+                        !item.done &&
+                        !item.partial &&
+                        styles.dayDotCurrent,
                     ]}
                   >
                     <Text
@@ -354,11 +377,15 @@ export const WellbeingModal: React.FC<WellbeingModalProps> = ({
                 onPress={toggleTimer}
                 style={[
                   styles.timerActionButton,
-                  data.running ? styles.timerButtonPause : styles.timerButtonStart,
+                  data.running
+                    ? styles.timerButtonPause
+                    : styles.timerButtonStart,
                 ]}
                 activeOpacity={0.8}
                 accessibilityRole="button"
-                accessibilityLabel={data.running ? "Приостановить таймер" : "Начать заниматься"}
+                accessibilityLabel={
+                  data.running ? "Приостановить таймер" : "Начать заниматься"
+                }
               >
                 <Text style={styles.timerActionButtonText}>
                   {data.running ? "Пауза" : "Начать заниматься"}
@@ -396,7 +423,9 @@ export const WellbeingModal: React.FC<WellbeingModalProps> = ({
 
             {/* Bite-sized steps */}
             <View style={styles.stepsSection}>
-              <Text style={styles.sectionLabel}>Небольшие шаги на сегодня:</Text>
+              <Text style={styles.sectionLabel}>
+                Небольшие шаги на сегодня:
+              </Text>
               <Text style={styles.stepsHint}>
                 Разбиение текущих работ на небольшие части для спокойного темпа.
               </Text>
@@ -454,9 +483,9 @@ export const WellbeingModal: React.FC<WellbeingModalProps> = ({
             {/* Academic Policy Disclaimer */}
             <View style={styles.disclaimerBox}>
               <Text style={styles.disclaimerText}>
-                Личный ориентир, не условие допуска к сессии. Время и шаги сохраняются
-                только на этом устройстве. Отметка шага и таймер не меняют выполнение
-                задания, баллы XP или зачёт преподавателя.
+                Личный ориентир, не условие допуска к сессии. Время и шаги
+                сохраняются только на этом устройстве. Отметка шага и таймер не
+                меняют выполнение задания, баллы XP или зачёт преподавателя.
               </Text>
             </View>
           </ScrollView>
@@ -466,288 +495,289 @@ export const WellbeingModal: React.FC<WellbeingModalProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.7)",
-    justifyContent: "flex-end",
-  },
-  modalCard: {
-    backgroundColor: "#0f172a",
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    maxHeight: "88%",
-    paddingBottom: Platform.OS === "ios" ? 34 : 20,
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.08)",
-  },
-  headerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingTop: 18,
-    paddingBottom: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(255, 255, 255, 0.08)",
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#f8fafc",
-  },
-  modalSubtitle: {
-    fontSize: 12,
-    color: "#64748b",
-    marginTop: 2,
-  },
-  closeButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: "rgba(255, 255, 255, 0.06)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  closeButtonText: {
-    color: "#94a3b8",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  scrollArea: {
-    paddingHorizontal: 20,
-  },
-  weekStrip: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginVertical: 16,
-    backgroundColor: "rgba(255, 255, 255, 0.03)",
-    padding: 10,
-    borderRadius: 16,
-  },
-  weekDayItem: {
-    alignItems: "center",
-    gap: 6,
-  },
-  weekDayItemCurrent: {
-    transform: [{ scale: 1.05 }],
-  },
-  weekDayLabel: {
-    fontSize: 11,
-    color: "#64748b",
-    fontWeight: "600",
-  },
-  weekDayLabelCurrent: {
-    color: "#60a5fa",
-    fontWeight: "700",
-  },
-  dayDot: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(255, 255, 255, 0.05)",
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.08)",
-  },
-  dayDotDone: {
-    backgroundColor: "#10b981",
-    borderColor: "#10b981",
-  },
-  dayDotPartial: {
-    backgroundColor: "#3b82f6",
-    borderColor: "#3b82f6",
-  },
-  dayDotCurrent: {
-    borderColor: "#60a5fa",
-    borderWidth: 1.5,
-  },
-  dayNumText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#94a3b8",
-  },
-  dayNumTextActive: {
-    color: "#ffffff",
-  },
-  timerBox: {
-    backgroundColor: "rgba(30, 41, 59, 0.5)",
-    borderRadius: 18,
-    padding: 18,
-    alignItems: "center",
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.06)",
-  },
-  timerBigValue: {
-    fontSize: 32,
-    fontWeight: "800",
-    color: "#f8fafc",
-    fontFamily: "monospace",
-  },
-  timerSmall: {
-    fontSize: 16,
-    color: "#94a3b8",
-    fontWeight: "500",
-  },
-  timerPercentBadge: {
-    fontSize: 12,
-    color: "#93c5fd",
-    fontWeight: "600",
-    marginTop: 4,
-    marginBottom: 12,
-  },
-  progressTrack: {
-    width: "100%",
-    height: 6,
-    backgroundColor: "rgba(255, 255, 255, 0.08)",
-    borderRadius: 3,
-    overflow: "hidden",
-    marginBottom: 16,
-  },
-  progressBar: {
-    height: "100%",
-    borderRadius: 3,
-  },
-  timerActionButton: {
-    width: "100%",
-    paddingVertical: 12,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  timerButtonStart: {
-    backgroundColor: "#2563eb",
-  },
-  timerButtonPause: {
-    backgroundColor: "#d97706",
-  },
-  timerActionButtonText: {
-    color: "#ffffff",
-    fontSize: 15,
-    fontWeight: "700",
-  },
-  goalSection: {
-    marginBottom: 16,
-  },
-  sectionLabel: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#94a3b8",
-    marginBottom: 8,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  goalPillsRow: {
-    flexDirection: "row",
-    gap: 8,
-    justifyContent: "space-between",
-  },
-  goalPill: {
-    flex: 1,
-    paddingVertical: 8,
-    alignItems: "center",
-    borderRadius: 10,
-    backgroundColor: "rgba(255, 255, 255, 0.04)",
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.08)",
-  },
-  goalPillActive: {
-    backgroundColor: "rgba(59, 130, 246, 0.2)",
-    borderColor: "#3b82f6",
-  },
-  goalPillDisabled: {
-    opacity: 0.5,
-  },
-  goalPillText: {
-    fontSize: 13,
-    color: "#94a3b8",
-    fontWeight: "600",
-  },
-  goalPillTextActive: {
-    color: "#60a5fa",
-  },
-  stepsSection: {
-    marginBottom: 16,
-  },
-  stepsHint: {
-    fontSize: 12,
-    color: "#64748b",
-    marginBottom: 10,
-    lineHeight: 16,
-  },
-  stepCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    backgroundColor: "rgba(255, 255, 255, 0.03)",
-    padding: 12,
-    borderRadius: 12,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.06)",
-  },
-  stepCardCompleted: {
-    opacity: 0.6,
-  },
-  stepCheckbox: {
-    width: 22,
-    height: 22,
-    borderRadius: 6,
-    borderWidth: 1.5,
-    borderColor: "#475569",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  stepCheckboxChecked: {
-    backgroundColor: "#10b981",
-    borderColor: "#10b981",
-  },
-  stepCheckmark: {
-    color: "#ffffff",
-    fontSize: 12,
-    fontWeight: "bold",
-  },
-  stepTextContainer: {
-    flex: 1,
-  },
-  stepCourseText: {
-    fontSize: 12,
-    color: "#60a5fa",
-    fontWeight: "600",
-    marginBottom: 2,
-  },
-  stepLabelText: {
-    fontSize: 13,
-    color: "#e2e8f0",
-  },
-  stepTextDone: {
-    textDecorationLine: "line-through",
-    color: "#64748b",
-  },
-  emptyStepsBox: {
-    padding: 14,
-    borderRadius: 10,
-    backgroundColor: "rgba(255, 255, 255, 0.02)",
-    alignItems: "center",
-  },
-  emptyStepsText: {
-    fontSize: 12,
-    color: "#64748b",
-  },
-  disclaimerBox: {
-    padding: 14,
-    borderRadius: 12,
-    backgroundColor: "rgba(255, 255, 255, 0.02)",
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.04)",
-    marginBottom: 24,
-  },
-  disclaimerText: {
-    fontSize: 11,
-    color: "#64748b",
-    lineHeight: 16,
-    textAlign: "center",
-  },
-});
+const createStyles = (colors: Palette) =>
+  StyleSheet.create({
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: "rgba(0, 0, 0, 0.7)",
+      justifyContent: "flex-end",
+    },
+    modalCard: {
+      backgroundColor: colors.canvas,
+      borderTopLeftRadius: 24,
+      borderTopRightRadius: 24,
+      maxHeight: "88%",
+      paddingBottom: Platform.OS === "ios" ? 34 : 20,
+      borderWidth: 1,
+      borderColor: colors.line,
+    },
+    headerRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingHorizontal: 20,
+      paddingTop: 18,
+      paddingBottom: 14,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.line,
+    },
+    modalTitle: {
+      fontSize: 18,
+      fontWeight: "700",
+      color: colors.text,
+    },
+    modalSubtitle: {
+      fontSize: 12,
+      color: colors.subtle,
+      marginTop: 2,
+    },
+    closeButton: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      backgroundColor: colors.soft,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    closeButtonText: {
+      color: colors.muted,
+      fontSize: 16,
+      fontWeight: "600",
+    },
+    scrollArea: {
+      paddingHorizontal: 20,
+    },
+    weekStrip: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      marginVertical: 16,
+      backgroundColor: colors.soft,
+      padding: 10,
+      borderRadius: 16,
+    },
+    weekDayItem: {
+      alignItems: "center",
+      gap: 6,
+    },
+    weekDayItemCurrent: {
+      transform: [{ scale: 1.05 }],
+    },
+    weekDayLabel: {
+      fontSize: 11,
+      color: colors.subtle,
+      fontWeight: "600",
+    },
+    weekDayLabelCurrent: {
+      color: colors.link,
+      fontWeight: "700",
+    },
+    dayDot: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: colors.soft,
+      borderWidth: 1,
+      borderColor: colors.line,
+    },
+    dayDotDone: {
+      backgroundColor: "#10b981",
+      borderColor: "#10b981",
+    },
+    dayDotPartial: {
+      backgroundColor: "#3b82f6",
+      borderColor: "#3b82f6",
+    },
+    dayDotCurrent: {
+      borderColor: colors.link,
+      borderWidth: 1.5,
+    },
+    dayNumText: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: colors.muted,
+    },
+    dayNumTextActive: {
+      color: colors.text,
+    },
+    timerBox: {
+      backgroundColor: "rgba(30, 41, 59, 0.5)",
+      borderRadius: 18,
+      padding: 18,
+      alignItems: "center",
+      marginBottom: 16,
+      borderWidth: 1,
+      borderColor: colors.line,
+    },
+    timerBigValue: {
+      fontSize: 32,
+      fontWeight: "800",
+      color: colors.text,
+      fontFamily: "monospace",
+    },
+    timerSmall: {
+      fontSize: 16,
+      color: colors.muted,
+      fontWeight: "500",
+    },
+    timerPercentBadge: {
+      fontSize: 12,
+      color: colors.link,
+      fontWeight: "600",
+      marginTop: 4,
+      marginBottom: 12,
+    },
+    progressTrack: {
+      width: "100%",
+      height: 6,
+      backgroundColor: colors.soft,
+      borderRadius: 3,
+      overflow: "hidden",
+      marginBottom: 16,
+    },
+    progressBar: {
+      height: "100%",
+      borderRadius: 3,
+    },
+    timerActionButton: {
+      width: "100%",
+      paddingVertical: 12,
+      borderRadius: 14,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    timerButtonStart: {
+      backgroundColor: "#2563eb",
+    },
+    timerButtonPause: {
+      backgroundColor: "#d97706",
+    },
+    timerActionButtonText: {
+      color: colors.onAccent,
+      fontSize: 15,
+      fontWeight: "700",
+    },
+    goalSection: {
+      marginBottom: 16,
+    },
+    sectionLabel: {
+      fontSize: 13,
+      fontWeight: "700",
+      color: colors.muted,
+      marginBottom: 8,
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+    },
+    goalPillsRow: {
+      flexDirection: "row",
+      gap: 8,
+      justifyContent: "space-between",
+    },
+    goalPill: {
+      flex: 1,
+      paddingVertical: 8,
+      alignItems: "center",
+      borderRadius: 10,
+      backgroundColor: colors.soft,
+      borderWidth: 1,
+      borderColor: colors.line,
+    },
+    goalPillActive: {
+      backgroundColor: "rgba(59, 130, 246, 0.2)",
+      borderColor: "#3b82f6",
+    },
+    goalPillDisabled: {
+      opacity: 0.5,
+    },
+    goalPillText: {
+      fontSize: 13,
+      color: colors.muted,
+      fontWeight: "600",
+    },
+    goalPillTextActive: {
+      color: colors.link,
+    },
+    stepsSection: {
+      marginBottom: 16,
+    },
+    stepsHint: {
+      fontSize: 12,
+      color: colors.subtle,
+      marginBottom: 10,
+      lineHeight: 16,
+    },
+    stepCard: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+      backgroundColor: colors.soft,
+      padding: 12,
+      borderRadius: 12,
+      marginBottom: 8,
+      borderWidth: 1,
+      borderColor: colors.line,
+    },
+    stepCardCompleted: {
+      opacity: 0.6,
+    },
+    stepCheckbox: {
+      width: 22,
+      height: 22,
+      borderRadius: 6,
+      borderWidth: 1.5,
+      borderColor: "#475569",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    stepCheckboxChecked: {
+      backgroundColor: "#10b981",
+      borderColor: "#10b981",
+    },
+    stepCheckmark: {
+      color: colors.text,
+      fontSize: 12,
+      fontWeight: "bold",
+    },
+    stepTextContainer: {
+      flex: 1,
+    },
+    stepCourseText: {
+      fontSize: 12,
+      color: colors.link,
+      fontWeight: "600",
+      marginBottom: 2,
+    },
+    stepLabelText: {
+      fontSize: 13,
+      color: colors.text,
+    },
+    stepTextDone: {
+      textDecorationLine: "line-through",
+      color: colors.subtle,
+    },
+    emptyStepsBox: {
+      padding: 14,
+      borderRadius: 10,
+      backgroundColor: colors.soft,
+      alignItems: "center",
+    },
+    emptyStepsText: {
+      fontSize: 12,
+      color: colors.subtle,
+    },
+    disclaimerBox: {
+      padding: 14,
+      borderRadius: 12,
+      backgroundColor: colors.soft,
+      borderWidth: 1,
+      borderColor: colors.line,
+      marginBottom: 24,
+    },
+    disclaimerText: {
+      fontSize: 11,
+      color: colors.subtle,
+      lineHeight: 16,
+      textAlign: "center",
+    },
+  });

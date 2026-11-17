@@ -633,9 +633,12 @@ export class TimetableSqliteRepository {
 
   async clearUserData(userId: string): Promise<void> {
     await this.init();
-    await this.db.run(`DELETE FROM scoped_cached_tasks WHERE scope_key = ?`, [
-      `user:${userId}`,
-    ]);
+    const scope = `user:${userId}`;
+    const prefix = `${scope}|origin:`;
+    await this.db.run(
+      `DELETE FROM scoped_cached_tasks WHERE scope_key = ? OR substr(scope_key,1,?) = ?`,
+      [scope, prefix.length, prefix],
+    );
     await this.db.run(`DELETE FROM pending_operations WHERE user_id = ?`, [
       userId,
     ]);
@@ -654,9 +657,13 @@ export class TimetableSqliteRepository {
     groupCode: string,
     tasks: CachedTask[],
     userId?: string,
+    apiOrigin?: string,
   ): Promise<void> {
     await this.init();
-    const scope = userId ? `user:${userId}` : "guest";
+    const baseScope = userId ? `user:${userId}` : "guest";
+    const scope = apiOrigin
+      ? `${baseScope}|origin:${new URL(apiOrigin).origin}`
+      : baseScope;
     await this.db.transaction(async () => {
       await this.db.run(
         `DELETE FROM scoped_cached_tasks WHERE scope_key = ? AND group_code = ?`,
@@ -682,11 +689,15 @@ export class TimetableSqliteRepository {
   async getCachedTasksForGroup(
     groupCode: string,
     userId?: string,
+    apiOrigin?: string,
   ): Promise<CachedTask[]> {
     await this.init();
     // Legacy unscoped cache is deliberately not read: its audience is unknown.
     // Preserve it rather than guessing ownership or deleting by title prefixes.
-    const scope = userId ? `user:${userId}` : "guest";
+    const baseScope = userId ? `user:${userId}` : "guest";
+    const scope = apiOrigin
+      ? `${baseScope}|origin:${new URL(apiOrigin).origin}`
+      : baseScope;
     const rows = await this.db.all<{ payload_json: string }>(
       `SELECT payload_json FROM scoped_cached_tasks WHERE scope_key = ? AND group_code = ? ORDER BY id`,
       [scope, groupCode],

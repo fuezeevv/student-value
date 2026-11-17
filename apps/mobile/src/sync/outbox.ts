@@ -18,6 +18,7 @@ export async function enqueueProgressUpdate(
   taskId: string,
   status: "NOT_STARTED" | "IN_PROGRESS" | "READY" | "SUBMITTED",
   notes?: string,
+  groupCode?: string,
 ): Promise<{ operationId: string; optimisticProgress: UserTaskProgress }> {
   const user = await getSessionUser();
   if (!user) {
@@ -55,6 +56,7 @@ export async function enqueueProgressUpdate(
     payload: {
       status,
       notes,
+      groupCode,
       ...(predecessor
         ? { dependsOnOperationId: predecessor.id }
         : { baseUpdatedAt: previous?.updatedAt ?? null }),
@@ -67,9 +69,9 @@ export async function enqueueProgressUpdate(
   // A new explicit choice supersedes failed drafts of the same task. Until this
   // point they remain stored for recovery; transient network retries never drop them.
   for (const failed of await repo.getPendingOperations(user.id)) {
-    if (failed.taskId === taskId && failed.status === "FAILED") await repo.removePendingOperation(failed.id);
+    if (failed.taskId === taskId && failed.status === "FAILED")
+      await repo.removePendingOperation(failed.id);
   }
-
 
   // Trigger background flush (fire-and-forget)
   flushOutbox().catch(() => {});
@@ -119,7 +121,9 @@ export async function flushOutbox(): Promise<FlushReport> {
       if (!isCurrentSession(generation)) break;
       if (op.status === "FAILED") {
         report.failed++;
-        report.errors.push("Есть конфликтующие изменения: обновите данные и повторите свой выбор.");
+        report.errors.push(
+          "Есть конфликтующие изменения: обновите данные и повторите свой выбор.",
+        );
         continue;
       }
       report.processed++;
@@ -142,6 +146,7 @@ export async function flushOutbox(): Promise<FlushReport> {
             taskId: op.taskId,
             status: op.payload.status || "READY",
             notes: op.payload.notes,
+            groupCode: op.payload.groupCode,
             createdAt: op.createdAt,
             baseUpdatedAt: op.payload.baseUpdatedAt,
             dependsOnOperationId: op.payload.dependsOnOperationId,

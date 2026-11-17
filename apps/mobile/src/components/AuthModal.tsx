@@ -1,3 +1,8 @@
+import {
+  useTheme,
+  useThemedStyles,
+  type Palette,
+} from "../theme/ThemeProvider";
 import React, { useState } from "react";
 import {
   Modal,
@@ -29,6 +34,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   onUserChanged,
   onFlushComplete,
 }) => {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(createStyles);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -130,7 +138,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     disabled={loading}
                   >
                     {loading ? (
-                      <ActivityIndicator size="small" color="#93c5fd" />
+                      <ActivityIndicator size="small" color={colors.link} />
                     ) : (
                       <Text style={styles.syncNowText}>
                         Синхронизировать сейчас
@@ -189,149 +197,150 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.75)",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 20,
-  },
-  modalCard: {
-    width: "100%",
-    maxWidth: 380,
-    backgroundColor: "#16253d",
-    borderRadius: 20,
-    padding: 24,
-    borderWidth: 1,
-    borderColor: "#223554",
-  },
-  profileSection: {
-    alignItems: "center",
-  },
-  avatarLarge: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: "#2563eb",
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  avatarInitial: {
-    fontSize: 26,
-    fontWeight: "bold",
-    color: "#ffffff",
-  },
-  userName: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#f0f4f8",
-    marginBottom: 4,
-  },
-  userRole: {
-    fontSize: 13,
-    color: "#93c5fd",
-    marginBottom: 16,
-  },
-  outboxCard: {
-    width: "100%",
-    backgroundColor: "#0b1424",
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: "#223554",
-  },
-  outboxRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  outboxLabel: {
-    fontSize: 13,
-    color: "#8a9bb5",
-  },
-  outboxValue: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#dbeafe",
-  },
-  syncNowButton: {
-    marginTop: 10,
-    backgroundColor: "#1e3a5f",
-    paddingVertical: 8,
-    borderRadius: 8,
-    alignItems: "center",
-  },
-  syncNowText: {
-    color: "#93c5fd",
-    fontSize: 13,
-    fontWeight: "600",
-  },
-  logoutButton: {
-    width: "100%",
-    paddingVertical: 12,
-    borderRadius: 12,
-    backgroundColor: "rgba(239, 68, 68, 0.12)",
-    borderWidth: 1,
-    borderColor: "rgba(239, 68, 68, 0.3)",
-    alignItems: "center",
-    marginBottom: 10,
-  },
-  logoutText: {
-    color: "#f87171",
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  loginSection: {
-    alignItems: "center",
-  },
-  loginTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#f0f4f8",
-    marginBottom: 8,
-  },
-  loginSubtitle: {
-    fontSize: 13,
-    color: "#8a9bb5",
-    textAlign: "center",
-    marginBottom: 20,
-    lineHeight: 18,
-  },
-  errorText: {
-    color: "#f87171",
-    fontSize: 13,
-    marginBottom: 12,
-    textAlign: "center",
-  },
-  googleLoginButton: {
-    width: "100%",
-    backgroundColor: "#f0f4f8",
-    paddingVertical: 14,
-    borderRadius: 14,
-    alignItems: "center",
-    marginBottom: 14,
-  },
-  googleButtonText: {
-    color: "#0b1424",
-    fontSize: 15,
-    fontWeight: "700",
-  },
-  securityNote: {
-    fontSize: 11,
-    color: "#6b7d96",
-    textAlign: "center",
-    marginBottom: 10,
-  },
-  closeButton: {
-    width: "100%",
-    paddingVertical: 12,
-    alignItems: "center",
-  },
-  closeText: {
-    color: "#8a9bb5",
-    fontSize: 14,
-  },
-});
+const createStyles = (colors: Palette) =>
+  StyleSheet.create({
+    overlay: {
+      flex: 1,
+      backgroundColor: "rgba(0, 0, 0, 0.75)",
+      justifyContent: "center",
+      alignItems: "center",
+      padding: 20,
+    },
+    modalCard: {
+      width: "100%",
+      maxWidth: 380,
+      backgroundColor: colors.surface,
+      borderRadius: 20,
+      padding: 24,
+      borderWidth: 1,
+      borderColor: "#223554",
+    },
+    profileSection: {
+      alignItems: "center",
+    },
+    avatarLarge: {
+      width: 64,
+      height: 64,
+      borderRadius: 32,
+      backgroundColor: "#2563eb",
+      justifyContent: "center",
+      alignItems: "center",
+      marginBottom: 12,
+    },
+    avatarInitial: {
+      fontSize: 26,
+      fontWeight: "bold",
+      color: colors.onAccent,
+    },
+    userName: {
+      fontSize: 18,
+      fontWeight: "700",
+      color: "#f0f4f8",
+      marginBottom: 4,
+    },
+    userRole: {
+      fontSize: 13,
+      color: colors.link,
+      marginBottom: 16,
+    },
+    outboxCard: {
+      width: "100%",
+      backgroundColor: colors.canvas,
+      borderRadius: 12,
+      padding: 14,
+      marginBottom: 16,
+      borderWidth: 1,
+      borderColor: "#223554",
+    },
+    outboxRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+    },
+    outboxLabel: {
+      fontSize: 13,
+      color: colors.muted,
+    },
+    outboxValue: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: colors.link,
+    },
+    syncNowButton: {
+      marginTop: 10,
+      backgroundColor: colors.raised,
+      paddingVertical: 8,
+      borderRadius: 8,
+      alignItems: "center",
+    },
+    syncNowText: {
+      color: colors.link,
+      fontSize: 13,
+      fontWeight: "600",
+    },
+    logoutButton: {
+      width: "100%",
+      paddingVertical: 12,
+      borderRadius: 12,
+      backgroundColor: "rgba(239, 68, 68, 0.12)",
+      borderWidth: 1,
+      borderColor: "rgba(239, 68, 68, 0.3)",
+      alignItems: "center",
+      marginBottom: 10,
+    },
+    logoutText: {
+      color: "#f87171",
+      fontSize: 14,
+      fontWeight: "600",
+    },
+    loginSection: {
+      alignItems: "center",
+    },
+    loginTitle: {
+      fontSize: 18,
+      fontWeight: "700",
+      color: "#f0f4f8",
+      marginBottom: 8,
+    },
+    loginSubtitle: {
+      fontSize: 13,
+      color: colors.muted,
+      textAlign: "center",
+      marginBottom: 20,
+      lineHeight: 18,
+    },
+    errorText: {
+      color: "#f87171",
+      fontSize: 13,
+      marginBottom: 12,
+      textAlign: "center",
+    },
+    googleLoginButton: {
+      width: "100%",
+      backgroundColor: "#f0f4f8",
+      paddingVertical: 14,
+      borderRadius: 14,
+      alignItems: "center",
+      marginBottom: 14,
+    },
+    googleButtonText: {
+      color: "#0b1424",
+      fontSize: 15,
+      fontWeight: "700",
+    },
+    securityNote: {
+      fontSize: 11,
+      color: "#6b7d96",
+      textAlign: "center",
+      marginBottom: 10,
+    },
+    closeButton: {
+      width: "100%",
+      paddingVertical: 12,
+      alignItems: "center",
+    },
+    closeText: {
+      color: colors.muted,
+      fontSize: 14,
+    },
+  });

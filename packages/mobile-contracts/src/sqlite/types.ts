@@ -48,6 +48,7 @@ export type PendingOperation = {
   payload: {
     status?: "NOT_STARTED" | "IN_PROGRESS" | "READY" | "SUBMITTED";
     notes?: string;
+    groupCode?: string;
     baseUpdatedAt?: string | null;
     dependsOnOperationId?: string;
   };

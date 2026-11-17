@@ -18,14 +18,14 @@ export const DEFAULT_API_ORIGIN =
 
 export const KNOWN_API_ORIGINS = [
   {
-    id: "lan",
-    label: "Local Wi-Fi (10.210.5.173:3000)",
-    origin: "http://10.210.5.173:3000",
-  },
-  {
     id: "usb",
     label: "Local USB (127.0.0.1:3000)",
     origin: "http://127.0.0.1:3000",
+  },
+  {
+    id: "lan",
+    label: "Local Wi-Fi (192.168.0.26:3000)",
+    origin: "http://192.168.0.26:3000",
   },
   {
     id: "prod",
@@ -40,10 +40,13 @@ export async function getActiveApiOrigin(): Promise<string> {
     const saved = await repo.getPreference("api_origin");
     if (saved && saved.trim()) {
       const trimmed = saved.trim();
-      // On real Android device, 127.0.0.1 loopback and stale subnet IPs cannot reach the dev server
       if (
-        Platform.OS === "android" &&
-        (trimmed.includes("127.0.0.1") || trimmed.includes("192.168.0.26"))
+        !process.env.EXPO_PUBLIC_API_URL &&
+        [
+          "http://127.0.0.1:3000",
+          "http://192.168.0.26:3000",
+          "http://10.210.5.173:3000",
+        ].includes(trimmed)
       ) {
         return DEFAULT_API_ORIGIN;
       }
