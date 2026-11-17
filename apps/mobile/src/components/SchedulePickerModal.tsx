@@ -17,6 +17,7 @@ import {
 } from "react-native";
 import {
   KNOWN_API_ORIGINS,
+  DEVELOPMENT_SERVER_CONTROLS,
   searchRuzTeachers,
   searchRuzGroups,
   type RuzSearchTeacher,
@@ -670,7 +671,7 @@ export const SchedulePickerModal: React.FC<SchedulePickerModalProps> = ({
           )}
 
           {/* API Origin Selector */}
-          {onSelectOrigin && (
+          {DEVELOPMENT_SERVER_CONTROLS && onSelectOrigin && (
             <View style={styles.originSection}>
               <Text style={styles.originTitle}>Сервер API (Origin)</Text>
               <View style={styles.originRow}>

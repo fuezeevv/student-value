@@ -16,6 +16,9 @@ import { getTimetableRepository } from "../storage/repository";
 export const DEFAULT_API_ORIGIN =
   process.env.EXPO_PUBLIC_API_URL || "https://studentvalue1984.eu.cc";
 
+export const DEVELOPMENT_SERVER_CONTROLS =
+  __DEV__ && process.env.EXPO_PUBLIC_ALLOW_DEV_SERVER === "true";
+
 export const KNOWN_API_ORIGINS = [
   {
     id: "usb",
@@ -41,15 +44,10 @@ export async function getActiveApiOrigin(): Promise<string> {
     if (saved && saved.trim()) {
       const trimmed = saved.trim();
       if (
-        !process.env.EXPO_PUBLIC_API_URL &&
-        [
-          "http://127.0.0.1:3000",
-          "http://192.168.0.26:3000",
-          "http://10.210.5.173:3000",
-        ].includes(trimmed)
-      ) {
+        !DEVELOPMENT_SERVER_CONTROLS &&
+        new URL(trimmed).origin !== new URL(DEFAULT_API_ORIGIN).origin
+      )
         return DEFAULT_API_ORIGIN;
-      }
       return trimmed;
     }
   } catch {}
@@ -57,8 +55,16 @@ export async function getActiveApiOrigin(): Promise<string> {
 }
 
 export async function setActiveApiOrigin(origin: string): Promise<void> {
+  const normalized = new URL(origin.trim()).origin;
+  if (
+    !DEVELOPMENT_SERVER_CONTROLS &&
+    normalized !== new URL(DEFAULT_API_ORIGIN).origin
+  )
+    throw Error(
+      "Тестовый сервер доступен только в специальной сборке разработчика",
+    );
   const repo = getTimetableRepository();
-  await repo.setPreference("api_origin", origin.trim());
+  await repo.setPreference("api_origin", normalized);
 }
 
 export type SyncResult =

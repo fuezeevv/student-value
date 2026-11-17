@@ -1,3 +1,4 @@
+import { DEVELOPMENT_SERVER_CONTROLS } from "../../api/client";
 import {
   useTheme,
   useThemedStyles,
@@ -266,7 +267,7 @@ export const ProfileTab = React.memo<ProfileTabProps>(
               <View style={styles.serviceTextCol}>
                 <Text style={styles.serviceTitle}>Карта корпусов кампуса</Text>
                 <Text style={styles.serviceSubtitle}>
-                  Официальная карта СПбПУ и PDF-схема в браузере
+                  Кампус в приложении и офлайн-планы главного здания
                 </Text>
               </View>
               <Text style={styles.serviceArrow}>›</Text>
@@ -292,7 +293,7 @@ export const ProfileTab = React.memo<ProfileTabProps>(
               <View style={styles.serviceTextCol}>
                 <Text style={styles.serviceTitle}>Новости и анонсы</Text>
                 <Text style={styles.serviceSubtitle}>
-                  Обновления проекта и канал @studentvalue
+                  Публикации проекта и студенческих сообществ
                 </Text>
               </View>
               <Text style={styles.serviceArrow}>›</Text>
@@ -302,9 +303,7 @@ export const ProfileTab = React.memo<ProfileTabProps>(
 
         {/* Offline Storage Card */}
         <View style={styles.card}>
-          <Text style={styles.cardSectionTitle}>
-            Память устройства (SQLite)
-          </Text>
+          <Text style={styles.cardSectionTitle}>Данные без интернета</Text>
           <View style={styles.statRow}>
             <Text style={styles.statLabel}>Сохранено пар в расписании:</Text>
             <Text style={styles.statValue}>{cachedLessonsCount}</Text>
@@ -330,50 +329,53 @@ export const ProfileTab = React.memo<ProfileTabProps>(
         </View>
 
         {/* Server Endpoint Card */}
-        <View style={styles.card}>
-          <Text style={styles.cardSectionTitle}>Серверный эндпоинт</Text>
-          <Text style={styles.serverInfoText}>Текущий: {apiOrigin}</Text>
+        {DEVELOPMENT_SERVER_CONTROLS ? (
+          <View style={styles.card}>
+            <Text style={styles.cardSectionTitle}>Серверный эндпоинт</Text>
+            <Text style={styles.serverInfoText}>Текущий: {apiOrigin}</Text>
 
-          <View style={styles.originButtonsRow}>
-            <SpringPressable
-              style={[
-                styles.originChip,
-                apiOrigin.includes("192.168") && styles.originChipActive,
-              ]}
-              activeScale={0.94}
-              onPress={() => onSelectOrigin("http://192.168.0.26:3000")}
-            >
-              <Text
+            <View style={styles.originButtonsRow}>
+              <SpringPressable
                 style={[
-                  styles.originChipText,
-                  apiOrigin.includes("192.168") && styles.originChipTextActive,
+                  styles.originChip,
+                  apiOrigin.includes("192.168") && styles.originChipActive,
                 ]}
+                activeScale={0.94}
+                onPress={() => onSelectOrigin("http://192.168.0.26:3000")}
               >
-                LAN (192.168.0.26)
-              </Text>
-            </SpringPressable>
+                <Text
+                  style={[
+                    styles.originChipText,
+                    apiOrigin.includes("192.168") &&
+                      styles.originChipTextActive,
+                  ]}
+                >
+                  LAN (192.168.0.26)
+                </Text>
+              </SpringPressable>
 
-            <SpringPressable
-              style={[
-                styles.originChip,
-                apiOrigin.includes("studentvalue1984.eu.cc") &&
-                  styles.originChipActive,
-              ]}
-              activeScale={0.94}
-              onPress={() => onSelectOrigin("https://studentvalue1984.eu.cc")}
-            >
-              <Text
+              <SpringPressable
                 style={[
-                  styles.originChipText,
+                  styles.originChip,
                   apiOrigin.includes("studentvalue1984.eu.cc") &&
-                    styles.originChipTextActive,
+                    styles.originChipActive,
                 ]}
+                activeScale={0.94}
+                onPress={() => onSelectOrigin("https://studentvalue1984.eu.cc")}
               >
-                Production (eu.cc)
-              </Text>
-            </SpringPressable>
+                <Text
+                  style={[
+                    styles.originChipText,
+                    apiOrigin.includes("studentvalue1984.eu.cc") &&
+                      styles.originChipTextActive,
+                  ]}
+                >
+                  Production (eu.cc)
+                </Text>
+              </SpringPressable>
+            </View>
           </View>
-        </View>
+        ) : null}
       </ScrollView>
     );
   },

@@ -1,3 +1,4 @@
+import { DEVELOPMENT_SERVER_CONTROLS } from "../api/client";
 import {
   useTheme,
   useThemedStyles,
@@ -99,7 +100,11 @@ export const AppInfoModal: React.FC<AppInfoModalProps> = ({
                   ]}
                 />
                 <Text style={styles.statusPillText}>
-                  {isOffline === undefined ? "Проверяем подключение" : isOffline ? "Нет подключения" : "Сеть подключена"}
+                  {isOffline === undefined
+                    ? "Проверяем подключение"
+                    : isOffline
+                      ? "Нет подключения"
+                      : "Сеть подключена"}
                 </Text>
               </View>
             </View>
@@ -139,41 +144,45 @@ export const AppInfoModal: React.FC<AppInfoModalProps> = ({
             </View>
 
             {/* Server Switch Quick Selector */}
-            <View style={styles.serverButtonsRow}>
-              <TouchableOpacity
-                onPress={() => onSelectOrigin("http://192.168.0.26:3000")}
-                style={[
-                  styles.serverSwitchButton,
-                  isDevOrigin && styles.serverSwitchButtonActive,
-                ]}
-              >
-                <Text
+            {DEVELOPMENT_SERVER_CONTROLS ? (
+              <View style={styles.serverButtonsRow}>
+                <TouchableOpacity
+                  onPress={() => onSelectOrigin("http://192.168.0.26:3000")}
                   style={[
-                    styles.serverSwitchText,
-                    isDevOrigin && styles.serverSwitchTextActive,
+                    styles.serverSwitchButton,
+                    isDevOrigin && styles.serverSwitchButtonActive,
                   ]}
                 >
-                  Dev LAN (192.168)
-                </Text>
-              </TouchableOpacity>
+                  <Text
+                    style={[
+                      styles.serverSwitchText,
+                      isDevOrigin && styles.serverSwitchTextActive,
+                    ]}
+                  >
+                    Dev LAN (192.168)
+                  </Text>
+                </TouchableOpacity>
 
-              <TouchableOpacity
-                onPress={() => onSelectOrigin("https://studentvalue1984.eu.cc")}
-                style={[
-                  styles.serverSwitchButton,
-                  !isDevOrigin && styles.serverSwitchButtonActive,
-                ]}
-              >
-                <Text
+                <TouchableOpacity
+                  onPress={() =>
+                    onSelectOrigin("https://studentvalue1984.eu.cc")
+                  }
                   style={[
-                    styles.serverSwitchText,
-                    !isDevOrigin && styles.serverSwitchTextActive,
+                    styles.serverSwitchButton,
+                    !isDevOrigin && styles.serverSwitchButtonActive,
                   ]}
                 >
-                  Production (eu.cc)
-                </Text>
-              </TouchableOpacity>
-            </View>
+                  <Text
+                    style={[
+                      styles.serverSwitchText,
+                      !isDevOrigin && styles.serverSwitchTextActive,
+                    ]}
+                  >
+                    Production (eu.cc)
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            ) : null}
 
             {/* Force Sync Action */}
             <TouchableOpacity
