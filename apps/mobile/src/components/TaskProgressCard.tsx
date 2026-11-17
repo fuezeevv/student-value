@@ -42,7 +42,8 @@ export const TaskProgressCard: React.FC<TaskProgressCardProps> = ({
   loading = false,
 }) => {
   const status = progress?.status || "NOT_STARTED";
-  const isReady = status === "READY" || status === "SUBMITTED";
+  const isAccepted = status === "ACCEPTED";
+  const isReady = status === "READY" || status === "SUBMITTED" || isAccepted;
   const syncState = progress?.syncState || "SYNCED";
 
   return (
@@ -108,9 +109,9 @@ export const TaskProgressCard: React.FC<TaskProgressCardProps> = ({
             </Text>
             <Text style={styles.reminderText}>
               {isReady
-                ? "Напоминание отменено (работа сдана)"
+                ? "Работа отмечена выполненной"
                 : reminderScheduled
-                  ? "Напоминание активно (за день до срока)"
+                  ? "Напоминание включено"
                   : "Включить напоминание о дедлайне"}
             </Text>
           </TouchableOpacity>
@@ -126,26 +127,40 @@ export const TaskProgressCard: React.FC<TaskProgressCardProps> = ({
             accessibilityRole="button"
             accessibilityLabel="Войти для отметки выполнения"
           >
-            <Text style={styles.guestButtonText}>Войдите, чтобы отметить работу</Text>
+            <Text style={styles.guestButtonText}>
+              Войдите, чтобы отметить работу
+            </Text>
           </TouchableOpacity>
         ) : isReady ? (
           <View style={styles.readyContainer}>
             <View style={styles.readyBadge}>
               <Text style={styles.readyBadgeText}>✓ Выполнено</Text>
-              <Text style={styles.readySubtext}>(ожидает проверки)</Text>
+              <Text style={styles.readySubtext}>
+                {isAccepted
+                  ? progress?.isVerified
+                    ? "Подтверждено"
+                    : "Результат требует уточнения"
+                  : "Самостоятельная отметка"}
+              </Text>
             </View>
 
             <TouchableOpacity
               style={styles.unmarkButton}
               onPress={() => onToggleStatus(taskId, status)}
-              disabled={loading}
+              disabled={loading || isAccepted}
               accessibilityRole="button"
-              accessibilityLabel="Снять отметку о выполнении"
+              accessibilityLabel={
+                isAccepted
+                  ? "Подтверждённый результат изменяет проверяющий"
+                  : "Снять отметку о выполнении"
+              }
             >
               {loading ? (
                 <ActivityIndicator size="small" color="#8a9bb5" />
               ) : (
-                <Text style={styles.unmarkButtonText}>Снять отметку</Text>
+                <Text style={styles.unmarkButtonText}>
+                  {isAccepted ? "Изменяет проверяющий" : "Снять отметку"}
+                </Text>
               )}
             </TouchableOpacity>
           </View>
@@ -160,7 +175,9 @@ export const TaskProgressCard: React.FC<TaskProgressCardProps> = ({
             {loading ? (
               <ActivityIndicator size="small" color="#ffffff" />
             ) : (
-              <Text style={styles.markReadyText}>Отметить выполненным (+20 XP)</Text>
+              <Text style={styles.markReadyText}>
+                Отметить выполненным (+20 XP)
+              </Text>
             )}
           </TouchableOpacity>
         )}

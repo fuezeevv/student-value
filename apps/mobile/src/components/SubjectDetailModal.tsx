@@ -14,6 +14,7 @@ import { SpringPressable } from "./SpringPressable";
 export interface SubjectDetailModalProps {
   visible: boolean;
   lesson: MobileLesson | null;
+  subject?: string | null;
   tasks: CachedTask[];
   onClose: () => void;
   onOpenMaterial?: (materialId: string) => void;
@@ -22,17 +23,17 @@ export interface SubjectDetailModalProps {
 export const SubjectDetailModal: React.FC<SubjectDetailModalProps> = ({
   visible,
   lesson,
+  subject,
   tasks,
   onClose,
   onOpenMaterial,
 }) => {
-  if (!lesson) return null;
+  const title = lesson?.subject ?? subject;
+  if (!title) return null;
 
   // Filter tasks that match this subject
   const subjectTasks = tasks.filter(
-    (t) =>
-      t.subject.toLowerCase().includes(lesson.subject.toLowerCase()) ||
-      lesson.subject.toLowerCase().includes(t.subject.toLowerCase()),
+    (t) => t.subject.trim().toLowerCase() === title.trim().toLowerCase(),
   );
 
   return (
@@ -50,8 +51,10 @@ export const SubjectDetailModal: React.FC<SubjectDetailModalProps> = ({
           {/* Header */}
           <View style={styles.headerRow}>
             <View style={styles.headerInfo}>
-              <Text style={styles.typeEyebrow}>{lesson.type || "Учебный курс"}</Text>
-              <Text style={styles.titleText}>{lesson.subject}</Text>
+              <Text style={styles.typeEyebrow}>
+                {lesson?.type || "Учебный курс"}
+              </Text>
+              <Text style={styles.titleText}>{title}</Text>
             </View>
             <SpringPressable
               style={styles.closeButton}
@@ -70,35 +73,37 @@ export const SubjectDetailModal: React.FC<SubjectDetailModalProps> = ({
             showsVerticalScrollIndicator={false}
           >
             {/* Class Info Box */}
-            <View style={styles.infoCard}>
-              <Text style={styles.sectionTitle}>Информация о занятии</Text>
-              <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>Время:</Text>
-                <Text style={styles.infoValue}>
-                  {lesson.start} – {lesson.scheduledEnd}
-                </Text>
-              </View>
-              <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>Аудитория:</Text>
-                <Text style={styles.infoValue}>
-                  {lesson.rooms.join(", ") || "Уточняется"}
-                </Text>
-              </View>
-              {lesson.teachers.length > 0 && (
+            {lesson && (
+              <View style={styles.infoCard}>
+                <Text style={styles.sectionTitle}>Информация о занятии</Text>
                 <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>Преподаватель:</Text>
+                  <Text style={styles.infoLabel}>Время:</Text>
                   <Text style={styles.infoValue}>
-                    {lesson.teachers.join(", ")}
+                    {lesson.start} – {lesson.scheduledEnd}
                   </Text>
                 </View>
-              )}
-              {lesson.note ? (
                 <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>Примечание:</Text>
-                  <Text style={styles.infoValueNote}>{lesson.note}</Text>
+                  <Text style={styles.infoLabel}>Аудитория:</Text>
+                  <Text style={styles.infoValue}>
+                    {lesson.rooms.join(", ") || "Уточняется"}
+                  </Text>
                 </View>
-              ) : null}
-            </View>
+                {lesson.teachers.length > 0 && (
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Преподаватель:</Text>
+                    <Text style={styles.infoValue}>
+                      {lesson.teachers.join(", ")}
+                    </Text>
+                  </View>
+                )}
+                {lesson.note ? (
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Примечание:</Text>
+                    <Text style={styles.infoValueNote}>{lesson.note}</Text>
+                  </View>
+                ) : null}
+              </View>
+            )}
 
             {/* Subject Tasks / Materials */}
             <View style={styles.tasksSection}>
@@ -132,7 +137,8 @@ export const SubjectDetailModal: React.FC<SubjectDetailModalProps> = ({
               ) : (
                 <View style={styles.emptyBox}>
                   <Text style={styles.emptyText}>
-                    По этому предмету пока нет прикреплённых заданий в базе группы.
+                    По этому предмету пока нет прикреплённых заданий в базе
+                    группы.
                   </Text>
                 </View>
               )}

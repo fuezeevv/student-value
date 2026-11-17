@@ -1,5 +1,12 @@
 import React from "react";
-import { View, Text, StyleSheet, ScrollView, Alert } from "react-native";
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  Alert,
+  Linking,
+} from "react-native";
 import type { MobileSessionUser } from "../../auth/token-storage";
 import { SpringPressable } from "../SpringPressable";
 
@@ -19,224 +26,292 @@ export interface ProfileTabProps {
   onOpenNews?: () => void;
 }
 
-export const ProfileTab = React.memo<ProfileTabProps>(({
-  sessionUser,
-  groupCode,
-  cachedLessonsCount,
-  cachedTasksCount,
-  apiOrigin,
-  isStale,
-  onOpenGroupPicker,
-  onOpenLogin,
-  onLogout,
-  onSelectOrigin,
-  onRefreshData,
-  onOpenCampusMap,
-  onOpenNews,
-}) => {
-  return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={styles.contentContainer}
-      showsVerticalScrollIndicator={false}
-    >
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Профиль и настройки</Text>
-        <Text style={styles.headerSubtitle}>
-          Student Value · Автономный академический компаньон
-        </Text>
-      </View>
-
-      {/* Account Card */}
-      <View style={styles.card}>
-        <View style={styles.accountRow}>
-          <View style={styles.avatarCircle}>
-            <Text style={styles.avatarInitials}>
-              {sessionUser
-                ? (sessionUser.nickname[0] || "U").toUpperCase()
-                : "G"}
-            </Text>
-          </View>
-          <View style={styles.accountDetails}>
-            <Text style={styles.accountName}>
-              {sessionUser ? sessionUser.nickname : "Гостевой доступ"}
-            </Text>
-            <Text style={styles.accountSubtitle}>
-              {sessionUser
-                ? `Студент · ${sessionUser.groupName || sessionUser.nickname}`
-                : "Доступно только публичное расписание"}
-            </Text>
-          </View>
-        </View>
-
-        {sessionUser ? (
-          <SpringPressable
-            style={styles.logoutButton}
-            activeScale={0.96}
-            onPress={() => {
-              Alert.alert(
-                "Выход из аккаунта",
-                "Вы уверены, что хотите выйти? Локальные отметки прогресса будут сохранены.",
-                [
-                  { text: "Отмена", style: "cancel" },
-                  { text: "Выйти", style: "destructive", onPress: onLogout },
-                ],
-              );
-            }}
-          >
-            <Text style={styles.logoutButtonText}>Выйти из профиля</Text>
-          </SpringPressable>
-        ) : (
-          <SpringPressable
-            style={styles.loginButton}
-            activeScale={0.96}
-            onPress={onOpenLogin}
-          >
-            <Text style={styles.loginButtonText}>Войти через Google</Text>
-          </SpringPressable>
-        )}
-      </View>
-
-      {/* Group Card */}
-      <View style={styles.card}>
-        <Text style={styles.cardSectionTitle}>Учебная группа</Text>
-        <View style={styles.groupInfoRow}>
-          <View>
-            <Text style={styles.groupCodeLarge}>{groupCode}</Text>
-            <Text style={styles.groupSubtext}>СПбПУ Петра Великого</Text>
-          </View>
-          <SpringPressable
-            style={styles.changeGroupButton}
-            activeScale={0.94}
-            onPress={onOpenGroupPicker}
-          >
-            <Text style={styles.changeGroupText}>Сменить</Text>
-          </SpringPressable>
-        </View>
-      </View>
-
-      {/* Campus Services Card */}
-      <View style={styles.card}>
-        <Text style={styles.cardSectionTitle}>Сервисы Политеха</Text>
-
-        {onOpenCampusMap && (
-          <SpringPressable
-            style={styles.serviceActionRow}
-            activeScale={0.97}
-            onPress={onOpenCampusMap}
-            accessibilityRole="button"
-            accessibilityLabel="Открыть карту кампуса"
-          >
-            <View style={styles.serviceIconBadge}>
-              <Text style={styles.serviceIconText}>🗺️</Text>
-            </View>
-            <View style={styles.serviceTextCol}>
-              <Text style={styles.serviceTitle}>Карта корпусов кампуса</Text>
-              <Text style={styles.serviceSubtitle}>
-                Входы, этажи, аудитории и столовые Политеха
-              </Text>
-            </View>
-            <Text style={styles.serviceArrow}>›</Text>
-          </SpringPressable>
-        )}
-
-        {onOpenNews && (
-          <SpringPressable
-            style={[styles.serviceActionRow, { marginTop: 8 }]}
-            activeScale={0.97}
-            onPress={onOpenNews}
-            accessibilityRole="button"
-            accessibilityLabel="Открыть новости"
-          >
-            <View style={[styles.serviceIconBadge, { backgroundColor: "rgba(34, 158, 217, 0.15)" }]}>
-              <Text style={styles.serviceIconText}>📢</Text>
-            </View>
-            <View style={styles.serviceTextCol}>
-              <Text style={styles.serviceTitle}>Новости и анонсы</Text>
-              <Text style={styles.serviceSubtitle}>
-                Официальные события СПбПУ и канал @studentvalue
-              </Text>
-            </View>
-            <Text style={styles.serviceArrow}>›</Text>
-          </SpringPressable>
-        )}
-      </View>
-
-      {/* Offline Storage Card */}
-      <View style={styles.card}>
-        <Text style={styles.cardSectionTitle}>Память устройства (SQLite)</Text>
-        <View style={styles.statRow}>
-          <Text style={styles.statLabel}>Сохранено пар в расписании:</Text>
-          <Text style={styles.statValue}>{cachedLessonsCount}</Text>
-        </View>
-        <View style={styles.statRow}>
-          <Text style={styles.statLabel}>Сохранено заданий:</Text>
-          <Text style={styles.statValue}>{cachedTasksCount}</Text>
-        </View>
-        <View style={styles.statRow}>
-          <Text style={styles.statLabel}>Статус кэша:</Text>
-          <Text style={[styles.statValue, isStale && styles.statWarning]}>
-            {isStale ? "Требует обновления" : "Актуален"}
+export const ProfileTab = React.memo<ProfileTabProps>(
+  ({
+    sessionUser,
+    groupCode,
+    cachedLessonsCount,
+    cachedTasksCount,
+    apiOrigin,
+    isStale,
+    onOpenGroupPicker,
+    onOpenLogin,
+    onLogout,
+    onSelectOrigin,
+    onRefreshData,
+    onOpenCampusMap,
+    onOpenNews,
+  }) => {
+    const website = (path: string) => {
+      Linking.openURL(`https://studentvalue1984.eu.cc${path}`).catch(() => {
+        Alert.alert(
+          "Не удалось открыть сайт",
+          "Откройте studentvalue1984.eu.cc в браузере.",
+        );
+      });
+    };
+    const canManage =
+      sessionUser &&
+      (sessionUser.isOwner ||
+        sessionUser.permissions.some((permission) =>
+          [
+            "manage_group",
+            "manage_tasks",
+            "manage_courses",
+            "manage_deadlines",
+            "manage_members",
+            "manage_announcements",
+          ].includes(permission),
+        ));
+    const webLinks = [
+      ...(canManage
+        ? [
+            { title: "Панель старосты", path: "/admin" },
+            { title: "Обмен материалами групп", path: "/exchange" },
+          ]
+        : []),
+      { title: "Настройки сайта и светлая / тёмная тема", path: "/settings" },
+      { title: "Google Calendar", path: "/calendar" },
+      { title: "Моя группа и приглашения", path: "/group" },
+      { title: "Предложения и уточнения", path: "/proposals" },
+      { title: "Прогресс и достижения", path: "/leaderboard" },
+      ...(sessionUser?.isPlatformOwner
+        ? [{ title: "Все группы и аккаунты", path: "/platform" }]
+        : []),
+    ];
+    return (
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.contentContainer}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Профиль и настройки</Text>
+          <Text style={styles.headerSubtitle}>
+            Student Value · Автономный академический компаньон
           </Text>
         </View>
 
-        <SpringPressable
-          style={styles.refreshSyncButton}
-          activeScale={0.96}
-          onPress={onRefreshData}
-        >
-          <Text style={styles.refreshSyncText}>Синхронизировать сейчас</Text>
-        </SpringPressable>
-      </View>
+        {/* Account Card */}
+        <View style={styles.card}>
+          <View style={styles.accountRow}>
+            <View style={styles.avatarCircle}>
+              <Text style={styles.avatarInitials}>
+                {sessionUser
+                  ? (sessionUser.nickname[0] || "U").toUpperCase()
+                  : "G"}
+              </Text>
+            </View>
+            <View style={styles.accountDetails}>
+              <Text style={styles.accountName}>
+                {sessionUser ? sessionUser.nickname : "Гостевой доступ"}
+              </Text>
+              <Text style={styles.accountSubtitle}>
+                {sessionUser
+                  ? `Студент · ${sessionUser.groupName || sessionUser.nickname}`
+                  : "Доступно только публичное расписание"}
+              </Text>
+            </View>
+          </View>
 
-      {/* Server Endpoint Card */}
-      <View style={styles.card}>
-        <Text style={styles.cardSectionTitle}>Серверный эндпоинт</Text>
-        <Text style={styles.serverInfoText}>Текущий: {apiOrigin}</Text>
-
-        <View style={styles.originButtonsRow}>
-          <SpringPressable
-            style={[
-              styles.originChip,
-              apiOrigin.includes("192.168") && styles.originChipActive,
-            ]}
-            activeScale={0.94}
-            onPress={() => onSelectOrigin("http://192.168.0.26:3000")}
-          >
-            <Text
-              style={[
-                styles.originChipText,
-                apiOrigin.includes("192.168") && styles.originChipTextActive,
-              ]}
+          {sessionUser ? (
+            <SpringPressable
+              style={styles.logoutButton}
+              activeScale={0.96}
+              onPress={() => {
+                Alert.alert(
+                  "Выход из аккаунта",
+                  "Выйти и удалить личные данные, скачанные материалы и очередь с устройства? Неотправленные изменения будут потеряны. Отправленные результаты останутся на сервере.",
+                  [
+                    { text: "Отмена", style: "cancel" },
+                    { text: "Выйти", style: "destructive", onPress: onLogout },
+                  ],
+                );
+              }}
             >
-              LAN (192.168.0.26)
+              <Text style={styles.logoutButtonText}>Выйти из профиля</Text>
+            </SpringPressable>
+          ) : (
+            <SpringPressable
+              style={styles.loginButton}
+              activeScale={0.96}
+              onPress={onOpenLogin}
+            >
+              <Text style={styles.loginButtonText}>Войти через Google</Text>
+            </SpringPressable>
+          )}
+        </View>
+
+        <View style={styles.card}>
+          <Text style={styles.cardSectionTitle}>Возможности сайта</Text>
+          <Text style={styles.serverInfoText}>
+            Эти разделы откроются в браузере. Вход на сайте отдельный; нативный
+            перенос ещё не завершён.
+          </Text>
+          {webLinks.map((link) => (
+            <SpringPressable
+              key={link.path}
+              style={styles.serviceActionRow}
+              onPress={() => website(link.path)}
+              accessibilityRole="link"
+              accessibilityLabel={`${link.title}, открыть сайт`}
+            >
+              <View style={styles.serviceTextCol}>
+                <Text style={styles.serviceTitle}>{link.title}</Text>
+              </View>
+              <Text style={styles.serviceArrow}>↗</Text>
+            </SpringPressable>
+          ))}
+        </View>
+
+        {/* Group Card */}
+        <View style={styles.card}>
+          <Text style={styles.cardSectionTitle}>Учебная группа</Text>
+          <View style={styles.groupInfoRow}>
+            <View>
+              <Text style={styles.groupCodeLarge}>{groupCode}</Text>
+              <Text style={styles.groupSubtext}>СПбПУ Петра Великого</Text>
+            </View>
+            <SpringPressable
+              style={styles.changeGroupButton}
+              activeScale={0.94}
+              onPress={onOpenGroupPicker}
+            >
+              <Text style={styles.changeGroupText}>Сменить</Text>
+            </SpringPressable>
+          </View>
+        </View>
+
+        {/* Campus Services Card */}
+        <View style={styles.card}>
+          <Text style={styles.cardSectionTitle}>Сервисы Политеха</Text>
+
+          {onOpenCampusMap && (
+            <SpringPressable
+              style={styles.serviceActionRow}
+              activeScale={0.97}
+              onPress={onOpenCampusMap}
+              accessibilityRole="button"
+              accessibilityLabel="Открыть карту кампуса"
+            >
+              <View style={styles.serviceIconBadge}>
+                <Text style={styles.serviceIconText}>🗺️</Text>
+              </View>
+              <View style={styles.serviceTextCol}>
+                <Text style={styles.serviceTitle}>Карта корпусов кампуса</Text>
+                <Text style={styles.serviceSubtitle}>
+                  Официальная карта СПбПУ и PDF-схема в браузере
+                </Text>
+              </View>
+              <Text style={styles.serviceArrow}>›</Text>
+            </SpringPressable>
+          )}
+
+          {onOpenNews && (
+            <SpringPressable
+              style={[styles.serviceActionRow, { marginTop: 8 }]}
+              activeScale={0.97}
+              onPress={onOpenNews}
+              accessibilityRole="button"
+              accessibilityLabel="Открыть новости"
+            >
+              <View
+                style={[
+                  styles.serviceIconBadge,
+                  { backgroundColor: "rgba(34, 158, 217, 0.15)" },
+                ]}
+              >
+                <Text style={styles.serviceIconText}>📢</Text>
+              </View>
+              <View style={styles.serviceTextCol}>
+                <Text style={styles.serviceTitle}>Новости и анонсы</Text>
+                <Text style={styles.serviceSubtitle}>
+                  Обновления проекта и канал @studentvalue
+                </Text>
+              </View>
+              <Text style={styles.serviceArrow}>›</Text>
+            </SpringPressable>
+          )}
+        </View>
+
+        {/* Offline Storage Card */}
+        <View style={styles.card}>
+          <Text style={styles.cardSectionTitle}>
+            Память устройства (SQLite)
+          </Text>
+          <View style={styles.statRow}>
+            <Text style={styles.statLabel}>Сохранено пар в расписании:</Text>
+            <Text style={styles.statValue}>{cachedLessonsCount}</Text>
+          </View>
+          <View style={styles.statRow}>
+            <Text style={styles.statLabel}>Сохранено заданий:</Text>
+            <Text style={styles.statValue}>{cachedTasksCount}</Text>
+          </View>
+          <View style={styles.statRow}>
+            <Text style={styles.statLabel}>Статус кэша:</Text>
+            <Text style={[styles.statValue, isStale && styles.statWarning]}>
+              {isStale ? "Требует обновления" : "Актуален"}
             </Text>
-          </SpringPressable>
+          </View>
 
           <SpringPressable
-            style={[
-              styles.originChip,
-              apiOrigin.includes("studentvalue1984.eu.cc") &&
-                styles.originChipActive,
-            ]}
-            activeScale={0.94}
-            onPress={() => onSelectOrigin("https://studentvalue1984.eu.cc")}
+            style={styles.refreshSyncButton}
+            activeScale={0.96}
+            onPress={onRefreshData}
           >
-            <Text
-              style={[
-                styles.originChipText,
-                apiOrigin.includes("studentvalue1984.eu.cc") &&
-                  styles.originChipTextActive,
-              ]}
-            >
-              Production (eu.cc)
-            </Text>
+            <Text style={styles.refreshSyncText}>Синхронизировать сейчас</Text>
           </SpringPressable>
         </View>
-      </View>
-    </ScrollView>
-  );
-});
+
+        {/* Server Endpoint Card */}
+        <View style={styles.card}>
+          <Text style={styles.cardSectionTitle}>Серверный эндпоинт</Text>
+          <Text style={styles.serverInfoText}>Текущий: {apiOrigin}</Text>
+
+          <View style={styles.originButtonsRow}>
+            <SpringPressable
+              style={[
+                styles.originChip,
+                apiOrigin.includes("192.168") && styles.originChipActive,
+              ]}
+              activeScale={0.94}
+              onPress={() => onSelectOrigin("http://192.168.0.26:3000")}
+            >
+              <Text
+                style={[
+                  styles.originChipText,
+                  apiOrigin.includes("192.168") && styles.originChipTextActive,
+                ]}
+              >
+                LAN (192.168.0.26)
+              </Text>
+            </SpringPressable>
+
+            <SpringPressable
+              style={[
+                styles.originChip,
+                apiOrigin.includes("studentvalue1984.eu.cc") &&
+                  styles.originChipActive,
+              ]}
+              activeScale={0.94}
+              onPress={() => onSelectOrigin("https://studentvalue1984.eu.cc")}
+            >
+              <Text
+                style={[
+                  styles.originChipText,
+                  apiOrigin.includes("studentvalue1984.eu.cc") &&
+                    styles.originChipTextActive,
+                ]}
+              >
+                Production (eu.cc)
+              </Text>
+            </SpringPressable>
+          </View>
+        </View>
+      </ScrollView>
+    );
+  },
+);
 
 const styles = StyleSheet.create({
   container: {

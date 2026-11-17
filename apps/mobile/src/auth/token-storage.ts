@@ -1,7 +1,21 @@
+import * as Crypto from "expo-crypto";
+import { getActiveApiOrigin } from "../api/client";
 import * as SecureStore from "expo-secure-store";
 
 const TOKEN_KEY = "sv_session_token";
 const USER_KEY = "sv_session_user";
+
+async function storageKey(
+  key: string,
+  capturedOrigin?: string,
+): Promise<string> {
+  const origin = new URL(capturedOrigin ?? (await getActiveApiOrigin())).origin;
+  const digest = await Crypto.digestStringAsync(
+    Crypto.CryptoDigestAlgorithm.SHA256,
+    origin,
+  );
+  return `${key}_${digest}`;
+}
 
 export interface MobileSessionUser {
   id: string;
@@ -17,26 +31,35 @@ export interface MobileSessionUser {
   groups?: { id: string; name: string; code: string }[];
 }
 
-export async function saveSessionToken(token: string): Promise<void> {
-  await SecureStore.setItemAsync(TOKEN_KEY, token, {
+export async function saveSessionToken(
+  token: string,
+  origin?: string,
+): Promise<void> {
+  await SecureStore.setItemAsync(await storageKey(TOKEN_KEY, origin), token, {
     keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK,
   });
 }
 
 export async function getSessionToken(): Promise<string | null> {
-  return SecureStore.getItemAsync(TOKEN_KEY);
+  return SecureStore.getItemAsync(await storageKey(TOKEN_KEY));
 }
 
 export async function deleteSessionToken(): Promise<void> {
-  await SecureStore.deleteItemAsync(TOKEN_KEY);
+  await SecureStore.deleteItemAsync(await storageKey(TOKEN_KEY));
 }
 
-export async function saveSessionUser(user: MobileSessionUser): Promise<void> {
-  await SecureStore.setItemAsync(USER_KEY, JSON.stringify(user));
+export async function saveSessionUser(
+  user: MobileSessionUser,
+  origin?: string,
+): Promise<void> {
+  await SecureStore.setItemAsync(
+    await storageKey(USER_KEY, origin),
+    JSON.stringify(user),
+  );
 }
 
 export async function getSessionUser(): Promise<MobileSessionUser | null> {
-  const raw = await SecureStore.getItemAsync(USER_KEY);
+  const raw = await SecureStore.getItemAsync(await storageKey(USER_KEY));
   if (!raw) return null;
   try {
     return JSON.parse(raw) as MobileSessionUser;
@@ -46,7 +69,7 @@ export async function getSessionUser(): Promise<MobileSessionUser | null> {
 }
 
 export async function deleteSessionUser(): Promise<void> {
-  await SecureStore.deleteItemAsync(USER_KEY);
+  await SecureStore.deleteItemAsync(await storageKey(USER_KEY));
 }
 
 export async function clearAllAuth(): Promise<void> {

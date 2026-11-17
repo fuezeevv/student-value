@@ -12,6 +12,7 @@ import {
 import type { DownloadedMaterial } from "@studentvalue/mobile-contracts";
 import {
   downloadMaterial,
+  openLocalMaterial,
   readLocalMaterialContent,
   deleteLocalMaterial,
   fetchMaterialMetadata,
@@ -38,7 +39,9 @@ export const MaterialModal: React.FC<MaterialModalProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [metadata, setMetadata] = useState<MaterialMetadata | null>(null);
   const [downloaded, setDownloaded] = useState<DownloadedMaterial | null>(null);
-  const [readResult, setReadResult] = useState<LocalMaterialReadResult | null>(null);
+  const [readResult, setReadResult] = useState<LocalMaterialReadResult | null>(
+    null,
+  );
   const [viewingFile, setViewingFile] = useState(false);
 
   useEffect(() => {
@@ -60,16 +63,21 @@ export const MaterialModal: React.FC<MaterialModalProps> = ({
         const local = await repo.getDownloadedMaterial(userId, materialId);
         if (active) {
           setDownloaded(local);
+          if (local) setLoading(false);
         }
+        // A saved document opens without waiting for an unreachable server.
+        if (local) return;
 
-        // Try to fetch latest metadata if online
+        // Fetch metadata only for materials not yet saved on this device.
         try {
           const meta = await fetchMaterialMetadata(materialId);
           if (active) setMetadata(meta);
         } catch (metaErr) {
           // If offline and have local copy, metadata isn't strictly required
           if (!local && active) {
-            setError(metaErr instanceof Error ? metaErr.message : "Ошибка загрузки");
+            setError(
+              metaErr instanceof Error ? metaErr.message : "Ошибка загрузки",
+            );
           }
         }
       } finally {
@@ -163,11 +171,36 @@ export const MaterialModal: React.FC<MaterialModalProps> = ({
                   <View style={styles.binaryContainer}>
                     <Text style={styles.binaryTitle}>📄 Бинарный документ</Text>
                     <Text style={styles.binarySubtitle}>
-                      {readResult.filename} ({readResult.mimeType || "application/octet-stream"})
+                      {readResult.filename} (
+                      {readResult.mimeType || "application/octet-stream"})
                     </Text>
                     <Text style={styles.binaryDesc}>
-                      Файл загружен и верифицирован ({readResult.byteSize} байт). Сохранён в изолированной памяти устройства для работы без сети.
+                      Файл загружен и верифицирован ({readResult.byteSize}{" "}
+                      байт). Сохранён в изолированной памяти устройства для
+                      работы без сети.
                     </Text>
+                    <TouchableOpacity
+                      style={styles.closeReaderButton}
+                      accessibilityRole="button"
+                      accessibilityLabel="Открыть сохранённый документ в просмотрщике"
+                      onPress={async () => {
+                        if (!userId || !materialId) return;
+                        try {
+                          await openLocalMaterial(userId, materialId);
+                        } catch {
+                          Alert.alert(
+                            "Не удалось открыть документ",
+                            "Установите приложение для этого формата и повторите попытку. Файл остаётся сохранённым на устройстве.",
+                          );
+                        }
+                      }}
+                    >
+                      <Text
+                        style={{ color: "#93c5fd", padding: 16, fontSize: 16 }}
+                      >
+                        Открыть документ ↗
+                      </Text>
+                    </TouchableOpacity>
                   </View>
                 ) : (
                   <Text style={styles.readerText}>{readResult?.content}</Text>
@@ -192,13 +225,17 @@ export const MaterialModal: React.FC<MaterialModalProps> = ({
               ) : (
                 <View style={styles.infoContainer}>
                   <Text style={styles.materialTitle}>
-                    {metadata?.title ?? downloaded?.filename ?? "Методические указания"}
+                    {metadata?.title ??
+                      downloaded?.filename ??
+                      "Методические указания"}
                   </Text>
 
                   <View style={styles.detailRow}>
                     <Text style={styles.label}>Файл:</Text>
                     <Text style={styles.value}>
-                      {metadata?.filename ?? downloaded?.filename ?? "Загрузка..."}
+                      {metadata?.filename ??
+                        downloaded?.filename ??
+                        "Загрузка..."}
                     </Text>
                   </View>
 

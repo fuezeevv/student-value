@@ -19,26 +19,11 @@ import {
 } from "../api/client";
 import { getTimetableRepository } from "../storage/repository";
 
-export const PUBLIC_GROUPS = [
-  { code: "5130901/40101", track: "ИВТ", label: "101", ruzId: 45590 },
-  { code: "5130901/40102", track: "ИВТ", label: "102", ruzId: 45591, isDefault: true },
-  { code: "5130901/40201", track: "ИВТ", label: "201", ruzId: 45592 },
-  { code: "5130901/40202", track: "ИВТ", label: "202", ruzId: 45593 },
-  { code: "5130902/40201", track: "ИСиТ", label: "201", ruzId: 45594 },
-  { code: "5130902/40202", track: "ИСиТ", label: "202", ruzId: 45595 },
-  { code: "5130902/40203", track: "ИСиТ", label: "203", ruzId: 45596 },
-  { code: "5130902/40204", track: "ИСиТ", label: "204", ruzId: 45597 },
-] as const;
+import { PUBLIC_GROUPS } from "@studentvalue/mobile-contracts";
+export { PUBLIC_GROUPS };
 
-export const POPULAR_TEACHERS = [
-  { id: 5796, full_name: "Сиднев Александр Георгиевич", chair: "САПР / СППР" },
-  { id: 5938, full_name: "Тарасов Олег Михайлович", chair: "КПР / Компьютерная графика" },
-  { id: 18451, full_name: "Васильянов Георгий Сергеевич", chair: "Инженерная графика и VR" },
-  { id: 5780, full_name: "Семенов Владимир Петрович", chair: "СОВД (Лекции)" },
-  { id: 17290, full_name: "Кадркулов Рустам Рафаилевич", chair: "СОВД (Практика)" },
-  { id: 5312, full_name: "Нестеров Петр Владимирович", chair: "ММФП" },
-  { id: 5854, full_name: "Смирнов Николай Владимирович", chair: "Физика" },
-];
+// Search results come from RUZ. Do not seed unverified names, IDs or teaching roles.
+export const POPULAR_TEACHERS: RuzSearchTeacher[] = [];
 
 export type PinnedSchedule = {
   type: "group" | "teacher";
@@ -67,14 +52,32 @@ export const SchedulePickerModal: React.FC<SchedulePickerModalProps> = ({
   onSelectOrigin,
   onClose,
 }) => {
-  const [activeTab, setActiveTab] = useState<"groups" | "teachers" | "favorites">("groups");
+  const [activeTab, setActiveTab] = useState<
+    "groups" | "teachers" | "favorites"
+  >("groups");
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearching, setIsSearching] = useState(false);
-  const [groupSearchResults, setGroupSearchResults] = useState<RuzSearchGroup[]>([]);
-  const [teacherSearchResults, setTeacherSearchResults] = useState<RuzSearchTeacher[]>([]);
+  const [groupSearchResults, setGroupSearchResults] = useState<
+    RuzSearchGroup[]
+  >([]);
+  const [teacherSearchResults, setTeacherSearchResults] = useState<
+    RuzSearchTeacher[]
+  >([]);
   const [pinnedSchedules, setPinnedSchedules] = useState<PinnedSchedule[]>([
-    { type: "group", id: "5130901/40102", name: "5130901/40102", subtext: "ИВТ-102 (Моя группа)", ruzId: 45591 },
-    { type: "teacher", id: "5796", name: "Сиднев Александр Георгиевич", subtext: "САПР / СППР", ruzId: 5796 },
+    {
+      type: "group",
+      id: "5130901/40102",
+      name: "5130901/40102",
+      subtext: "ИВТ-102",
+      ruzId: 45591,
+    },
+    {
+      type: "teacher",
+      id: "5796",
+      name: "Сиднев Александр Георгиевич",
+      subtext: "САПР / СППР",
+      ruzId: 5796,
+    },
   ]);
 
   const repo = useMemo(() => getTimetableRepository(), []);
@@ -86,7 +89,7 @@ export const SchedulePickerModal: React.FC<SchedulePickerModalProps> = ({
         if (raw) {
           try {
             const parsed = JSON.parse(raw);
-            if (Array.isArray(parsed) && parsed.length > 0) {
+            if (Array.isArray(parsed) && parsed.length <= 100) {
               setPinnedSchedules(parsed);
             }
           } catch {}
@@ -128,6 +131,8 @@ export const SchedulePickerModal: React.FC<SchedulePickerModalProps> = ({
     [pinnedSchedules],
   );
 
+  const [searchError, setSearchError] = useState<string | null>(null);
+
   // Debounced search
   useEffect(() => {
     const q = searchQuery.trim();
@@ -138,19 +143,36 @@ export const SchedulePickerModal: React.FC<SchedulePickerModalProps> = ({
       return;
     }
 
+    let active = true;
     setIsSearching(true);
+    setSearchError(null);
     const timer = setTimeout(async () => {
-      if (activeTab === "groups") {
-        const groups = await searchRuzGroups(q);
-        setGroupSearchResults(groups);
-      } else if (activeTab === "teachers") {
-        const teachers = await searchRuzTeachers(q);
-        setTeacherSearchResults(teachers);
+      try {
+        if (activeTab === "groups") {
+          const groups = await searchRuzGroups(q);
+          if (active) setGroupSearchResults(groups);
+        } else if (activeTab === "teachers") {
+          const teachers = await searchRuzTeachers(q);
+          if (active) setTeacherSearchResults(teachers);
+        }
+      } catch (error) {
+        if (active) {
+          setGroupSearchResults([]);
+          setTeacherSearchResults([]);
+          setSearchError(
+            error instanceof Error
+              ? error.message
+              : "Поиск временно недоступен",
+          );
+        }
+      } finally {
+        if (active) setIsSearching(false);
       }
-      setIsSearching(false);
     }, 350);
-
-    return () => clearTimeout(timer);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
   }, [searchQuery, activeTab]);
 
   return (
@@ -261,6 +283,14 @@ export const SchedulePickerModal: React.FC<SchedulePickerModalProps> = ({
             </View>
           )}
 
+          {searchError && (
+            <Text
+              accessibilityRole="alert"
+              style={{ color: "#fda4af", padding: 16 }}
+            >
+              {searchError}
+            </Text>
+          )}
           {/* Tab 1: Groups */}
           {activeTab === "groups" && (
             <ScrollView
@@ -270,7 +300,9 @@ export const SchedulePickerModal: React.FC<SchedulePickerModalProps> = ({
             >
               {groupSearchResults.length > 0 ? (
                 <View>
-                  <Text style={styles.sectionHeader}>Результаты поиска в РУЗ</Text>
+                  <Text style={styles.sectionHeader}>
+                    Результаты поиска в РУЗ
+                  </Text>
                   {groupSearchResults.map((g) => {
                     const isSelected = g.name === selectedSchedule;
                     const pinned = isPinned("group", g.name);
@@ -295,7 +327,10 @@ export const SchedulePickerModal: React.FC<SchedulePickerModalProps> = ({
                             {g.name}
                           </Text>
                           {g.faculty?.name && (
-                            <Text style={styles.resultSubtext} numberOfLines={1}>
+                            <Text
+                              style={styles.resultSubtext}
+                              numberOfLines={1}
+                            >
                               {g.faculty.name}
                             </Text>
                           )}
@@ -313,7 +348,12 @@ export const SchedulePickerModal: React.FC<SchedulePickerModalProps> = ({
                           }
                           accessibilityLabel="В избранное"
                         >
-                          <Text style={[styles.pinIcon, pinned && styles.pinIconActive]}>
+                          <Text
+                            style={[
+                              styles.pinIcon,
+                              pinned && styles.pinIconActive,
+                            ]}
+                          >
                             {pinned ? "★" : "☆"}
                           </Text>
                         </TouchableOpacity>
@@ -329,7 +369,9 @@ export const SchedulePickerModal: React.FC<SchedulePickerModalProps> = ({
                 </View>
               ) : (
                 <View>
-                  <Text style={styles.sectionHeader}>Официальные группы кафедры</Text>
+                  <Text style={styles.sectionHeader}>
+                    Официальные группы кафедры
+                  </Text>
                   <View style={styles.grid}>
                     {PUBLIC_GROUPS.map((g) => {
                       const isSelected = g.code === selectedSchedule;
@@ -438,7 +480,10 @@ export const SchedulePickerModal: React.FC<SchedulePickerModalProps> = ({
                             {t.full_name}
                           </Text>
                           {t.chair && (
-                            <Text style={styles.resultSubtext} numberOfLines={2}>
+                            <Text
+                              style={styles.resultSubtext}
+                              numberOfLines={2}
+                            >
                               {t.chair}
                             </Text>
                           )}
@@ -455,7 +500,12 @@ export const SchedulePickerModal: React.FC<SchedulePickerModalProps> = ({
                             })
                           }
                         >
-                          <Text style={[styles.pinIcon, pinned && styles.pinIconActive]}>
+                          <Text
+                            style={[
+                              styles.pinIcon,
+                              pinned && styles.pinIconActive,
+                            ]}
+                          >
                             {pinned ? "★" : "☆"}
                           </Text>
                         </TouchableOpacity>
@@ -471,7 +521,9 @@ export const SchedulePickerModal: React.FC<SchedulePickerModalProps> = ({
                 </View>
               ) : (
                 <View>
-                  <Text style={styles.sectionHeader}>Преподаватели семестра</Text>
+                  <Text style={styles.sectionHeader}>
+                    Найдите преподавателя по фамилии
+                  </Text>
                   {POPULAR_TEACHERS.map((t) => {
                     const isSelected = t.full_name === selectedSchedule;
                     const pinned = isPinned("teacher", String(t.id));
@@ -509,7 +561,12 @@ export const SchedulePickerModal: React.FC<SchedulePickerModalProps> = ({
                             })
                           }
                         >
-                          <Text style={[styles.pinIcon, pinned && styles.pinIconActive]}>
+                          <Text
+                            style={[
+                              styles.pinIcon,
+                              pinned && styles.pinIconActive,
+                            ]}
+                          >
                             {pinned ? "★" : "☆"}
                           </Text>
                         </TouchableOpacity>
@@ -531,9 +588,13 @@ export const SchedulePickerModal: React.FC<SchedulePickerModalProps> = ({
               {pinnedSchedules.length > 0 ? (
                 pinnedSchedules.map((item) => {
                   const isSelected =
-                    item.name === selectedSchedule || item.id === selectedSchedule;
+                    item.name === selectedSchedule ||
+                    item.id === selectedSchedule;
                   return (
-                    <View key={`${item.type}-${item.id}`} style={styles.searchResultRow}>
+                    <View
+                      key={`${item.type}-${item.id}`}
+                      style={styles.searchResultRow}
+                    >
                       <TouchableOpacity
                         style={[
                           styles.searchResultCard,
@@ -558,7 +619,9 @@ export const SchedulePickerModal: React.FC<SchedulePickerModalProps> = ({
                             ]}
                           >
                             <Text style={styles.badgeText}>
-                              {item.type === "teacher" ? "Преподаватель" : "Группа"}
+                              {item.type === "teacher"
+                                ? "Преподаватель"
+                                : "Группа"}
                             </Text>
                           </View>
                         </View>
@@ -571,14 +634,18 @@ export const SchedulePickerModal: React.FC<SchedulePickerModalProps> = ({
                           {item.name}
                         </Text>
                         {item.subtext && (
-                          <Text style={styles.resultSubtext}>{item.subtext}</Text>
+                          <Text style={styles.resultSubtext}>
+                            {item.subtext}
+                          </Text>
                         )}
                       </TouchableOpacity>
                       <TouchableOpacity
                         style={styles.pinBtn}
                         onPress={() => togglePin(item)}
                       >
-                        <Text style={[styles.pinIcon, styles.pinIconActive]}>★</Text>
+                        <Text style={[styles.pinIcon, styles.pinIconActive]}>
+                          ★
+                        </Text>
                       </TouchableOpacity>
                     </View>
                   );
@@ -586,7 +653,8 @@ export const SchedulePickerModal: React.FC<SchedulePickerModalProps> = ({
               ) : (
                 <View style={styles.emptySearchBox}>
                   <Text style={styles.emptySearchText}>
-                    Нет сохранённых расписаний.{"\n"}Нажмите ★ возле группы или преподавателя, чтобы добавить в избранное.
+                    Нет сохранённых расписаний.{"\n"}Нажмите ★ возле группы или
+                    преподавателя, чтобы добавить в избранное.
                   </Text>
                 </View>
               )}

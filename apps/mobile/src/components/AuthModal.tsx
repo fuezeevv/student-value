@@ -62,13 +62,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         onPress: async () => {
           setLoading(true);
           try {
-            if (user) {
-              const { purgeAllUserMaterials } = await import("../materials/downloader");
-              await purgeAllUserMaterials(user.id);
-            }
             await logoutMobile();
             onUserChanged(null);
             onClose();
+          } catch {
+            onUserChanged(null);
+            setError(
+              "Сессия завершена, но не все файлы удалось удалить. Повторите очистку устройства.",
+            );
           } finally {
             setLoading(false);
           }
@@ -107,7 +108,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
               <Text style={styles.userName}>{user.nickname}</Text>
               <Text style={styles.userRole}>
-                {user.isOwner ? "Староста группы" : "Студент"} · Группа {user.groupName || user.groupId}
+                {user.isOwner ? "Староста группы" : "Студент"} · Группа{" "}
+                {user.groupName || user.groupId}
               </Text>
 
               {/* Outbox Status Card */}
@@ -130,7 +132,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     {loading ? (
                       <ActivityIndicator size="small" color="#93c5fd" />
                     ) : (
-                      <Text style={styles.syncNowText}>Синхронизировать сейчас</Text>
+                      <Text style={styles.syncNowText}>
+                        Синхронизировать сейчас
+                      </Text>
                     )}
                   </TouchableOpacity>
                 )}
@@ -150,7 +154,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             <View style={styles.loginSection}>
               <Text style={styles.loginTitle}>Вход в аккаунт</Text>
               <Text style={styles.loginSubtitle}>
-                Войдите через Google для сохранения личного прогресса, отметок выполнения заданий и получения XP.
+                Войдите через Google для сохранения личного прогресса, отметок
+                выполнения заданий и получения XP.
               </Text>
 
               {error && <Text style={styles.errorText}>{error}</Text>}
@@ -163,7 +168,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 {loading ? (
                   <ActivityIndicator color="#0b1424" />
                 ) : (
-                  <Text style={styles.googleButtonText}>Войти через Google</Text>
+                  <Text style={styles.googleButtonText}>
+                    Войти через Google
+                  </Text>
                 )}
               </TouchableOpacity>
 

@@ -1,3 +1,10 @@
+import { PUBLIC_GROUPS } from "@studentvalue/mobile-contracts";
+import { z } from "zod";
+import {
+  parseMobileRuzSource,
+  type RuzSelection,
+} from "@studentvalue/mobile-contracts";
+import { mobileRuzJson, MobileRuzRequestError } from "./ruz-transport";
 import { Platform } from "react-native";
 import {
   mobileTimetableSchema,
@@ -7,13 +14,24 @@ import { getTimetableRepository } from "../storage/repository";
 
 // Configurable API origin with fallback to local Wi-Fi or production
 export const DEFAULT_API_ORIGIN =
-  process.env.EXPO_PUBLIC_API_URL ||
-  (__DEV__ ? "http://10.210.5.173:3000" : "https://studentvalue1984.eu.cc");
+  process.env.EXPO_PUBLIC_API_URL || "https://studentvalue1984.eu.cc";
 
 export const KNOWN_API_ORIGINS = [
-  { id: "lan", label: "Local Wi-Fi (10.210.5.173:3000)", origin: "http://10.210.5.173:3000" },
-  { id: "usb", label: "Local USB (127.0.0.1:3000)", origin: "http://127.0.0.1:3000" },
-  { id: "prod", label: "Production (eu.cc)", origin: "https://studentvalue1984.eu.cc" },
+  {
+    id: "lan",
+    label: "Local Wi-Fi (10.210.5.173:3000)",
+    origin: "http://10.210.5.173:3000",
+  },
+  {
+    id: "usb",
+    label: "Local USB (127.0.0.1:3000)",
+    origin: "http://127.0.0.1:3000",
+  },
+  {
+    id: "prod",
+    label: "Production (eu.cc)",
+    origin: "https://studentvalue1984.eu.cc",
+  },
 ] as const;
 
 export async function getActiveApiOrigin(): Promise<string> {
@@ -95,6 +113,9 @@ export async function syncTimetableFromApi(
         };
       }
 
+      const group = PUBLIC_GROUPS.find((item) => item.code === groupCode);
+      if (group)
+        return syncGroupTimetableFromRuzId(group.ruzId, group.code, date);
       return {
         success: false,
         reason: "ENDPOINT_NOT_FOUND",
@@ -150,7 +171,8 @@ export async function syncTimetableFromApi(
       return {
         success: false,
         reason: "SCHEMA_ERROR",
-        message: "Структура ответа не соответствует контракту MobileTimetable v1",
+        message:
+          "Структура ответа не соответствует контракту MobileTimetable v1",
       };
     }
 
@@ -229,52 +251,71 @@ export type RuzSearchGroup = {
   };
 };
 
-export async function searchRuzTeachers(query: string): Promise<RuzSearchTeacher[]> {
+export async function searchRuzTeachers(
+  query: string,
+): Promise<RuzSearchTeacher[]> {
   const trimmed = query.trim();
   if (!trimmed || trimmed.length < 2) return [];
 
   try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 6000);
-    const res = await fetch(
-      `https://ruz.spbstu.ru/api/v1/ruz/search/teachers?q=${encodeURIComponent(trimmed)}`,
-      {
-        signal: controller.signal,
-        headers: { Accept: "application/json" },
-      },
-    );
-    clearTimeout(timer);
-    if (!res.ok) return [];
-    const data = await res.json();
-    return (data.teachers || []).map((t: any) => ({
+    const data = (await mobileRuzJson(
+      `search/teachers?q=${encodeURIComponent(trimmed)}`,
+    )) as { teachers?: unknown[] };
+    const validated = z
+      .object({
+        teachers: z
+          .array(
+            z.object({
+              id: z.number().int().positive(),
+              full_name: z.string().trim().min(1).max(1000),
+              chair: z.string().max(1000).optional(),
+            }),
+          )
+          .max(500),
+      })
+      .parse(data);
+    return validated.teachers.map((t: any) => ({
       id: t.id,
       full_name: t.full_name,
       chair: t.chair || "",
     }));
   } catch (err) {
-    console.warn("Error searching RUZ teachers:", err);
-    return [];
+    throw new Error(
+      "Не удалось выполнить поиск преподавателей в РУЗ. Повторите попытку.",
+    );
   }
 }
 
-export async function searchRuzGroups(query: string): Promise<RuzSearchGroup[]> {
+export async function searchRuzGroups(
+  query: string,
+): Promise<RuzSearchGroup[]> {
   const trimmed = query.trim();
   if (!trimmed || trimmed.length < 2) return [];
 
   try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 6000);
-    const res = await fetch(
-      `https://ruz.spbstu.ru/api/v1/ruz/search/groups?q=${encodeURIComponent(trimmed)}`,
-      {
-        signal: controller.signal,
-        headers: { Accept: "application/json" },
-      },
-    );
-    clearTimeout(timer);
-    if (!res.ok) return [];
-    const data = await res.json();
-    return (data.groups || []).map((g: any) => ({
+    const data = (await mobileRuzJson(
+      `search/groups?q=${encodeURIComponent(trimmed)}`,
+    )) as { groups?: unknown[] };
+    const validated = z
+      .object({
+        groups: z
+          .array(
+            z.object({
+              id: z.number().int().positive(),
+              name: z.string().trim().min(1).max(1000),
+              faculty: z
+                .object({
+                  id: z.number().int().positive(),
+                  name: z.string().max(1000),
+                  abbr: z.string().max(100).optional(),
+                })
+                .optional(),
+            }),
+          )
+          .max(3000),
+      })
+      .parse(data);
+    return validated.groups.map((g: any) => ({
       id: g.id,
       name: g.name,
       faculty: g.faculty
@@ -286,8 +327,9 @@ export async function searchRuzGroups(query: string): Promise<RuzSearchGroup[]> 
         : undefined,
     }));
   } catch (err) {
-    console.warn("Error searching RUZ groups:", err);
-    return [];
+    throw new Error(
+      "Не удалось выполнить поиск групп в РУЗ. Повторите попытку.",
+    );
   }
 }
 
@@ -304,192 +346,65 @@ function addDaysTo(dateStr: string, count: number): string {
   return next.toISOString().slice(0, 10);
 }
 
-export async function syncTeacherTimetableFromRuz(
+async function syncDirectRuz(
+  selection: RuzSelection,
+  date?: string,
+): Promise<SyncResult> {
+  const targetDate =
+    date ||
+    new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Europe/Moscow",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date());
+  const weekStart = calculateWeekStart(targetDate);
+  try {
+    const path =
+      selection.kind === "teacher"
+        ? `teachers/${selection.id}/scheduler`
+        : `scheduler/${selection.id}`;
+    const raw = await mobileRuzJson(`${path}?date=${weekStart}`);
+    const timetable = parseMobileRuzSource(raw, selection, weekStart);
+    try {
+      await getTimetableRepository().saveSnapshot(timetable);
+    } catch {
+      return {
+        success: false,
+        reason: "STORAGE_ERROR",
+        message: "Не удалось сохранить расписание на устройстве",
+      };
+    }
+    return { success: true, state: "FRESH", timetable };
+  } catch (error) {
+    const reason =
+      error instanceof MobileRuzRequestError ? error.reason : "SCHEMA_ERROR";
+    return {
+      success: false,
+      reason,
+      message:
+        reason === "TIMEOUT"
+          ? "РУЗ не ответил вовремя"
+          : reason === "SCHEMA_ERROR"
+            ? "Ответ РУЗ не соответствует выбранному расписанию. Сохранённая копия не изменена."
+            : "Не удалось обновить расписание из РУЗ",
+    };
+  }
+}
+export function syncTeacherTimetableFromRuz(
   teacherId: number,
   teacherDisplayName: string,
   date?: string,
 ): Promise<SyncResult> {
-  const repo = getTimetableRepository();
-  const targetDate = date || new Date().toISOString().slice(0, 10);
-  const weekStart = calculateWeekStart(targetDate);
-
-  try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 8000);
-    const res = await fetch(
-      `https://ruz.spbstu.ru/api/v1/ruz/teachers/${teacherId}/scheduler?date=${weekStart}`,
-      {
-        signal: controller.signal,
-        headers: { Accept: "application/json" },
-      },
-    );
-    clearTimeout(timer);
-
-    if (!res.ok) {
-      return {
-        success: false,
-        reason: "UNAVAILABLE",
-        message: `РУЗ вернул ошибку HTTP ${res.status}`,
-      };
-    }
-
-    const ruzData = await res.json();
-    const ruzDays = ruzData.days || [];
-
-    const days = Array.from({ length: 7 }, (_, i) => {
-      const dayDate = addDaysTo(weekStart, i);
-      const ruzDay = ruzDays.find((d: any) => d.date === dayDate);
-
-      const lessons = (ruzDay?.lessons || []).map((l: any, idx: number) => ({
-        id: `occ-teacher-${teacherId}-${dayDate}-${(l.time_start || "").replace(":", "")}-${idx}`,
-        subject: l.subject || "Занятие",
-        start: l.time_start || "00:00",
-        scheduledEnd: l.time_end || "00:00",
-        type: l.typeObj?.abbr || l.typeObj?.name || "Пара",
-        teachers: [teacherDisplayName],
-        rooms: (l.auditories || []).map(
-          (a: any) =>
-            `${a.name || "Ауд"}${a.building?.name ? ` (${a.building.name})` : ""}`,
-        ),
-        note: (l.groups || []).map((g: any) => g.name).join(", "),
-      }));
-
-      return {
-        date: dayDate,
-        lessons,
-      };
-    });
-
-    const dto: MobileTimetable = {
-      schemaVersion: 1,
-      group: {
-        code: teacherDisplayName,
-        ruzId: teacherId,
-      },
-      weekStart,
-      state: "FRESH",
-      sourceFetchedAt: new Date().toISOString(),
-      sourceUrl: `https://ruz.spbstu.ru/teachers/${teacherId}?date=${weekStart}`,
-      data: {
-        days: days as any,
-      },
-    };
-
-    const validated = mobileTimetableSchema.parse(dto);
-    await repo.saveSnapshot(validated);
-
-    return {
-      success: true,
-      state: "FRESH",
-      timetable: validated,
-    };
-  } catch (err: any) {
-    if (err.name === "AbortError") {
-      return {
-        success: false,
-        reason: "TIMEOUT",
-        message: "Таймаут подключения к РУЗ (более 8 сек)",
-      };
-    }
-    return {
-      success: false,
-      reason: "OFFLINE",
-      message: "Нет подключения к официальному источнику РУЗ",
-    };
-  }
+  return syncDirectRuz(
+    { kind: "teacher", id: teacherId, label: teacherDisplayName },
+    date,
+  );
 }
-
-export async function syncGroupTimetableFromRuzId(
+export function syncGroupTimetableFromRuzId(
   groupId: number,
   groupCode: string,
   date?: string,
 ): Promise<SyncResult> {
-  const repo = getTimetableRepository();
-  const targetDate = date || new Date().toISOString().slice(0, 10);
-  const weekStart = calculateWeekStart(targetDate);
-
-  try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 8000);
-    const res = await fetch(
-      `https://ruz.spbstu.ru/api/v1/ruz/scheduler/${groupId}?date=${weekStart}`,
-      {
-        signal: controller.signal,
-        headers: { Accept: "application/json" },
-      },
-    );
-    clearTimeout(timer);
-
-    if (!res.ok) {
-      return {
-        success: false,
-        reason: "UNAVAILABLE",
-        message: `РУЗ вернул ошибку HTTP ${res.status}`,
-      };
-    }
-
-    const ruzData = await res.json();
-    const ruzDays = ruzData.days || [];
-
-    const days = Array.from({ length: 7 }, (_, i) => {
-      const dayDate = addDaysTo(weekStart, i);
-      const ruzDay = ruzDays.find((d: any) => d.date === dayDate);
-
-      const lessons = (ruzDay?.lessons || []).map((l: any, idx: number) => ({
-        id: `occ-group-${groupId}-${dayDate}-${(l.time_start || "").replace(":", "")}-${idx}`,
-        subject: l.subject || "Занятие",
-        start: l.time_start || "00:00",
-        scheduledEnd: l.time_end || "00:00",
-        type: l.typeObj?.abbr || l.typeObj?.name || "Пара",
-        teachers: (l.teachers || []).map((t: any) => t.full_name),
-        rooms: (l.auditories || []).map(
-          (a: any) =>
-            `${a.name || "Ауд"}${a.building?.name ? ` (${a.building.name})` : ""}`,
-        ),
-        note: l.additional_info ? l.additional_info.trim() : null,
-      }));
-
-      return {
-        date: dayDate,
-        lessons,
-      };
-    });
-
-    const dto: MobileTimetable = {
-      schemaVersion: 1,
-      group: {
-        code: groupCode,
-        ruzId: groupId,
-      },
-      weekStart,
-      state: "FRESH",
-      sourceFetchedAt: new Date().toISOString(),
-      sourceUrl: `https://ruz.spbstu.ru/faculty/125/groups/${groupId}?date=${weekStart}`,
-      data: {
-        days: days as any,
-      },
-    };
-
-    const validated = mobileTimetableSchema.parse(dto);
-    await repo.saveSnapshot(validated);
-
-    return {
-      success: true,
-      state: "FRESH",
-      timetable: validated,
-    };
-  } catch (err: any) {
-    if (err.name === "AbortError") {
-      return {
-        success: false,
-        reason: "TIMEOUT",
-        message: "Таймаут подключения к РУЗ (более 8 сек)",
-      };
-    }
-    return {
-      success: false,
-      reason: "OFFLINE",
-      message: "Нет подключения к официальному источнику РУЗ",
-    };
-  }
+  return syncDirectRuz({ kind: "group", id: groupId, label: groupCode }, date);
 }

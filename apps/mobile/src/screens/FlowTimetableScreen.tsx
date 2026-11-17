@@ -1,4 +1,17 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { logoutMobile } from "../auth/client";
+import {
+  sessionGeneration,
+  invalidateSessionWork,
+  isCurrentSession,
+  sessionSignal,
+} from "../auth/session-lifecycle";
+import React, {
+  useState,
+  useEffect,
+  useMemo,
+  useCallback,
+  useRef,
+} from "react";
 import {
   View,
   Text,
@@ -172,12 +185,22 @@ export const FlowTimetableScreen: React.FC = () => {
   });
   const [containerHeight, setContainerHeight] = useState<number>(0);
   const [selectedGroup, setSelectedGroup] = useState<string>("5130901/40102");
-  const [scheduleType, setScheduleType] = useState<"group" | "teacher">("group");
-  const [selectedTeacherId, setSelectedTeacherId] = useState<number | null>(null);
-  const [selectedRuzGroupId, setSelectedRuzGroupId] = useState<number | null>(45591);
+  const [scheduleType, setScheduleType] = useState<"group" | "teacher">(
+    "group",
+  );
+  const [selectedTeacherId, setSelectedTeacherId] = useState<number | null>(
+    null,
+  );
+  const [selectedRuzGroupId, setSelectedRuzGroupId] = useState<number | null>(
+    45591,
+  );
   const [todayStr, setTodayStr] = useState<string>(() => getMoscowDateString());
-  const [nowMoscowMin, setNowMoscowMin] = useState<number>(() => getMoscowNowMinutes());
-  const [selectedDate, setSelectedDate] = useState<string>(() => getMoscowDateString());
+  const [nowMoscowMin, setNowMoscowMin] = useState<number>(() =>
+    getMoscowNowMinutes(),
+  );
+  const [selectedDate, setSelectedDate] = useState<string>(() =>
+    getMoscowDateString(),
+  );
 
   // Storage states
   const [isLoaded, setIsLoaded] = useState<boolean>(false);
@@ -188,30 +211,51 @@ export const FlowTimetableScreen: React.FC = () => {
   const [isStale, setIsStale] = useState<boolean>(false);
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
-  const [apiOrigin, setApiOrigin] = useState<string>("https://studentvalue1984.eu.cc");
+  const [apiOrigin, setApiOrigin] = useState<string>(
+    "https://studentvalue1984.eu.cc",
+  );
 
   // Auth and task progress states
-  const [sessionUser, setSessionUser] = useState<MobileSessionUser | null>(null);
-  const [taskProgress, setTaskProgress] = useState<Record<string, UserTaskProgress>>({});
+  const [sessionUser, setSessionUser] = useState<MobileSessionUser | null>(
+    null,
+  );
+  const [taskProgress, setTaskProgress] = useState<
+    Record<string, UserTaskProgress>
+  >({});
   const [pendingOpsCount, setPendingOpsCount] = useState<number>(0);
   const [tasks, setTasks] = useState<CachedTask[]>([]);
-  const [scheduledReminders, setScheduledReminders] = useState<Record<string, boolean>>({});
+  const [scheduledReminders, setScheduledReminders] = useState<
+    Record<string, boolean>
+  >({});
   const [updatingTaskId, setUpdatingTaskId] = useState<string | null>(null);
 
   // Modals
-  const [schedulePickerVisible, setSchedulePickerVisible] = useState<boolean>(false);
+  const [schedulePickerVisible, setSchedulePickerVisible] =
+    useState<boolean>(false);
   const [mapModalVisible, setMapModalVisible] = useState<boolean>(false);
   const [newsModalVisible, setNewsModalVisible] = useState<boolean>(false);
   const [authModalVisible, setAuthModalVisible] = useState<boolean>(false);
-  const [wellbeingModalVisible, setWellbeingModalVisible] = useState<boolean>(false);
-  const [appInfoModalVisible, setAppInfoModalVisible] = useState<boolean>(false);
+  const [wellbeingModalVisible, setWellbeingModalVisible] =
+    useState<boolean>(false);
+  const [appInfoModalVisible, setAppInfoModalVisible] =
+    useState<boolean>(false);
   const [focusPercent, setFocusPercent] = useState<number>(0);
-  const [materialModalVisible, setMaterialModalVisible] = useState<boolean>(false);
-  const [activeMaterialModalId, setActiveMaterialModalId] = useState<string | null>(null);
-  const [subjectModalVisible, setSubjectModalVisible] = useState<boolean>(false);
-  const [selectedLessonForModal, setSelectedLessonForModal] = useState<MobileLesson | null>(null);
+  const [materialModalVisible, setMaterialModalVisible] =
+    useState<boolean>(false);
+  const [activeMaterialModalId, setActiveMaterialModalId] = useState<
+    string | null
+  >(null);
+  const [subjectModalVisible, setSubjectModalVisible] =
+    useState<boolean>(false);
+  const [selectedLessonForModal, setSelectedLessonForModal] =
+    useState<MobileLesson | null>(null);
+  const [selectedSubjectTitle, setSelectedSubjectTitle] = useState<
+    string | null
+  >(null);
 
   const repo = useMemo(() => getTimetableRepository(), []);
+  const taskReqGenRef = useRef(0);
+  const [taskLoadMessage, setTaskLoadMessage] = useState<string | null>(null);
   const scrollRef = useRef<any>(null);
   const reqGenRef = useRef(0);
 
@@ -221,6 +265,7 @@ export const FlowTimetableScreen: React.FC = () => {
   }, []);
 
   const handleOpenLesson = useCallback((l: MobileLesson) => {
+    setSelectedSubjectTitle(null);
     setSelectedLessonForModal(l);
     setSubjectModalVisible(true);
   }, []);
@@ -246,15 +291,28 @@ export const FlowTimetableScreen: React.FC = () => {
 
   const loadTasks = useCallback(
     async (groupCode: string, user: MobileSessionUser | null) => {
+      const generation = sessionGeneration();
+      const requestId = ++taskReqGenRef.current;
+      const current = () =>
+        isCurrentSession(generation) && requestId === taskReqGenRef.current;
+      if (!/^\d{7}\/\d{5}(?:_\d{4})?$/.test(groupCode)) {
+        setTasks([]);
+        setTaskLoadMessage("Для просмотра заданий выберите учебную группу.");
+        return;
+      }
+      setTaskLoadMessage("Обновляем задания…");
       try {
-        const cached = await repo.getCachedTasksForGroup(groupCode);
-        if (cached.length > 0) {
-          setTasks(cached);
-        }
+        const cached = await repo.getCachedTasksForGroup(groupCode, user?.id);
+        if (current()) setTasks(cached);
       } catch (err) {
         console.warn("Could not read cached tasks from SQLite:", err);
       }
 
+      const controller = new AbortController();
+      const parentSignal = sessionSignal();
+      const abort = () => controller.abort();
+      parentSignal.addEventListener("abort", abort);
+      const timer = setTimeout(abort, 8000);
       try {
         const origin = await getActiveApiOrigin();
         const token = await getSessionToken();
@@ -264,13 +322,18 @@ export const FlowTimetableScreen: React.FC = () => {
         }
         const res = await fetch(
           `${origin}/api/v1/tasks?group=${encodeURIComponent(groupCode)}`,
-          { headers },
+          { headers, signal: controller.signal },
         );
+        if (!res.ok)
+          throw new Error(
+            res.status === 404
+              ? "Список заданий недоступен на выбранном сервере. Проверьте его на сайте."
+              : "Не удалось обновить задания. Показываем сохранённую копию, если она есть.",
+          );
         if (res.ok) {
           const data = await res.json();
-          const serverTasks = (data.tasks || []).filter(
-            (t: any) => !t.title?.includes("[TEST]") && !t.id?.startsWith("test-"),
-          );
+          if (current()) setTaskLoadMessage(null);
+          const serverTasks = data.tasks || [];
           const mapped: CachedTask[] = serverTasks.map((t: any) => ({
             id: t.id,
             groupCode,
@@ -289,12 +352,25 @@ export const FlowTimetableScreen: React.FC = () => {
             materialSha256: t.material?.sha256 ?? null,
             updatedAt: new Date().toISOString(),
           }));
-          await repo.saveCachedTasksForGroup(groupCode, mapped);
+          if (!current()) return;
+          await repo.saveCachedTasksForGroup(groupCode, mapped, user?.id);
+          if (!current()) return;
           setTasks(mapped);
 
           if (user) {
             const progressMap: Record<string, UserTaskProgress> = {};
+            const pendingTasks = new Set(
+              (await repo.getPendingOperations(user.id)).filter(operation => operation.status !== "FAILED").map(
+                (operation) => operation.taskId,
+              ),
+            );
             for (const st of serverTasks) {
+              if (!current()) return;
+              if (pendingTasks.has(st.id)) {
+                const draft = await repo.getUserProgress(user.id, st.id);
+                if (draft) progressMap[st.id] = draft;
+                continue;
+              }
               if (st.progress) {
                 progressMap[st.id] = {
                   userId: user.id,
@@ -306,15 +382,27 @@ export const FlowTimetableScreen: React.FC = () => {
                   completedAt: st.progress.completedAt,
                   updatedAt: st.progress.updatedAt,
                 };
+                await repo.saveUserProgress(progressMap[st.id]);
+              } else {
+                await repo.deleteUserProgress(user.id, st.id);
               }
             }
+            if (!current()) return;
             if (Object.keys(progressMap).length > 0) {
               setTaskProgress((prev) => ({ ...prev, ...progressMap }));
             }
           }
         }
       } catch (err) {
-        console.warn("Could not refresh tasks from API (using SQLite cache):", err);
+        if (current())
+          setTaskLoadMessage(
+            err instanceof Error && err.name !== "AbortError"
+              ? err.message
+              : "Не удалось обновить задания. Сохранённая копия может быть устаревшей.",
+          );
+      } finally {
+        clearTimeout(timer);
+        parentSignal.removeEventListener("abort", abort);
       }
     },
     [repo],
@@ -322,14 +410,19 @@ export const FlowTimetableScreen: React.FC = () => {
 
   // Cold start directly from SQLite repository
   const loadFromSqlite = useCallback(async () => {
+    const generation = reqGenRef.current;
     try {
       const res = await repo.getDayTimetable(selectedGroup, selectedDate);
+      if (generation !== reqGenRef.current) return;
       if (res.status === "loaded") {
         setIsLoaded(true);
         setLessons(res.lessons);
         setSavedAt(res.savedAt);
         setSourceFetchedAt(res.sourceFetchedAt);
-        setIsStale(res.isStale);
+        setIsStale(
+          res.isStale ||
+            Date.now() - Date.parse(res.sourceFetchedAt) > 15 * 60 * 1000,
+        );
       } else {
         setIsLoaded(false);
         setLessons([]);
@@ -339,6 +432,8 @@ export const FlowTimetableScreen: React.FC = () => {
 
       const weekStart = weekStartFor(selectedDate);
       const stored = await repo.getSnapshot(selectedGroup, weekStart);
+      if (generation !== reqGenRef.current) return;
+      setWeekLessons([]);
       if (stored?.snapshot?.data?.days) {
         const allWkLessons = stored.snapshot.data.days.flatMap(
           (d: { lessons: MobileLesson[] }) => d.lessons,
@@ -346,30 +441,74 @@ export const FlowTimetableScreen: React.FC = () => {
         setWeekLessons(allWkLessons);
       }
     } catch {
+      if (generation !== reqGenRef.current) return;
       setIsLoaded(false);
       setLessons([]);
+      setWeekLessons([]);
     }
   }, [repo, selectedGroup, selectedDate]);
 
-  // Load session user and tasks
+  // Ignore completions from the previous account or group selection.
   useEffect(() => {
-    getSessionUser().then(async (u) => {
-      setSessionUser(u);
-      if (u) {
-        const ops = await repo.getPendingOperations(u.id);
-        setPendingOpsCount(ops.length);
-        const progressList = await repo.getAllUserProgress(u.id);
-        const map: Record<string, UserTaskProgress> = {};
-        for (const p of progressList) {
-          map[p.taskId] = p;
+    let active = true;
+    const generation = sessionGeneration();
+    void (async () => {
+      try {
+        const u = await getSessionUser();
+        if (!active || !isCurrentSession(generation)) return;
+        setSessionUser(u);
+        if (u) {
+          const ops = await repo.getPendingOperations(u.id);
+          const progressList = await repo.getAllUserProgress(u.id);
+          if (!active || !isCurrentSession(generation)) return;
+          setPendingOpsCount(ops.length);
+          setTaskProgress(
+            Object.fromEntries(progressList.map((p) => [p.taskId, p])),
+          );
+          void flushOutbox().catch(() => {});
         }
-        setTaskProgress(map);
-
-        flushOutbox().catch(() => {});
+        await loadTasks(selectedGroup, u);
+      } catch {
+        if (active)
+          setTaskLoadMessage(
+            "Не удалось прочитать личные данные с устройства. Повторите вход.",
+          );
       }
-      await loadTasks(selectedGroup, u);
-    });
+    })();
+    return () => {
+      active = false;
+    };
   }, [repo, selectedGroup, loadTasks]);
+
+  // Best-effort delivery while the app is active. No background-service claim:
+  // OS suspension can pause this timer; foreground return also retries the queue.
+  useEffect(() => {
+    let active = true;
+    const retry = async () => {
+      if (AppState.currentState !== "active") return;
+      const generation = sessionGeneration();
+      const user = await getSessionUser();
+      if (!user) return;
+      await flushOutbox();
+      if (!active || !isCurrentSession(generation)) return;
+      const pending = await repo.getPendingOperations(user.id);
+      const progress = await repo.getAllUserProgress(user.id);
+      if (!active || !isCurrentSession(generation)) return;
+      setPendingOpsCount(pending.length);
+      setTaskProgress(Object.fromEntries(progress.map((p) => [p.taskId, p])));
+    };
+    const timer = setInterval(() => {
+      void retry().catch(() => {});
+    }, 30000);
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") void retry().catch(() => {});
+    });
+    return () => {
+      active = false;
+      clearInterval(timer);
+      subscription.remove();
+    };
+  }, [repo]);
 
   // Load timetable on date/group change
   useEffect(() => {
@@ -379,9 +518,19 @@ export const FlowTimetableScreen: React.FC = () => {
       setIsSyncing(true);
       const syncPromise =
         scheduleType === "teacher" && selectedTeacherId
-          ? syncTeacherTimetableFromRuz(selectedTeacherId, selectedGroup, selectedDate)
-          : selectedRuzGroupId && selectedRuzGroupId !== 45591 && !selectedGroup.startsWith("5130901/40102")
-            ? syncGroupTimetableFromRuzId(selectedRuzGroupId, selectedGroup, selectedDate)
+          ? syncTeacherTimetableFromRuz(
+              selectedTeacherId,
+              selectedGroup,
+              selectedDate,
+            )
+          : selectedRuzGroupId &&
+              selectedRuzGroupId !== 45591 &&
+              !selectedGroup.startsWith("5130901/40102")
+            ? syncGroupTimetableFromRuzId(
+                selectedRuzGroupId,
+                selectedGroup,
+                selectedDate,
+              )
             : syncTimetableFromApi(selectedGroup, selectedDate);
 
       syncPromise.then((result) => {
@@ -395,7 +544,14 @@ export const FlowTimetableScreen: React.FC = () => {
         }
       });
     });
-  }, [loadFromSqlite, selectedGroup, selectedDate, scheduleType, selectedTeacherId, selectedRuzGroupId]);
+  }, [
+    loadFromSqlite,
+    selectedGroup,
+    selectedDate,
+    scheduleType,
+    selectedTeacherId,
+    selectedRuzGroupId,
+  ]);
 
   // Live timer for clock and midnight rollover
   useEffect(() => {
@@ -450,9 +606,21 @@ export const FlowTimetableScreen: React.FC = () => {
 
     let result;
     if (scheduleType === "teacher" && selectedTeacherId) {
-      result = await syncTeacherTimetableFromRuz(selectedTeacherId, selectedGroup, selectedDate);
-    } else if (selectedRuzGroupId && selectedRuzGroupId !== 45591 && !selectedGroup.startsWith("5130901/40102")) {
-      result = await syncGroupTimetableFromRuzId(selectedRuzGroupId, selectedGroup, selectedDate);
+      result = await syncTeacherTimetableFromRuz(
+        selectedTeacherId,
+        selectedGroup,
+        selectedDate,
+      );
+    } else if (
+      selectedRuzGroupId &&
+      selectedRuzGroupId !== 45591 &&
+      !selectedGroup.startsWith("5130901/40102")
+    ) {
+      result = await syncGroupTimetableFromRuzId(
+        selectedRuzGroupId,
+        selectedGroup,
+        selectedDate,
+      );
     } else {
       result = await syncTimetableFromApi(selectedGroup, selectedDate);
     }
@@ -496,12 +664,24 @@ export const FlowTimetableScreen: React.FC = () => {
   };
 
   const handleSelectOrigin = async (newOrigin: string) => {
+    if (newOrigin === apiOrigin) return;
+    invalidateSessionWork();
+    // Never send a production bearer token to a development server.
+    if (sessionUser) await logoutMobile();
+    setSessionUser(null);
+    setTaskProgress({});
+    setTasks([]);
+    setPendingOpsCount(0);
     setApiOrigin(newOrigin);
     await setActiveApiOrigin(newOrigin);
     setSchedulePickerVisible(false);
     setIsSyncing(true);
     setSyncMessage(null);
-    const result = await syncTimetableFromApi(selectedGroup, selectedDate, newOrigin);
+    const result = await syncTimetableFromApi(
+      selectedGroup,
+      selectedDate,
+      newOrigin,
+    );
     setIsSyncing(false);
     if (result.success) {
       setSyncMessage(null);
@@ -545,7 +725,9 @@ export const FlowTimetableScreen: React.FC = () => {
     );
     const diffWeeks = Math.max(
       1,
-      Math.floor((start.getTime() - semStartMonday.getTime()) / (7 * 86400000)) + 1,
+      Math.floor(
+        (start.getTime() - semStartMonday.getTime()) / (7 * 86400000),
+      ) + 1,
     );
     const isEven = diffWeeks % 2 === 0;
     return `${diffWeeks}-я неделя · ${isEven ? "Чётная" : "Нечётная"}`;
@@ -628,7 +810,10 @@ export const FlowTimetableScreen: React.FC = () => {
         return;
       }
       if (!task.deadlineId || !task.deadlineDate) {
-        Alert.alert("Дедлайн не найден", "У этого задания нет подтверждённого срока.");
+        Alert.alert(
+          "Дедлайн не найден",
+          "У этого задания нет подтверждённого срока.",
+        );
         return;
       }
 
@@ -682,9 +867,23 @@ export const FlowTimetableScreen: React.FC = () => {
     await loadTasks(selectedGroup, user);
   };
 
-  const handleLogout = useCallback(async () => {
-    await handleUserChanged(null);
-  }, []);
+  const handleLogout = async () => {
+    try {
+      await logoutMobile();
+    } catch {
+      Alert.alert(
+        "Выход",
+        "Сессия завершена, но не все локальные файлы удалось удалить. Повторите очистку на устройстве.",
+      );
+    } finally {
+      setTasks([]);
+      setSessionUser(null);
+      setTaskProgress({});
+      setPendingOpsCount(0);
+      setScheduledReminders({});
+      await loadTasks(selectedGroup, null);
+    }
+  };
 
   // Determine current hero lesson
   const isSelectedToday = selectedDate === todayStr;
@@ -724,7 +923,10 @@ export const FlowTimetableScreen: React.FC = () => {
   const totalXp = useMemo(() => {
     if (!sessionUser) return 0;
     const completedCount = Object.values(taskProgress).filter(
-      (p) => p.status === "READY" || p.status === "SUBMITTED" || p.status === "ACCEPTED",
+      (p) =>
+        p.status === "READY" ||
+        p.status === "SUBMITTED" ||
+        p.status === "ACCEPTED",
     ).length;
     return completedCount * 50;
   }, [sessionUser, taskProgress]);
@@ -796,28 +998,30 @@ export const FlowTimetableScreen: React.FC = () => {
           </TouchableOpacity>
 
           {/* Circular Wellbeing / Focus Badge (matches '0' in user's design) */}
-        <TouchableOpacity
-          onPress={() => setWellbeingModalVisible(true)}
-          style={[
-            styles.wellbeingBadge,
-            focusPercent >= 100 && styles.wellbeingBadgeCompleted,
-            focusPercent > 0 && focusPercent < 100 && styles.wellbeingBadgeActive,
-          ]}
-          activeOpacity={0.8}
-          accessibilityRole="button"
-          accessibilityLabel={`Сегодня в своём темпе: ${focusPercent}% выполнено. Нажмите для открытия.`}
-        >
-          <Text
+          <TouchableOpacity
+            onPress={() => setWellbeingModalVisible(true)}
             style={[
-              styles.wellbeingText,
-              focusPercent >= 100 && styles.wellbeingTextCompleted,
-              focusPercent > 0 && styles.wellbeingTextActive,
+              styles.wellbeingBadge,
+              focusPercent >= 100 && styles.wellbeingBadgeCompleted,
+              focusPercent > 0 &&
+                focusPercent < 100 &&
+                styles.wellbeingBadgeActive,
             ]}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel={`Сегодня в своём темпе: ${focusPercent}% выполнено. Нажмите для открытия.`}
           >
-            {focusPercent}
-          </Text>
-          {pendingOpsCount > 0 && <View style={styles.pendingDot} />}
-        </TouchableOpacity>
+            <Text
+              style={[
+                styles.wellbeingText,
+                focusPercent >= 100 && styles.wellbeingTextCompleted,
+                focusPercent > 0 && styles.wellbeingTextActive,
+              ]}
+            >
+              {focusPercent}
+            </Text>
+            {pendingOpsCount > 0 && <View style={styles.pendingDot} />}
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -841,7 +1045,9 @@ export const FlowTimetableScreen: React.FC = () => {
             style={styles.scrollArea}
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
-            snapToOffsets={containerHeight > 0 ? [0, containerHeight] : undefined}
+            snapToOffsets={
+              containerHeight > 0 ? [0, containerHeight] : undefined
+            }
             snapToEnd={false}
             decelerationRate="fast"
             refreshControl={
@@ -882,7 +1088,9 @@ export const FlowTimetableScreen: React.FC = () => {
             <View
               style={[
                 styles.page2Container,
-                containerHeight > 0 ? { minHeight: containerHeight } : undefined,
+                containerHeight > 0
+                  ? { minHeight: containerHeight }
+                  : undefined,
               ]}
             >
               {/* Day & Week Switcher at top of schedule view */}
@@ -904,13 +1112,17 @@ export const FlowTimetableScreen: React.FC = () => {
                   <View style={styles.page2HeaderRow}>
                     <Text style={styles.sectionHeaderTitle}>Далее сегодня</Text>
                     <TouchableOpacity
-                      onPress={() => scrollRef.current?.scrollTo({ y: 0, animated: true })}
+                      onPress={() =>
+                        scrollRef.current?.scrollTo({ y: 0, animated: true })
+                      }
                       style={styles.backToHeroButton}
                       activeOpacity={0.7}
                       accessibilityRole="button"
                       accessibilityLabel="Вернуться к текущей паре"
                     >
-                      <Text style={styles.backToHeroText}>↑ К текущей паре</Text>
+                      <Text style={styles.backToHeroText}>
+                        ↑ К текущей паре
+                      </Text>
                     </TouchableOpacity>
                   </View>
                   {remainingLessons.map((l) => (
@@ -931,48 +1143,56 @@ export const FlowTimetableScreen: React.FC = () => {
                 <Text style={styles.sectionHeaderTitle}>
                   Текущая работа и дедлайны
                 </Text>
-              {tasks.length > 0 ? (
-                tasks.map((task) => (
-                  <TaskProgressCard
-                    key={task.id}
-                    taskId={task.id}
-                    title={task.title}
-                    subject={task.subject}
-                    deadlineText={
-                      task.deadlineMoscowStr
-                        ? `Дедлайн: ${task.deadlineMoscowStr}`
-                        : "Без установленного дедлайна"
-                    }
-                    progress={taskProgress[task.id] || null}
-                    isLoggedIn={Boolean(sessionUser)}
-                    materialId={task.materialId}
-                    materialTitle={task.materialTitle}
-                    reminderScheduled={Boolean(scheduledReminders[task.id])}
-                    onToggleReminder={() => handleToggleReminderForTask(task)}
-                    onOpenMaterial={(matId) => {
-                      setActiveMaterialModalId(matId);
-                      setMaterialModalVisible(true);
-                    }}
-                    onToggleStatus={handleToggleTaskStatus}
-                    onOpenLogin={() => setAuthModalVisible(true)}
-                    loading={updatingTaskId === task.id}
-                  />
-                ))
-              ) : (
-                <View style={styles.emptyTasksBox}>
-                  <Text style={styles.emptyTasksText}>
-                    В группе {selectedGroup} нет активных дедлайнов на текущей неделе.
-                  </Text>
-                </View>
-              )}
+                {taskLoadMessage && (
+                  <Text style={styles.emptyTasksText}>{taskLoadMessage}</Text>
+                )}
+                {tasks.length > 0 ? (
+                  tasks.map((task) => (
+                    <TaskProgressCard
+                      key={task.id}
+                      taskId={task.id}
+                      title={task.title}
+                      subject={task.subject}
+                      deadlineText={
+                        task.deadlineMoscowStr
+                          ? `Дедлайн: ${task.deadlineMoscowStr}`
+                          : "Без установленного дедлайна"
+                      }
+                      progress={taskProgress[task.id] || null}
+                      isLoggedIn={Boolean(sessionUser)}
+                      materialId={task.materialId}
+                      materialTitle={task.materialTitle}
+                      reminderScheduled={Boolean(scheduledReminders[task.id])}
+                      onToggleReminder={() => handleToggleReminderForTask(task)}
+                      onOpenMaterial={(matId) => {
+                        setActiveMaterialModalId(matId);
+                        setMaterialModalVisible(true);
+                      }}
+                      onToggleStatus={handleToggleTaskStatus}
+                      onOpenLogin={() => setAuthModalVisible(true)}
+                      loading={updatingTaskId === task.id}
+                    />
+                  ))
+                ) : (
+                  <View style={styles.emptyTasksBox}>
+                    <Text style={styles.emptyTasksText}>
+                      {taskLoadMessage
+                        ? "Задания пока не удалось показать. Это не означает, что их не задавали."
+                        : "В доступных данных группы пока нет опубликованных заданий. Это не означает, что заданий нет."}
+                    </Text>
+                  </View>
+                )}
+              </View>
             </View>
-          </View>
           </ScrollView>
         </View>
 
         {/* Tab 2: Subjects */}
         <View
-          style={[styles.tabPane, activeTab !== "subjects" && styles.hiddenPane]}
+          style={[
+            styles.tabPane,
+            activeTab !== "subjects" && styles.hiddenPane,
+          ]}
           pointerEvents={activeTab === "subjects" ? "auto" : "none"}
         >
           {visitedTabs.subjects && (
@@ -981,13 +1201,21 @@ export const FlowTimetableScreen: React.FC = () => {
               tasks={tasks}
               groupCode={selectedGroup}
               onOpenLesson={handleOpenLesson}
+              onOpenSubjectTasks={(subject) => {
+                setSelectedLessonForModal(null);
+                setSelectedSubjectTitle(subject);
+                setSubjectModalVisible(true);
+              }}
             />
           )}
         </View>
 
         {/* Tab 3: Deadlines */}
         <View
-          style={[styles.tabPane, activeTab !== "deadlines" && styles.hiddenPane]}
+          style={[
+            styles.tabPane,
+            activeTab !== "deadlines" && styles.hiddenPane,
+          ]}
           pointerEvents={activeTab === "deadlines" ? "auto" : "none"}
         >
           {visitedTabs.deadlines && (
@@ -995,6 +1223,7 @@ export const FlowTimetableScreen: React.FC = () => {
               tasks={tasks}
               taskProgress={taskProgress}
               groupCode={selectedGroup}
+              statusMessage={taskLoadMessage}
               isLoggedIn={Boolean(sessionUser)}
               scheduledReminders={scheduledReminders}
               updatingTaskId={updatingTaskId}
@@ -1035,10 +1264,7 @@ export const FlowTimetableScreen: React.FC = () => {
       <AmbientBottomGlow />
 
       {/* Persistent Bottom Navigation Bar */}
-      <BottomNavBar
-        activeTab={activeTab}
-        onSelectTab={handleSelectTab}
-      />
+      <BottomNavBar activeTab={activeTab} onSelectTab={handleSelectTab} />
 
       {/* Schedule Picker Modal (Groups, Teachers, Favorites) */}
       <SchedulePickerModal
@@ -1067,6 +1293,7 @@ export const FlowTimetableScreen: React.FC = () => {
       <SubjectDetailModal
         visible={subjectModalVisible}
         lesson={selectedLessonForModal}
+        subject={selectedSubjectTitle}
         tasks={tasks}
         onClose={() => {
           setSubjectModalVisible(false);
@@ -1146,7 +1373,8 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: "#0b1322",
-    paddingTop: Platform.OS === "android" ? (RNStatusBar.currentHeight || 28) + 4 : 0,
+    paddingTop:
+      Platform.OS === "android" ? (RNStatusBar.currentHeight || 28) + 4 : 0,
   },
   topHeader: {
     flexDirection: "row",

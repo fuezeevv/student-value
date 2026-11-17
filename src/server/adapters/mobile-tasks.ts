@@ -1,3 +1,4 @@
+import { confirmedDeadlineWhere } from "@/server/domain/deadline-visibility";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { getMobileSessionUser } from "./mobile-auth";
@@ -37,17 +38,25 @@ export interface MobileTaskItem {
   deadline: MobileTaskDeadline | null;
   material: MobileTaskMaterial | null;
   progress: MobileTaskProgress | null;
+  materialTitles?: string[];
 }
 
-function formatMoscowDate(d: Date): string {
+function formatMoscowDate(d: Date, strict = false): string {
   // Format as DD.MM.YYYY in Europe/Moscow timezone
   const formatter = new Intl.DateTimeFormat("ru-RU", {
     timeZone: "Europe/Moscow",
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
+    ...(strict
+      ? {
+          hour: "2-digit" as const,
+          minute: "2-digit" as const,
+          hourCycle: "h23" as const,
+        }
+      : {}),
   });
-  return formatter.format(d);
+  return formatter.format(d) + (strict ? " МСК" : "");
 }
 
 export async function handleGetMobileTasks(
@@ -58,8 +67,21 @@ export async function handleGetMobileTasks(
     ? authHeader.slice("Bearer ".length).trim()
     : null;
 
-  const sessionUser = token ? await getMobileSessionUser(token) : null;
+  let sessionUser = token ? await getMobileSessionUser(token) : null;
   const rawGroup = request.nextUrl.searchParams.get("group") || "";
+  if (token && !sessionUser) {
+    return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
+  }
+  if (sessionUser && rawGroup) {
+    const membership = sessionUser.groups?.find(
+      (group) => group.code === rawGroup,
+    );
+    // A timetable selection never grants membership or chooses another group's
+    // private assignments. Nonmember groups use only the strict public projection.
+    sessionUser = membership
+      ? await getMobileSessionUser(token!, membership.id)
+      : null;
+  }
 
   if (sessionUser) {
     // Authenticated path: use authoritative taskVisibilityWhere
@@ -81,12 +103,13 @@ export async function handleGetMobileTasks(
           },
         },
         deadlines: {
-          where: { status: "ACTIVE" },
+          where: confirmedDeadlineWhere,
           orderBy: { date: "asc" },
           take: 1,
           select: {
             id: true,
             date: true,
+            isTimeStrict: true,
             status: true,
           },
         },
@@ -132,15 +155,16 @@ export async function handleGetMobileTasks(
       return {
         id: t.id,
         title: t.title,
-        subject:
-          t.courseOffering.courseDefinition.shortTitle ||
-          t.courseOffering.courseDefinition.title,
+        subject: t.courseOffering.courseDefinition.title,
         type: t.type,
         deadline: activeDl
           ? {
               id: activeDl.id,
               date: activeDl.date.toISOString(),
-              dateMoscowStr: formatMoscowDate(activeDl.date),
+              dateMoscowStr: formatMoscowDate(
+                activeDl.date,
+                activeDl.isTimeStrict,
+              ),
               status: activeDl.status,
             }
           : null,
@@ -167,13 +191,19 @@ export async function handleGetMobileTasks(
       };
     });
 
-    return NextResponse.json({ tasks: items }, { headers: { "Cache-Control": "no-store" } });
+    return NextResponse.json(
+      { tasks: items },
+      { headers: { "Cache-Control": "no-store" } },
+    );
   }
 
   // Guest path: strict read-only group projection (per AGENTS.md)
   if (!rawGroup) {
     return NextResponse.json(
-      { error: "Требуется указать группу (параметр ?group=)", code: "MISSING_GROUP" },
+      {
+        error: "Требуется указать группу (параметр ?group=)",
+        code: "MISSING_GROUP",
+      },
       { status: 400, headers: { "Cache-Control": "no-store" } },
     );
   }
@@ -219,33 +249,19 @@ export async function handleGetMobileTasks(
         },
       },
       deadlines: {
-        where: { status: "ACTIVE" },
+        where: confirmedDeadlineWhere,
         orderBy: { date: "asc" },
         take: 1,
         select: {
           id: true,
           date: true,
+          isTimeStrict: true,
           status: true,
         },
       },
       materials: {
-        take: 1,
-        select: {
-          material: {
-            select: {
-              id: true,
-              title: true,
-              file: {
-                select: {
-                  filename: true,
-                  byteSize: true,
-                  mimeType: true,
-                  sha256: true,
-                },
-              },
-            },
-          },
-        },
+        take: 20,
+        select: { material: { select: { title: true } } },
       },
     },
     orderBy: { createdAt: "desc" },
@@ -258,32 +274,27 @@ export async function handleGetMobileTasks(
     return {
       id: t.id,
       title: t.title,
-      subject:
-        t.courseOffering.courseDefinition.shortTitle ||
-        t.courseOffering.courseDefinition.title,
+      subject: t.courseOffering.courseDefinition.title,
       type: t.type,
       deadline: activeDl
         ? {
             id: activeDl.id,
             date: activeDl.date.toISOString(),
-            dateMoscowStr: formatMoscowDate(activeDl.date),
+            dateMoscowStr: formatMoscowDate(
+              activeDl.date,
+              activeDl.isTimeStrict,
+            ),
             status: activeDl.status,
           }
         : null,
-      material:
-        mat && mat.file
-          ? {
-              id: mat.id,
-              title: mat.title,
-              filename: mat.file.filename,
-              byteSize: mat.file.byteSize,
-              mimeType: mat.file.mimeType,
-              sha256: mat.file.sha256,
-            }
-          : null,
+      material: null,
+      materialTitles: t.materials.map((link) => link.material.title),
       progress: null, // Guests never receive progress
     };
   });
 
-  return NextResponse.json({ tasks: items }, { headers: { "Cache-Control": "no-store" } });
+  return NextResponse.json(
+    { tasks: items },
+    { headers: { "Cache-Control": "no-store" } },
+  );
 }
