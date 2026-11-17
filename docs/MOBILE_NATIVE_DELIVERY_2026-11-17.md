@@ -41,3 +41,10 @@ The backend is the project's existing custom application/domain backend on Next.
 - Date-only API deadlines use effective Moscow end-of-day while retaining original DB timestamps. A regression test covers a legacy midnight row.
 - A logged-in visitor viewing a nonmember group gets explicit read-only work cards. Native management refreshes academic data after successful changes. Light-theme status/error text uses semantic contrast colors.
 - Privacy text now describes native local copies, public feed and the isolated university-published Yandex map.
+
+## Delivery checkpoint
+
+- Latest arm64 debug preview built and installed preserving app data: 56 MB, SHA-256 `ec65ce50c187860538cd939365eafae6c01312de05ac9bedec9edb345b7d77fa`. Public release assets were not replaced.
+- Real owner Google login, native profile, headman work list and RR3 editor were observed without academic writes. Final build cold launch was observed; horizontal gestures were not accepted through the unreliable mirror coordinate input.
+- Production feed/manage API deployment remains live. Final follow-up rollout (privacy additions and date-only deadline projection) hit Vercel API connection timeouts before upload; it is committed but not claimed live. Retry from this branch with `node scripts/cloud-cli.mjs vercel deploy --prod --yes --archive=tgz`, then check health/feed, anonymous manage/progress rejection, privacy text and date-only deadline projection. No migrations are required.
+- Two pre-existing untracked colleague screenshots (`docs/images/map.png`, `docs/images/news.png`) were preserved and not included.
