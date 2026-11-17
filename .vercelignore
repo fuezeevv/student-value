@@ -41,3 +41,5 @@ integrations/
 Dockerfile
 .dockerignore
 scripts/container-start.mjs
+
+scripts/mobile-test-server.ts

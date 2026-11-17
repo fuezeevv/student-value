@@ -1,4 +1,28 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { focusScope } from "../focus/storage";
+import { useNetInfo } from "@react-native-community/netinfo";
+import { BrandMark, OfflineMark } from "../components/BrandMark";
+import { ComparedSchedule } from "../components/ComparedSchedule";
+import { showStudentScheduleSubject } from "@studentvalue/mobile-contracts";
+import {
+  useTheme,
+  useThemedStyles,
+  type Palette,
+} from "../theme/ThemeProvider";
+import { useDaySwipe } from "../schedule/useDaySwipe";
+import { logoutMobile } from "../auth/client";
+import {
+  sessionGeneration,
+  invalidateSessionWork,
+  isCurrentSession,
+  sessionSignal,
+} from "../auth/session-lifecycle";
+import React, {
+  useState,
+  useEffect,
+  useMemo,
+  useCallback,
+  useRef,
+} from "react";
 import {
   View,
   Text,
@@ -56,6 +80,8 @@ import { AmbientBottomGlow } from "../components/AmbientBottomGlow";
 import { MapIcon, NewsIcon, ChevronDownIcon } from "../components/NativeIcons";
 import {
   scheduleDeadlineReminder,
+  activeReminderFlags,
+  reconcileTaskReminders,
   cancelDeadlineReminder,
   setupNotificationChannels,
 } from "../notifications/scheduler";
@@ -163,6 +189,11 @@ function formatAge(isoString: string | null): string {
 }
 
 export const FlowTimetableScreen: React.FC = () => {
+  const { colors, isDark } = useTheme();
+  const connection = useNetInfo();
+  const isOffline = connection.isConnected === false;
+  const styles = useThemedStyles(createStyles);
+
   const [activeTab, setActiveTab] = useState<NavTab>("flow");
   const [visitedTabs, setVisitedTabs] = useState<Record<NavTab, boolean>>({
     flow: true,
@@ -172,46 +203,87 @@ export const FlowTimetableScreen: React.FC = () => {
   });
   const [containerHeight, setContainerHeight] = useState<number>(0);
   const [selectedGroup, setSelectedGroup] = useState<string>("5130901/40102");
-  const [scheduleType, setScheduleType] = useState<"group" | "teacher">("group");
-  const [selectedTeacherId, setSelectedTeacherId] = useState<number | null>(null);
-  const [selectedRuzGroupId, setSelectedRuzGroupId] = useState<number | null>(45591);
+  const [scheduleType, setScheduleType] = useState<"group" | "teacher">(
+    "group",
+  );
+  const [selectedTeacherId, setSelectedTeacherId] = useState<number | null>(
+    null,
+  );
+  const [selectedRuzGroupId, setSelectedRuzGroupId] = useState<number | null>(
+    45591,
+  );
   const [todayStr, setTodayStr] = useState<string>(() => getMoscowDateString());
-  const [nowMoscowMin, setNowMoscowMin] = useState<number>(() => getMoscowNowMinutes());
-  const [selectedDate, setSelectedDate] = useState<string>(() => getMoscowDateString());
+  const [nowMoscowMin, setNowMoscowMin] = useState<number>(() =>
+    getMoscowNowMinutes(),
+  );
+  const [selectedDate, setSelectedDate] = useState<string>(() =>
+    getMoscowDateString(),
+  );
 
   // Storage states
   const [isLoaded, setIsLoaded] = useState<boolean>(false);
   const [lessons, setLessons] = useState<MobileLesson[]>([]);
   const [weekLessons, setWeekLessons] = useState<MobileLesson[]>([]);
+  const [daysWithLessons, setDaysWithLessons] = useState<
+    Record<string, boolean>
+  >({});
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [sourceFetchedAt, setSourceFetchedAt] = useState<string | null>(null);
   const [isStale, setIsStale] = useState<boolean>(false);
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
-  const [apiOrigin, setApiOrigin] = useState<string>("https://studentvalue1984.eu.cc");
+  const [apiOrigin, setApiOrigin] = useState<string>(
+    "https://studentvalue1984.eu.cc",
+  );
 
   // Auth and task progress states
-  const [sessionUser, setSessionUser] = useState<MobileSessionUser | null>(null);
-  const [taskProgress, setTaskProgress] = useState<Record<string, UserTaskProgress>>({});
+  const [sessionUser, setSessionUser] = useState<MobileSessionUser | null>(
+    null,
+  );
+  const [taskProgress, setTaskProgress] = useState<
+    Record<string, UserTaskProgress>
+  >({});
+  const hasSelectedMembership = Boolean(
+    sessionUser?.groups?.some((group) => group.code === selectedGroup),
+  );
+  const readOnlyReason =
+    sessionUser && !hasSelectedMembership
+      ? "Общие работы доступны для просмотра. Личные отметки и напоминания — в вашей группе."
+      : undefined;
   const [pendingOpsCount, setPendingOpsCount] = useState<number>(0);
   const [tasks, setTasks] = useState<CachedTask[]>([]);
-  const [scheduledReminders, setScheduledReminders] = useState<Record<string, boolean>>({});
+  const [scheduledReminders, setScheduledReminders] = useState<
+    Record<string, boolean>
+  >({});
   const [updatingTaskId, setUpdatingTaskId] = useState<string | null>(null);
 
   // Modals
-  const [schedulePickerVisible, setSchedulePickerVisible] = useState<boolean>(false);
+  const [schedulePickerVisible, setSchedulePickerVisible] =
+    useState<boolean>(false);
   const [mapModalVisible, setMapModalVisible] = useState<boolean>(false);
   const [newsModalVisible, setNewsModalVisible] = useState<boolean>(false);
   const [authModalVisible, setAuthModalVisible] = useState<boolean>(false);
-  const [wellbeingModalVisible, setWellbeingModalVisible] = useState<boolean>(false);
-  const [appInfoModalVisible, setAppInfoModalVisible] = useState<boolean>(false);
+  const [wellbeingModalVisible, setWellbeingModalVisible] =
+    useState<boolean>(false);
+  const [appInfoModalVisible, setAppInfoModalVisible] =
+    useState<boolean>(false);
   const [focusPercent, setFocusPercent] = useState<number>(0);
-  const [materialModalVisible, setMaterialModalVisible] = useState<boolean>(false);
-  const [activeMaterialModalId, setActiveMaterialModalId] = useState<string | null>(null);
-  const [subjectModalVisible, setSubjectModalVisible] = useState<boolean>(false);
-  const [selectedLessonForModal, setSelectedLessonForModal] = useState<MobileLesson | null>(null);
+  const [materialModalVisible, setMaterialModalVisible] =
+    useState<boolean>(false);
+  const [activeMaterialModalId, setActiveMaterialModalId] = useState<
+    string | null
+  >(null);
+  const [subjectModalVisible, setSubjectModalVisible] =
+    useState<boolean>(false);
+  const [selectedLessonForModal, setSelectedLessonForModal] =
+    useState<MobileLesson | null>(null);
+  const [selectedSubjectTitle, setSelectedSubjectTitle] = useState<
+    string | null
+  >(null);
 
   const repo = useMemo(() => getTimetableRepository(), []);
+  const taskReqGenRef = useRef(0);
+  const [taskLoadMessage, setTaskLoadMessage] = useState<string | null>(null);
   const scrollRef = useRef<any>(null);
   const reqGenRef = useRef(0);
 
@@ -221,6 +293,7 @@ export const FlowTimetableScreen: React.FC = () => {
   }, []);
 
   const handleOpenLesson = useCallback((l: MobileLesson) => {
+    setSelectedSubjectTitle(null);
     setSelectedLessonForModal(l);
     setSubjectModalVisible(true);
   }, []);
@@ -246,15 +319,41 @@ export const FlowTimetableScreen: React.FC = () => {
 
   const loadTasks = useCallback(
     async (groupCode: string, user: MobileSessionUser | null) => {
+      const generation = sessionGeneration();
+      const requestId = ++taskReqGenRef.current;
+      const current = () =>
+        isCurrentSession(generation) && requestId === taskReqGenRef.current;
+      if (!/^\d{7}\/\d{5}(?:_\d{4})?$/.test(groupCode)) {
+        setTasks([]);
+        setTaskLoadMessage("Для просмотра заданий выберите учебную группу.");
+        return;
+      }
+      setTaskLoadMessage("Обновляем задания…");
+      const cacheOrigin = await getActiveApiOrigin();
+      let previousTasks: CachedTask[] = [];
       try {
-        const cached = await repo.getCachedTasksForGroup(groupCode);
-        if (cached.length > 0) {
-          setTasks(cached);
+        const cached = await repo.getCachedTasksForGroup(
+          groupCode,
+          user?.id,
+          cacheOrigin,
+        );
+        previousTasks = cached;
+        if (current()) setTasks(cached);
+        if (user) {
+          const flags = await activeReminderFlags(user.id, cached).catch(
+            () => ({}),
+          );
+          if (current()) setScheduledReminders(flags);
         }
       } catch (err) {
         console.warn("Could not read cached tasks from SQLite:", err);
       }
 
+      const controller = new AbortController();
+      const parentSignal = sessionSignal();
+      const abort = () => controller.abort();
+      parentSignal.addEventListener("abort", abort);
+      const timer = setTimeout(abort, 8000);
       try {
         const origin = await getActiveApiOrigin();
         const token = await getSessionToken();
@@ -264,13 +363,18 @@ export const FlowTimetableScreen: React.FC = () => {
         }
         const res = await fetch(
           `${origin}/api/v1/tasks?group=${encodeURIComponent(groupCode)}`,
-          { headers },
+          { headers, signal: controller.signal },
         );
+        if (!res.ok)
+          throw new Error(
+            res.status === 404
+              ? "Список заданий недоступен на выбранном сервере. Проверьте его на сайте."
+              : "Не удалось обновить задания. Показываем сохранённую копию, если она есть.",
+          );
         if (res.ok) {
           const data = await res.json();
-          const serverTasks = (data.tasks || []).filter(
-            (t: any) => !t.title?.includes("[TEST]") && !t.id?.startsWith("test-"),
-          );
+          if (current()) setTaskLoadMessage(null);
+          const serverTasks = data.tasks || [];
           const mapped: CachedTask[] = serverTasks.map((t: any) => ({
             id: t.id,
             groupCode,
@@ -289,12 +393,30 @@ export const FlowTimetableScreen: React.FC = () => {
             materialSha256: t.material?.sha256 ?? null,
             updatedAt: new Date().toISOString(),
           }));
-          await repo.saveCachedTasksForGroup(groupCode, mapped);
+          if (!current()) return;
+          await repo.saveCachedTasksForGroup(
+            groupCode,
+            mapped,
+            user?.id,
+            cacheOrigin,
+          );
+          if (!current()) return;
           setTasks(mapped);
 
           if (user) {
             const progressMap: Record<string, UserTaskProgress> = {};
+            const pendingTasks = new Set(
+              (await repo.getPendingOperations(user.id)).map(
+                (operation) => operation.taskId,
+              ),
+            );
             for (const st of serverTasks) {
+              if (!current()) return;
+              if (pendingTasks.has(st.id)) {
+                const draft = await repo.getUserProgress(user.id, st.id);
+                if (draft) progressMap[st.id] = draft;
+                continue;
+              }
               if (st.progress) {
                 progressMap[st.id] = {
                   userId: user.id,
@@ -306,15 +428,47 @@ export const FlowTimetableScreen: React.FC = () => {
                   completedAt: st.progress.completedAt,
                   updatedAt: st.progress.updatedAt,
                 };
+                await repo.saveUserProgress(progressMap[st.id]);
+              } else {
+                await repo.deleteUserProgress(user.id, st.id);
               }
             }
-            if (Object.keys(progressMap).length > 0) {
-              setTaskProgress((prev) => ({ ...prev, ...progressMap }));
-            }
+            if (!current()) return;
+            setTaskProgress((previous) => {
+              const next = { ...previous };
+              for (const task of serverTasks) delete next[task.id];
+              return { ...next, ...progressMap };
+            });
+            await reconcileTaskReminders(
+              user.id,
+              previousTasks,
+              mapped,
+              new Set(
+                Object.values(progressMap)
+                  .filter((progress) =>
+                    ["READY", "SUBMITTED", "ACCEPTED"].includes(
+                      progress.status,
+                    ),
+                  )
+                  .map((progress) => progress.taskId),
+              ),
+            ).catch(() => {});
+            const flags = await activeReminderFlags(user.id, mapped).catch(
+              () => ({}),
+            );
+            if (current()) setScheduledReminders(flags);
           }
         }
       } catch (err) {
-        console.warn("Could not refresh tasks from API (using SQLite cache):", err);
+        if (current())
+          setTaskLoadMessage(
+            err instanceof Error && err.name !== "AbortError"
+              ? err.message
+              : "Не удалось обновить задания. Сохранённая копия может быть устаревшей.",
+          );
+      } finally {
+        clearTimeout(timer);
+        parentSignal.removeEventListener("abort", abort);
       }
     },
     [repo],
@@ -322,14 +476,21 @@ export const FlowTimetableScreen: React.FC = () => {
 
   // Cold start directly from SQLite repository
   const loadFromSqlite = useCallback(async () => {
+    const generation = reqGenRef.current;
     try {
       const res = await repo.getDayTimetable(selectedGroup, selectedDate);
+      if (generation !== reqGenRef.current) return;
       if (res.status === "loaded") {
         setIsLoaded(true);
-        setLessons(res.lessons);
+        setLessons(
+          res.lessons.filter((l) => showStudentScheduleSubject(l.subject)),
+        );
         setSavedAt(res.savedAt);
         setSourceFetchedAt(res.sourceFetchedAt);
-        setIsStale(res.isStale);
+        setIsStale(
+          res.isStale ||
+            Date.now() - Date.parse(res.sourceFetchedAt) > 15 * 60 * 1000,
+        );
       } else {
         setIsLoaded(false);
         setLessons([]);
@@ -339,37 +500,94 @@ export const FlowTimetableScreen: React.FC = () => {
 
       const weekStart = weekStartFor(selectedDate);
       const stored = await repo.getSnapshot(selectedGroup, weekStart);
+      if (generation !== reqGenRef.current) return;
+      setWeekLessons([]);
+      setDaysWithLessons({});
       if (stored?.snapshot?.data?.days) {
         const allWkLessons = stored.snapshot.data.days.flatMap(
           (d: { lessons: MobileLesson[] }) => d.lessons,
         );
-        setWeekLessons(allWkLessons);
+        setWeekLessons(
+          allWkLessons.filter((l) => showStudentScheduleSubject(l.subject)),
+        );
+        setDaysWithLessons(
+          Object.fromEntries(
+            stored.snapshot.data.days.map((day) => [
+              day.date,
+              day.lessons.some((l) => showStudentScheduleSubject(l.subject)),
+            ]),
+          ),
+        );
       }
     } catch {
+      if (generation !== reqGenRef.current) return;
       setIsLoaded(false);
       setLessons([]);
+      setWeekLessons([]);
     }
   }, [repo, selectedGroup, selectedDate]);
 
-  // Load session user and tasks
+  // Ignore completions from the previous account or group selection.
   useEffect(() => {
-    getSessionUser().then(async (u) => {
-      setSessionUser(u);
-      if (u) {
-        const ops = await repo.getPendingOperations(u.id);
-        setPendingOpsCount(ops.length);
-        const progressList = await repo.getAllUserProgress(u.id);
-        const map: Record<string, UserTaskProgress> = {};
-        for (const p of progressList) {
-          map[p.taskId] = p;
+    let active = true;
+    const generation = sessionGeneration();
+    void (async () => {
+      try {
+        const u = await getSessionUser();
+        if (!active || !isCurrentSession(generation)) return;
+        setSessionUser(u);
+        if (u) {
+          const ops = await repo.getPendingOperations(u.id);
+          const progressList = await repo.getAllUserProgress(u.id);
+          if (!active || !isCurrentSession(generation)) return;
+          setPendingOpsCount(ops.length);
+          setTaskProgress(
+            Object.fromEntries(progressList.map((p) => [p.taskId, p])),
+          );
+          void flushOutbox().catch(() => {});
         }
-        setTaskProgress(map);
-
-        flushOutbox().catch(() => {});
+        await loadTasks(selectedGroup, u);
+      } catch {
+        if (active)
+          setTaskLoadMessage(
+            "Не удалось прочитать личные данные с устройства. Повторите вход.",
+          );
       }
-      await loadTasks(selectedGroup, u);
-    });
+    })();
+    return () => {
+      active = false;
+    };
   }, [repo, selectedGroup, loadTasks]);
+
+  // Best-effort delivery while the app is active. No background-service claim:
+  // OS suspension can pause this timer; foreground return also retries the queue.
+  useEffect(() => {
+    let active = true;
+    const retry = async () => {
+      if (AppState.currentState !== "active") return;
+      const generation = sessionGeneration();
+      const user = await getSessionUser();
+      if (!user) return;
+      await flushOutbox();
+      if (!active || !isCurrentSession(generation)) return;
+      const pending = await repo.getPendingOperations(user.id);
+      const progress = await repo.getAllUserProgress(user.id);
+      if (!active || !isCurrentSession(generation)) return;
+      setPendingOpsCount(pending.length);
+      setTaskProgress(Object.fromEntries(progress.map((p) => [p.taskId, p])));
+    };
+    const timer = setInterval(() => {
+      void retry().catch(() => {});
+    }, 30000);
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") void retry().catch(() => {});
+    });
+    return () => {
+      active = false;
+      clearInterval(timer);
+      subscription.remove();
+    };
+  }, [repo]);
 
   // Load timetable on date/group change
   useEffect(() => {
@@ -379,9 +597,19 @@ export const FlowTimetableScreen: React.FC = () => {
       setIsSyncing(true);
       const syncPromise =
         scheduleType === "teacher" && selectedTeacherId
-          ? syncTeacherTimetableFromRuz(selectedTeacherId, selectedGroup, selectedDate)
-          : selectedRuzGroupId && selectedRuzGroupId !== 45591 && !selectedGroup.startsWith("5130901/40102")
-            ? syncGroupTimetableFromRuzId(selectedRuzGroupId, selectedGroup, selectedDate)
+          ? syncTeacherTimetableFromRuz(
+              selectedTeacherId,
+              selectedGroup,
+              selectedDate,
+            )
+          : selectedRuzGroupId &&
+              selectedRuzGroupId !== 45591 &&
+              !selectedGroup.startsWith("5130901/40102")
+            ? syncGroupTimetableFromRuzId(
+                selectedRuzGroupId,
+                selectedGroup,
+                selectedDate,
+              )
             : syncTimetableFromApi(selectedGroup, selectedDate);
 
       syncPromise.then((result) => {
@@ -395,7 +623,14 @@ export const FlowTimetableScreen: React.FC = () => {
         }
       });
     });
-  }, [loadFromSqlite, selectedGroup, selectedDate, scheduleType, selectedTeacherId, selectedRuzGroupId]);
+  }, [
+    loadFromSqlite,
+    selectedGroup,
+    selectedDate,
+    scheduleType,
+    selectedTeacherId,
+    selectedRuzGroupId,
+  ]);
 
   // Live timer for clock and midnight rollover
   useEffect(() => {
@@ -450,9 +685,21 @@ export const FlowTimetableScreen: React.FC = () => {
 
     let result;
     if (scheduleType === "teacher" && selectedTeacherId) {
-      result = await syncTeacherTimetableFromRuz(selectedTeacherId, selectedGroup, selectedDate);
-    } else if (selectedRuzGroupId && selectedRuzGroupId !== 45591 && !selectedGroup.startsWith("5130901/40102")) {
-      result = await syncGroupTimetableFromRuzId(selectedRuzGroupId, selectedGroup, selectedDate);
+      result = await syncTeacherTimetableFromRuz(
+        selectedTeacherId,
+        selectedGroup,
+        selectedDate,
+      );
+    } else if (
+      selectedRuzGroupId &&
+      selectedRuzGroupId !== 45591 &&
+      !selectedGroup.startsWith("5130901/40102")
+    ) {
+      result = await syncGroupTimetableFromRuzId(
+        selectedRuzGroupId,
+        selectedGroup,
+        selectedDate,
+      );
     } else {
       result = await syncTimetableFromApi(selectedGroup, selectedDate);
     }
@@ -496,12 +743,24 @@ export const FlowTimetableScreen: React.FC = () => {
   };
 
   const handleSelectOrigin = async (newOrigin: string) => {
+    if (newOrigin === apiOrigin) return;
+    invalidateSessionWork();
+    // Never send a production bearer token to a development server.
+    if (sessionUser) await logoutMobile();
+    setSessionUser(null);
+    setTaskProgress({});
+    setTasks([]);
+    setPendingOpsCount(0);
     setApiOrigin(newOrigin);
     await setActiveApiOrigin(newOrigin);
     setSchedulePickerVisible(false);
     setIsSyncing(true);
     setSyncMessage(null);
-    const result = await syncTimetableFromApi(selectedGroup, selectedDate, newOrigin);
+    const result = await syncTimetableFromApi(
+      selectedGroup,
+      selectedDate,
+      newOrigin,
+    );
     setIsSyncing(false);
     if (result.success) {
       setSyncMessage(null);
@@ -519,6 +778,8 @@ export const FlowTimetableScreen: React.FC = () => {
   const handleNextDay = useCallback(() => {
     setSelectedDate((prev) => addDaysTo(prev, 1));
   }, []);
+
+  const daySwipe = useDaySwipe(handlePrevDay, handleNextDay);
 
   const handlePrevWeek = useCallback(() => {
     setSelectedDate((prev) => addDaysTo(prev, -7));
@@ -545,7 +806,9 @@ export const FlowTimetableScreen: React.FC = () => {
     );
     const diffWeeks = Math.max(
       1,
-      Math.floor((start.getTime() - semStartMonday.getTime()) / (7 * 86400000)) + 1,
+      Math.floor(
+        (start.getTime() - semStartMonday.getTime()) / (7 * 86400000),
+      ) + 1,
     );
     const isEven = diffWeeks % 2 === 0;
     return `${diffWeeks}-я неделя · ${isEven ? "Чётная" : "Нечётная"}`;
@@ -563,10 +826,10 @@ export const FlowTimetableScreen: React.FC = () => {
         dayNumber: dayNum,
         dayLabel: labels[i],
         isToday,
-        hasLessons: weekLessons.length > 0,
+        hasLessons: Boolean(daysWithLessons[dStr]),
       };
     });
-  }, [selectedDate, todayStr, weekLessons]);
+  }, [selectedDate, todayStr, daysWithLessons]);
 
   // Task self-completion toggle
   const handleToggleTaskStatus = useCallback(
@@ -576,6 +839,13 @@ export const FlowTimetableScreen: React.FC = () => {
         return;
       }
 
+      if (!sessionUser.groups?.some((group) => group.code === selectedGroup)) {
+        Alert.alert(
+          "Просмотр другой группы",
+          "Личные отметки доступны только в группе, в которой вы состоите.",
+        );
+        return;
+      }
       setUpdatingTaskId(taskId);
       const nextStatus: "READY" | "NOT_STARTED" =
         currentStatus === "READY" || currentStatus === "SUBMITTED"
@@ -588,6 +858,7 @@ export const FlowTimetableScreen: React.FC = () => {
           taskId,
           nextStatus,
           cur?.studentNotes ?? undefined,
+          tasks.find((task) => task.id === taskId)?.groupCode,
         );
 
         setTaskProgress((prev) => ({ ...prev, [taskId]: optimisticProgress }));
@@ -617,48 +888,71 @@ export const FlowTimetableScreen: React.FC = () => {
         setUpdatingTaskId(null);
       }
     },
-    [sessionUser, taskProgress, repo, tasks],
+    [sessionUser, taskProgress, repo, tasks, selectedGroup],
   );
 
   // Toggle reminder for task
   const handleToggleReminderForTask = useCallback(
     async (task: CachedTask) => {
-      if (!sessionUser) {
-        setAuthModalVisible(true);
-        return;
-      }
-      if (!task.deadlineId || !task.deadlineDate) {
-        Alert.alert("Дедлайн не найден", "У этого задания нет подтверждённого срока.");
-        return;
-      }
-
-      const isCurrentScheduled = Boolean(scheduledReminders[task.id]);
-
-      if (isCurrentScheduled) {
-        await cancelDeadlineReminder(sessionUser.id, task.id, task.deadlineId);
-        setScheduledReminders((prev) => ({ ...prev, [task.id]: false }));
-        Alert.alert("Напоминание", "Напоминание о дедлайне отключено.");
-      } else {
-        const scheduled = await scheduleDeadlineReminder({
-          userId: sessionUser.id,
-          taskId: task.id,
-          deadlineId: task.deadlineId,
-          taskTitle: task.title,
-          subjectName: task.subject,
-          deadlineDateStr: task.deadlineDate,
-        });
-        if (scheduled) {
-          setScheduledReminders((prev) => ({ ...prev, [task.id]: true }));
-          Alert.alert(
-            "Напоминание установлено",
-            `Напоминание сработает за 24 часа до дедлайна (${task.deadlineMoscowStr || "по расписанию"}).`,
-          );
-        } else {
-          Alert.alert(
-            "Не удалось установить напоминание",
-            "Дедлайн уже прошёл или дата не подтверждена.",
-          );
+      try {
+        if (!sessionUser) {
+          setAuthModalVisible(true);
+          return;
         }
+        if (
+          !sessionUser.groups?.some((group) => group.code === task.groupCode)
+        ) {
+          Alert.alert(
+            "Просмотр другой группы",
+            "Личные напоминания доступны только участникам этой группы.",
+          );
+          return;
+        }
+        if (!task.deadlineId || !task.deadlineDate) {
+          Alert.alert(
+            "Дедлайн не найден",
+            "У этого задания нет подтверждённого срока.",
+          );
+          return;
+        }
+
+        const isCurrentScheduled = Boolean(scheduledReminders[task.id]);
+
+        if (isCurrentScheduled) {
+          await cancelDeadlineReminder(
+            sessionUser.id,
+            task.id,
+            task.deadlineId,
+          );
+          setScheduledReminders((prev) => ({ ...prev, [task.id]: false }));
+          Alert.alert("Напоминание", "Напоминание о дедлайне отключено.");
+        } else {
+          const scheduled = await scheduleDeadlineReminder({
+            userId: sessionUser.id,
+            taskId: task.id,
+            deadlineId: task.deadlineId,
+            taskTitle: task.title,
+            subjectName: task.subject,
+            deadlineDateStr: task.deadlineDate,
+          });
+          if (scheduled) {
+            setScheduledReminders((prev) => ({ ...prev, [task.id]: true }));
+            Alert.alert(
+              "Напоминание установлено",
+              `Напоминание: ${new Date(scheduled.triggerTime).toLocaleString("ru-RU", { timeZone: "Europe/Moscow" })} МСК.`,
+            );
+          } else {
+            Alert.alert(
+              "Не удалось установить напоминание",
+              "Проверьте разрешение уведомлений и актуальность подтверждённого срока.",
+            );
+          }
+        }
+      } catch {
+        Alert.alert(
+          "Напоминание не сохранено",
+          "Проверьте разрешение уведомлений в настройках Android и повторите попытку.",
+        );
       }
     },
     [sessionUser, scheduledReminders],
@@ -682,9 +976,23 @@ export const FlowTimetableScreen: React.FC = () => {
     await loadTasks(selectedGroup, user);
   };
 
-  const handleLogout = useCallback(async () => {
-    await handleUserChanged(null);
-  }, []);
+  const handleLogout = async () => {
+    try {
+      await logoutMobile();
+    } catch {
+      Alert.alert(
+        "Выход",
+        "Сессия завершена, но не все локальные файлы удалось удалить. Повторите очистку на устройстве.",
+      );
+    } finally {
+      setTasks([]);
+      setSessionUser(null);
+      setTaskProgress({});
+      setPendingOpsCount(0);
+      setScheduledReminders({});
+      await loadTasks(selectedGroup, null);
+    }
+  };
 
   // Determine current hero lesson
   const isSelectedToday = selectedDate === todayStr;
@@ -699,7 +1007,7 @@ export const FlowTimetableScreen: React.FC = () => {
 
     const ongoing = lessons.find((l) => {
       const s = parseMin(l.start);
-      const e = parseMin(l.scheduledEnd);
+      const e = s + 90;
       return nowMoscowMin >= s && nowMoscowMin < e;
     });
     if (ongoing) return ongoing;
@@ -713,7 +1021,7 @@ export const FlowTimetableScreen: React.FC = () => {
   const allDoneToday = useMemo(() => {
     if (lessons.length === 0 || !isSelectedToday) return false;
     const last = lessons[lessons.length - 1];
-    return nowMoscowMin >= parseMin(last.scheduledEnd);
+    return nowMoscowMin >= parseMin(last.start) + 90;
   }, [lessons, isSelectedToday, nowMoscowMin]);
 
   const remainingLessons = useMemo(() => {
@@ -721,21 +1029,13 @@ export const FlowTimetableScreen: React.FC = () => {
     return lessons.filter((l) => l.id !== heroLesson.id);
   }, [lessons, heroLesson]);
 
-  const totalXp = useMemo(() => {
-    if (!sessionUser) return 0;
-    const completedCount = Object.values(taskProgress).filter(
-      (p) => p.status === "READY" || p.status === "SUBMITTED" || p.status === "ACCEPTED",
-    ).length;
-    return completedCount * 50;
-  }, [sessionUser, taskProgress]);
-
   const dateFullLabel = useMemo(() => {
     return formatFlowDate(selectedDate);
   }, [selectedDate]);
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar style="light" />
+      <StatusBar style={isDark ? "light" : "dark"} />
 
       {/* Top Header - clean, minimal, camera notch protected */}
       <View style={styles.topHeader}>
@@ -751,11 +1051,7 @@ export const FlowTimetableScreen: React.FC = () => {
           accessibilityRole="button"
           accessibilityLabel="О приложении и статус сети"
         >
-          <Image
-            source={require("../../assets/brand-mark.png")}
-            style={styles.brandLogoImage}
-            resizeMode="contain"
-          />
+          <BrandMark size={34} />
         </TouchableOpacity>
 
         {/* Schedule Selector Chip (current group or teacher) */}
@@ -769,11 +1065,21 @@ export const FlowTimetableScreen: React.FC = () => {
           <Text style={styles.headerScheduleText} numberOfLines={1}>
             {selectedGroup}
           </Text>
-          <ChevronDownIcon size={12} color="#93c5fd" />
+          <ChevronDownIcon size={12} color={colors.link} />
         </TouchableOpacity>
 
         {/* Right header actions: Campus Map, News, Wellbeing badge */}
         <View style={styles.topHeaderRight}>
+          {isOffline ? (
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel={`Нет подключения к сети. Сохранённые данные: ${formatAge(sourceFetchedAt)}`}
+              onPress={() => setAppInfoModalVisible(true)}
+              style={styles.headerIconBtn}
+            >
+              <OfflineMark color={colors.muted} />
+            </TouchableOpacity>
+          ) : null}
           <TouchableOpacity
             style={styles.headerIconBtn}
             onPress={() => setMapModalVisible(true)}
@@ -781,7 +1087,7 @@ export const FlowTimetableScreen: React.FC = () => {
             accessibilityRole="button"
             accessibilityLabel="Карта кампуса СПбПУ"
           >
-            <MapIcon size={18} color="#cbd5e1" />
+            <MapIcon size={18} color={colors.muted} />
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -791,33 +1097,34 @@ export const FlowTimetableScreen: React.FC = () => {
             accessibilityRole="button"
             accessibilityLabel="Новости и анонсы"
           >
-            <NewsIcon size={18} color="#cbd5e1" />
-            <View style={styles.newsIndicatorDot} />
+            <NewsIcon size={18} color={colors.muted} />
           </TouchableOpacity>
 
           {/* Circular Wellbeing / Focus Badge (matches '0' in user's design) */}
-        <TouchableOpacity
-          onPress={() => setWellbeingModalVisible(true)}
-          style={[
-            styles.wellbeingBadge,
-            focusPercent >= 100 && styles.wellbeingBadgeCompleted,
-            focusPercent > 0 && focusPercent < 100 && styles.wellbeingBadgeActive,
-          ]}
-          activeOpacity={0.8}
-          accessibilityRole="button"
-          accessibilityLabel={`Сегодня в своём темпе: ${focusPercent}% выполнено. Нажмите для открытия.`}
-        >
-          <Text
+          <TouchableOpacity
+            onPress={() => setWellbeingModalVisible(true)}
             style={[
-              styles.wellbeingText,
-              focusPercent >= 100 && styles.wellbeingTextCompleted,
-              focusPercent > 0 && styles.wellbeingTextActive,
+              styles.wellbeingBadge,
+              focusPercent >= 100 && styles.wellbeingBadgeCompleted,
+              focusPercent > 0 &&
+                focusPercent < 100 &&
+                styles.wellbeingBadgeActive,
             ]}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel={`Сегодня в своём темпе: ${focusPercent}% выполнено. Нажмите для открытия.`}
           >
-            {focusPercent}
-          </Text>
-          {pendingOpsCount > 0 && <View style={styles.pendingDot} />}
-        </TouchableOpacity>
+            <Text
+              style={[
+                styles.wellbeingText,
+                focusPercent >= 100 && styles.wellbeingTextCompleted,
+                focusPercent > 0 && styles.wellbeingTextActive,
+              ]}
+            >
+              {focusPercent}
+            </Text>
+            {pendingOpsCount > 0 && <View style={styles.pendingDot} />}
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -837,18 +1144,21 @@ export const FlowTimetableScreen: React.FC = () => {
           pointerEvents={activeTab === "flow" ? "auto" : "none"}
         >
           <ScrollView
+            {...daySwipe.panHandlers}
             ref={scrollRef}
             style={styles.scrollArea}
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
-            snapToOffsets={containerHeight > 0 ? [0, containerHeight] : undefined}
+            snapToOffsets={
+              containerHeight > 0 ? [0, containerHeight] : undefined
+            }
             snapToEnd={false}
             decelerationRate="fast"
             refreshControl={
               <RefreshControl
                 refreshing={isSyncing}
                 onRefresh={handleManualSync}
-                tintColor="#93c5fd"
+                tintColor={colors.link}
                 colors={["#3378ff"]}
               />
             }
@@ -882,7 +1192,9 @@ export const FlowTimetableScreen: React.FC = () => {
             <View
               style={[
                 styles.page2Container,
-                containerHeight > 0 ? { minHeight: containerHeight } : undefined,
+                containerHeight > 0
+                  ? { minHeight: containerHeight }
+                  : undefined,
               ]}
             >
               {/* Day & Week Switcher at top of schedule view */}
@@ -899,80 +1211,69 @@ export const FlowTimetableScreen: React.FC = () => {
                 weekParity={weekParityLabel}
                 isTodaySelected={selectedDate === todayStr}
               />
-              {remainingLessons.length > 0 && (
-                <View style={styles.upcomingSection}>
-                  <View style={styles.page2HeaderRow}>
-                    <Text style={styles.sectionHeaderTitle}>Далее сегодня</Text>
-                    <TouchableOpacity
-                      onPress={() => scrollRef.current?.scrollTo({ y: 0, animated: true })}
-                      style={styles.backToHeroButton}
-                      activeOpacity={0.7}
-                      accessibilityRole="button"
-                      accessibilityLabel="Вернуться к текущей паре"
-                    >
-                      <Text style={styles.backToHeroText}>↑ К текущей паре</Text>
-                    </TouchableOpacity>
-                  </View>
-                  {remainingLessons.map((l) => (
-                    <UpcomingLessonCard
-                      key={l.id}
-                      lesson={l}
-                      onPress={() => {
-                        setSelectedLessonForModal(l);
-                        setSubjectModalVisible(true);
-                      }}
-                    />
-                  ))}
-                </View>
-              )}
+              <ComparedSchedule
+                date={selectedDate}
+                primaryLabel={selectedGroup}
+                primaryLessons={lessons}
+                loaded={isLoaded}
+              />
 
               {/* Deadlines and Tasks section */}
               <View style={styles.tasksSection}>
                 <Text style={styles.sectionHeaderTitle}>
                   Текущая работа и дедлайны
                 </Text>
-              {tasks.length > 0 ? (
-                tasks.map((task) => (
-                  <TaskProgressCard
-                    key={task.id}
-                    taskId={task.id}
-                    title={task.title}
-                    subject={task.subject}
-                    deadlineText={
-                      task.deadlineMoscowStr
-                        ? `Дедлайн: ${task.deadlineMoscowStr}`
-                        : "Без установленного дедлайна"
-                    }
-                    progress={taskProgress[task.id] || null}
-                    isLoggedIn={Boolean(sessionUser)}
-                    materialId={task.materialId}
-                    materialTitle={task.materialTitle}
-                    reminderScheduled={Boolean(scheduledReminders[task.id])}
-                    onToggleReminder={() => handleToggleReminderForTask(task)}
-                    onOpenMaterial={(matId) => {
-                      setActiveMaterialModalId(matId);
-                      setMaterialModalVisible(true);
-                    }}
-                    onToggleStatus={handleToggleTaskStatus}
-                    onOpenLogin={() => setAuthModalVisible(true)}
-                    loading={updatingTaskId === task.id}
-                  />
-                ))
-              ) : (
-                <View style={styles.emptyTasksBox}>
-                  <Text style={styles.emptyTasksText}>
-                    В группе {selectedGroup} нет активных дедлайнов на текущей неделе.
-                  </Text>
-                </View>
-              )}
+                {taskLoadMessage && (
+                  <Text style={styles.emptyTasksText}>{taskLoadMessage}</Text>
+                )}
+                {tasks.length > 0 ? (
+                  tasks.map((task) => (
+                    <TaskProgressCard
+                      key={task.id}
+                      taskId={task.id}
+                      title={task.title}
+                      subject={task.subject}
+                      deadlineText={
+                        task.deadlineMoscowStr
+                          ? `Дедлайн: ${task.deadlineMoscowStr}`
+                          : "Без установленного дедлайна"
+                      }
+                      progress={taskProgress[task.id] || null}
+                      isLoggedIn={Boolean(sessionUser) && hasSelectedMembership}
+                      readOnlyReason={readOnlyReason}
+                      materialId={task.materialId}
+                      materialTitle={task.materialTitle}
+                      reminderScheduled={Boolean(scheduledReminders[task.id])}
+                      onToggleReminder={() => handleToggleReminderForTask(task)}
+                      onOpenMaterial={(matId) => {
+                        setActiveMaterialModalId(matId);
+                        setMaterialModalVisible(true);
+                      }}
+                      onToggleStatus={handleToggleTaskStatus}
+                      onOpenLogin={() => setAuthModalVisible(true)}
+                      loading={updatingTaskId === task.id}
+                    />
+                  ))
+                ) : (
+                  <View style={styles.emptyTasksBox}>
+                    <Text style={styles.emptyTasksText}>
+                      {taskLoadMessage
+                        ? "Задания пока не удалось показать. Это не означает, что их не задавали."
+                        : "В доступных данных группы пока нет опубликованных заданий. Это не означает, что заданий нет."}
+                    </Text>
+                  </View>
+                )}
+              </View>
             </View>
-          </View>
           </ScrollView>
         </View>
 
         {/* Tab 2: Subjects */}
         <View
-          style={[styles.tabPane, activeTab !== "subjects" && styles.hiddenPane]}
+          style={[
+            styles.tabPane,
+            activeTab !== "subjects" && styles.hiddenPane,
+          ]}
           pointerEvents={activeTab === "subjects" ? "auto" : "none"}
         >
           {visitedTabs.subjects && (
@@ -981,13 +1282,21 @@ export const FlowTimetableScreen: React.FC = () => {
               tasks={tasks}
               groupCode={selectedGroup}
               onOpenLesson={handleOpenLesson}
+              onOpenSubjectTasks={(subject) => {
+                setSelectedLessonForModal(null);
+                setSelectedSubjectTitle(subject);
+                setSubjectModalVisible(true);
+              }}
             />
           )}
         </View>
 
         {/* Tab 3: Deadlines */}
         <View
-          style={[styles.tabPane, activeTab !== "deadlines" && styles.hiddenPane]}
+          style={[
+            styles.tabPane,
+            activeTab !== "deadlines" && styles.hiddenPane,
+          ]}
           pointerEvents={activeTab === "deadlines" ? "auto" : "none"}
         >
           {visitedTabs.deadlines && (
@@ -995,7 +1304,9 @@ export const FlowTimetableScreen: React.FC = () => {
               tasks={tasks}
               taskProgress={taskProgress}
               groupCode={selectedGroup}
-              isLoggedIn={Boolean(sessionUser)}
+              statusMessage={taskLoadMessage}
+              isLoggedIn={Boolean(sessionUser) && hasSelectedMembership}
+              readOnlyReason={readOnlyReason}
               scheduledReminders={scheduledReminders}
               updatingTaskId={updatingTaskId}
               onToggleStatus={handleToggleTaskStatus}
@@ -1035,10 +1346,7 @@ export const FlowTimetableScreen: React.FC = () => {
       <AmbientBottomGlow />
 
       {/* Persistent Bottom Navigation Bar */}
-      <BottomNavBar
-        activeTab={activeTab}
-        onSelectTab={handleSelectTab}
-      />
+      <BottomNavBar activeTab={activeTab} onSelectTab={handleSelectTab} />
 
       {/* Schedule Picker Modal (Groups, Teachers, Favorites) */}
       <SchedulePickerModal
@@ -1067,6 +1375,7 @@ export const FlowTimetableScreen: React.FC = () => {
       <SubjectDetailModal
         visible={subjectModalVisible}
         lesson={selectedLessonForModal}
+        subject={selectedSubjectTitle}
         tasks={tasks}
         onClose={() => {
           setSubjectModalVisible(false);
@@ -1116,6 +1425,7 @@ export const FlowTimetableScreen: React.FC = () => {
         visible={appInfoModalVisible}
         groupCode={selectedGroup}
         isSyncing={isSyncing}
+        isOffline={connection.isConnected === null ? undefined : isOffline}
         isStale={isStale}
         apiOrigin={apiOrigin}
         cachedAgeLabel={formatAge(savedAt || sourceFetchedAt)}
@@ -1133,6 +1443,8 @@ export const FlowTimetableScreen: React.FC = () => {
 
       {/* Wellbeing & Focus Modal (opened by Circle with 0) */}
       <WellbeingModal
+        key={focusScope(apiOrigin, sessionUser?.id)}
+        storageScope={focusScope(apiOrigin, sessionUser?.id)}
         visible={wellbeingModalVisible}
         tasks={tasks}
         onClose={() => setWellbeingModalVisible(false)}
@@ -1142,175 +1454,177 @@ export const FlowTimetableScreen: React.FC = () => {
   );
 };
 
-const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: "#0b1322",
-    paddingTop: Platform.OS === "android" ? (RNStatusBar.currentHeight || 28) + 4 : 0,
-  },
-  topHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    backgroundColor: "#0b1322",
-  },
-  logoButton: {
-    padding: 4,
-  },
-  brandLogoImage: {
-    width: 34,
-    height: 34,
-    borderRadius: 8,
-  },
-  headerScheduleChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    backgroundColor: "rgba(255, 255, 255, 0.05)",
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.08)",
-    maxWidth: 165,
-  },
-  headerScheduleText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#f8fafc",
-    fontFamily: "monospace",
-  },
-  topHeaderRight: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  headerIconBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(255, 255, 255, 0.04)",
-    position: "relative",
-  },
-  newsIndicatorDot: {
-    position: "absolute",
-    top: 5,
-    right: 5,
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: "#38bdf8",
-  },
-  wellbeingBadge: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    borderWidth: 1.5,
-    borderColor: "rgba(255, 255, 255, 0.2)",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(255, 255, 255, 0.04)",
-    position: "relative",
-  },
-  wellbeingText: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#cbd5e1",
-  },
-  wellbeingBadgeActive: {
-    borderColor: "#60a5fa",
-    backgroundColor: "rgba(59, 130, 246, 0.15)",
-  },
-  wellbeingBadgeCompleted: {
-    borderColor: "#10b981",
-    backgroundColor: "rgba(16, 185, 129, 0.2)",
-  },
-  wellbeingTextActive: {
-    color: "#93c5fd",
-  },
-  wellbeingTextCompleted: {
-    color: "#34d399",
-  },
-  pendingDot: {
-    position: "absolute",
-    top: 2,
-    right: 2,
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
-    backgroundColor: "#f59e0b",
-  },
-  bodyContainer: {
-    flex: 1,
-  },
-  tabPane: {
-    flex: 1,
-  },
-  hiddenPane: {
-    display: "none",
-  },
-  scrollArea: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingBottom: 40,
-  },
-  page2Container: {
-    paddingTop: 8,
-  },
-  page2HeaderRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 12,
-  },
-  backToHeroButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 14,
-    backgroundColor: "rgba(51, 120, 255, 0.1)",
-    borderWidth: 1,
-    borderColor: "rgba(96, 165, 250, 0.2)",
-  },
-  backToHeroText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#93c5fd",
-  },
-  upcomingSection: {
-    paddingHorizontal: 20,
-    marginTop: 12,
-    marginBottom: 20,
-  },
-  sectionHeaderTitle: {
-    fontSize: 14,
-    fontWeight: "800",
-    color: "#64748b",
-    letterSpacing: 0.8,
-    textTransform: "uppercase",
-    marginBottom: 12,
-  },
-  tasksSection: {
-    paddingHorizontal: 20,
-    marginBottom: 24,
-  },
-  emptyTasksBox: {
-    backgroundColor: "rgba(255, 255, 255, 0.02)",
-    borderRadius: 16,
-    padding: 20,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.04)",
-  },
-  emptyTasksText: {
-    fontSize: 13,
-    color: "#64748b",
-    textAlign: "center",
-    lineHeight: 18,
-  },
-});
+const createStyles = (colors: Palette) =>
+  StyleSheet.create({
+    safeArea: {
+      flex: 1,
+      backgroundColor: colors.canvas,
+      paddingTop:
+        Platform.OS === "android" ? (RNStatusBar.currentHeight || 28) + 4 : 0,
+    },
+    topHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+      backgroundColor: colors.canvas,
+    },
+    logoButton: {
+      padding: 4,
+    },
+    brandLogoImage: {
+      width: 34,
+      height: 34,
+      borderRadius: 8,
+    },
+    headerScheduleChip: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      backgroundColor: colors.soft,
+      paddingVertical: 6,
+      paddingHorizontal: 12,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: colors.line,
+      maxWidth: 165,
+    },
+    headerScheduleText: {
+      fontSize: 12,
+      fontWeight: "700",
+      color: colors.text,
+      fontFamily: "monospace",
+    },
+    topHeaderRight: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+    },
+    headerIconBtn: {
+      width: 34,
+      height: 34,
+      borderRadius: 17,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: colors.soft,
+      position: "relative",
+    },
+    newsIndicatorDot: {
+      position: "absolute",
+      top: 5,
+      right: 5,
+      width: 6,
+      height: 6,
+      borderRadius: 3,
+      backgroundColor: colors.link,
+    },
+    wellbeingBadge: {
+      width: 34,
+      height: 34,
+      borderRadius: 17,
+      borderWidth: 1.5,
+      borderColor: "rgba(255, 255, 255, 0.2)",
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: colors.soft,
+      position: "relative",
+    },
+    wellbeingText: {
+      fontSize: 13,
+      fontWeight: "700",
+      color: colors.muted,
+    },
+    wellbeingBadgeActive: {
+      borderColor: colors.link,
+      backgroundColor: "rgba(59, 130, 246, 0.15)",
+    },
+    wellbeingBadgeCompleted: {
+      borderColor: "#10b981",
+      backgroundColor: "rgba(16, 185, 129, 0.2)",
+    },
+    wellbeingTextActive: {
+      color: colors.link,
+    },
+    wellbeingTextCompleted: {
+      color: colors.success,
+    },
+    pendingDot: {
+      position: "absolute",
+      top: 2,
+      right: 2,
+      width: 7,
+      height: 7,
+      borderRadius: 3.5,
+      backgroundColor: "#f59e0b",
+    },
+    bodyContainer: {
+      flex: 1,
+    },
+    tabPane: {
+      flex: 1,
+    },
+    hiddenPane: {
+      display: "none",
+    },
+    scrollArea: {
+      flex: 1,
+    },
+    scrollContent: {
+      paddingBottom: 40,
+    },
+    page2Container: {
+      paddingTop: 8,
+    },
+    page2HeaderRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: 12,
+    },
+    backToHeroButton: {
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 14,
+      backgroundColor: "rgba(51, 120, 255, 0.1)",
+      borderWidth: 1,
+      borderColor: "rgba(96, 165, 250, 0.2)",
+    },
+    backToHeroText: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: colors.link,
+    },
+    upcomingSection: {
+      paddingHorizontal: 20,
+      marginTop: 12,
+      marginBottom: 20,
+    },
+    sectionHeaderTitle: {
+      fontSize: 14,
+      fontWeight: "800",
+      color: colors.subtle,
+      letterSpacing: 0.8,
+      textTransform: "uppercase",
+      marginBottom: 12,
+    },
+    tasksSection: {
+      paddingHorizontal: 20,
+      marginBottom: 24,
+    },
+    emptyTasksBox: {
+      backgroundColor: colors.soft,
+      borderRadius: 16,
+      padding: 20,
+      alignItems: "center",
+      justifyContent: "center",
+      borderWidth: 1,
+      borderColor: colors.line,
+    },
+    emptyTasksText: {
+      fontSize: 13,
+      color: colors.subtle,
+      textAlign: "center",
+      lineHeight: 18,
+    },
+  });

@@ -1,7 +1,7 @@
 import { enqueuePersonalCalendar } from "@/server/calendar/queue";
 import { reconcileCompletionXp } from "@/server/services/gamification-service";
 import { z } from "zod";
-import { VerificationSource } from "@prisma/client";
+import { Prisma, VerificationSource } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import type { SessionUser } from "@/lib/auth/session";
 import { ForbiddenError } from "@/lib/permissions/checker";
@@ -14,71 +14,80 @@ export async function updateOwnProgress(
   status: string,
   notes?: string,
 ) {
-  const newStatus = selfStatus.parse(status); // ACCEPTED is forbidden even for the owner.
-  await requireTaskAudience(user, taskId);
   return prisma.$transaction(
-    async (tx) => {
-      await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${user.id} FOR UPDATE`;
-      const existing = await tx.studentTaskProgress.findUnique({
-        where: { taskId_userId: { taskId, userId: user.id } },
-      });
-      if (existing?.status === "ACCEPTED")
-        throw new ForbiddenError(
-          "Подтверждённый результат изменяет проверяющий; заметки можно сохранить отдельно",
-        );
-      const submittedAt =
-        newStatus === "SUBMITTED"
-          ? (existing?.submittedAt ?? new Date())
-          : existing?.submittedAt;
-      const complete = newStatus === "READY" || newStatus === "SUBMITTED";
-      const completedAt = complete
-        ? (existing?.completedAt ?? new Date())
-        : null;
-      const values = {
-        completedAt,
-        ...(!complete || !existing?.completedAt
-          ? { completionReviewedAt: null, completionReviewedById: null }
-          : {}),
-        status: newStatus,
-        ...(notes !== undefined
-          ? { studentNotes: z.string().max(10000).parse(notes) }
-          : {}),
-        submittedAt,
-        isVerified: false,
-        verifiedById: null,
-        verifiedAt: null,
-        verificationSource: null,
-        verificationSourceReferenceId: null,
-        acceptedAt: null,
-      };
-      await enqueuePersonalCalendar(tx, user.id);
-      if (existing) {
-        const updated = await tx.studentTaskProgress.updateMany({
-          where: {
-            id: existing.id,
-            updatedAt: existing.updatedAt,
-            status: { not: "ACCEPTED" },
-          },
-          data: values,
-        });
-        if (updated.count !== 1)
-          throw new ForbiddenError(
-            "Результат изменился. Обновите страницу перед сменой статуса",
-          );
-        await reconcileCompletionXp(tx, user.id, taskId, complete, completedAt);
-        return tx.studentTaskProgress.findUniqueOrThrow({
-          where: { id: existing.id },
-        });
-      }
-      const progress = await tx.studentTaskProgress.create({
-        data: { taskId, userId: user.id, ...values },
-      });
-      await reconcileCompletionXp(tx, user.id, taskId, complete, completedAt);
-      return progress;
-    },
+    (tx) => updateOwnProgressTx(tx, user, taskId, status, notes),
     { timeout: 20000 },
   );
 }
+
+// Shared mutation: callers may atomically commit an operation receipt alongside
+// the academic mutation. Keep audience checks, XP and Calendar in this boundary.
+export async function updateOwnProgressTx(
+  tx: Prisma.TransactionClient,
+  user: SessionUser,
+  taskId: string,
+  status: string,
+  notes?: string,
+) {
+  const newStatus = selfStatus.parse(status);
+  await requireTaskAudience(user, taskId, tx);
+  await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${user.id} FOR UPDATE`;
+  const existing = await tx.studentTaskProgress.findUnique({
+    where: { taskId_userId: { taskId, userId: user.id } },
+  });
+  if (existing?.status === "ACCEPTED")
+    throw new ForbiddenError(
+      "Подтверждённый результат изменяет проверяющий; заметки можно сохранить отдельно",
+    );
+  const submittedAt =
+    newStatus === "SUBMITTED"
+      ? (existing?.submittedAt ?? new Date())
+      : existing?.submittedAt;
+  const complete = newStatus === "READY" || newStatus === "SUBMITTED";
+  const completedAt = complete ? (existing?.completedAt ?? new Date()) : null;
+  const values = {
+    completedAt,
+    ...(!complete || !existing?.completedAt
+      ? { completionReviewedAt: null, completionReviewedById: null }
+      : {}),
+    status: newStatus,
+    ...(notes !== undefined
+      ? { studentNotes: z.string().max(10000).parse(notes) }
+      : {}),
+    submittedAt,
+    isVerified: false,
+    verifiedById: null,
+    verifiedAt: null,
+    verificationSource: null,
+    verificationSourceReferenceId: null,
+    acceptedAt: null,
+  };
+  await enqueuePersonalCalendar(tx, user.id);
+  if (existing) {
+    const updated = await tx.studentTaskProgress.updateMany({
+      where: {
+        id: existing.id,
+        updatedAt: existing.updatedAt,
+        status: { not: "ACCEPTED" },
+      },
+      data: values,
+    });
+    if (updated.count !== 1)
+      throw new ForbiddenError(
+        "Результат изменился. Обновите страницу перед сменой статуса",
+      );
+    await reconcileCompletionXp(tx, user.id, taskId, complete, completedAt);
+    return tx.studentTaskProgress.findUniqueOrThrow({
+      where: { id: existing.id },
+    });
+  }
+  const progress = await tx.studentTaskProgress.create({
+    data: { taskId, userId: user.id, ...values },
+  });
+  await reconcileCompletionXp(tx, user.id, taskId, complete, completedAt);
+  return progress;
+}
+
 export async function saveOwnNotes(
   user: SessionUser,
   taskId: string,

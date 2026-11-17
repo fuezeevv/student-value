@@ -1,3 +1,8 @@
+import {
+  sessionGeneration,
+  sessionSignal,
+  isCurrentSession,
+} from "../auth/session-lifecycle";
 import * as Crypto from "expo-crypto";
 import { getTimetableRepository } from "../storage/repository";
 import { getSessionToken, getSessionUser } from "../auth/token-storage";
@@ -13,6 +18,7 @@ export async function enqueueProgressUpdate(
   taskId: string,
   status: "NOT_STARTED" | "IN_PROGRESS" | "READY" | "SUBMITTED",
   notes?: string,
+  groupCode?: string,
 ): Promise<{ operationId: string; optimisticProgress: UserTaskProgress }> {
   const user = await getSessionUser();
   if (!user) {
@@ -22,31 +28,50 @@ export async function enqueueProgressUpdate(
   const repo = getTimetableRepository();
   const operationId = Crypto.randomUUID();
   const now = new Date().toISOString();
+  const previous = await repo.getUserProgress(user.id, taskId);
+  const queued = (await repo.getPendingOperations(user.id)).filter(
+    (op) => op.taskId === taskId && op.status !== "FAILED",
+  );
+  const predecessor = queued.at(-1);
 
   const optimisticProgress: UserTaskProgress = {
     userId: user.id,
     taskId,
     status,
     isVerified: false,
-    studentNotes: notes ?? null,
-    completedAt: status === "READY" ? now : null,
+    studentNotes: notes ?? previous?.studentNotes ?? null,
+    completedAt:
+      status === "READY" || status === "SUBMITTED"
+        ? (previous?.completedAt ?? now)
+        : null,
     updatedAt: now,
     syncState: "PENDING_SYNC",
   };
-
-  await repo.saveUserProgress(optimisticProgress);
 
   const op: PendingOperation = {
     id: operationId,
     userId: user.id,
     taskId,
     action: "SET_STATUS",
-    payload: { status, notes },
+    payload: {
+      status,
+      notes,
+      groupCode,
+      ...(predecessor
+        ? { dependsOnOperationId: predecessor.id }
+        : { baseUpdatedAt: previous?.updatedAt ?? null }),
+    },
     createdAt: now,
     status: "PENDING",
   };
 
-  await repo.addPendingOperation(op);
+  await repo.enqueueProgressOperation(optimisticProgress, op);
+  // A new explicit choice supersedes failed drafts of the same task. Until this
+  // point they remain stored for recovery; transient network retries never drop them.
+  for (const failed of await repo.getPendingOperations(user.id)) {
+    if (failed.taskId === taskId && failed.status === "FAILED")
+      await repo.removePendingOperation(failed.id);
+  }
 
   // Trigger background flush (fire-and-forget)
   flushOutbox().catch(() => {});
@@ -63,7 +88,12 @@ export type FlushReport = {
 
 export async function flushOutbox(): Promise<FlushReport> {
   if (isFlushing) {
-    return { processed: 0, succeeded: 0, failed: 0, errors: ["ALREADY_FLUSHING"] };
+    return {
+      processed: 0,
+      succeeded: 0,
+      failed: 0,
+      errors: ["ALREADY_FLUSHING"],
+    };
   }
 
   isFlushing = true;
@@ -75,6 +105,7 @@ export async function flushOutbox(): Promise<FlushReport> {
   };
 
   try {
+    const generation = sessionGeneration();
     const user = await getSessionUser();
     const token = await getSessionToken();
 
@@ -87,12 +118,25 @@ export async function flushOutbox(): Promise<FlushReport> {
     const baseUrl = await getActiveApiOrigin();
 
     for (const op of pendingOps) {
+      if (!isCurrentSession(generation)) break;
+      if (op.status === "FAILED") {
+        report.failed++;
+        report.errors.push(
+          "Есть конфликтующие изменения: обновите данные и повторите свой выбор.",
+        );
+        continue;
+      }
       report.processed++;
       await repo.updatePendingOperationStatus(op.id, "SYNCING");
-
+      const controller = new AbortController();
+      const parentSignal = sessionSignal();
+      const abort = () => controller.abort();
+      parentSignal.addEventListener("abort", abort);
+      const timer = setTimeout(abort, 10000);
       try {
         const res = await fetch(`${baseUrl}/api/v1/progress`, {
           method: "POST",
+          signal: controller.signal,
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
@@ -102,12 +146,16 @@ export async function flushOutbox(): Promise<FlushReport> {
             taskId: op.taskId,
             status: op.payload.status || "READY",
             notes: op.payload.notes,
+            groupCode: op.payload.groupCode,
             createdAt: op.createdAt,
+            baseUpdatedAt: op.payload.baseUpdatedAt,
+            dependsOnOperationId: op.payload.dependsOnOperationId,
           }),
         });
 
         if (res.status === 200) {
           const data = await res.json();
+          if (!isCurrentSession(generation)) break;
           await repo.saveUserProgress({
             userId: data.progress.userId,
             taskId: data.progress.taskId,
@@ -120,6 +168,16 @@ export async function flushOutbox(): Promise<FlushReport> {
           });
           await repo.removePendingOperation(op.id);
           report.succeeded++;
+        } else if (res.status === 409) {
+          await repo.updatePendingOperationStatus(op.id, "FAILED");
+          const local = await repo.getUserProgress(user.id, op.taskId);
+          if (local)
+            await repo.saveUserProgress({ ...local, syncState: "FAILED" });
+          report.failed++;
+          report.errors.push(
+            "Результат изменён на другом устройстве. Обновите данные и повторите отметку; черновик сохранён.",
+          );
+          break;
         } else if (res.status === 403) {
           // Audience revoked or forbidden
           await repo.updatePendingOperationStatus(op.id, "FAILED");
@@ -138,10 +196,15 @@ export async function flushOutbox(): Promise<FlushReport> {
           break; // Back off on server error
         }
       } catch (networkErr: any) {
+        // Logout already cleared this user's queue; never write it back.
+        if (!isCurrentSession(generation)) break;
         // Network connection error - keep operation as PENDING for retry
         await repo.updatePendingOperationStatus(op.id, "PENDING");
         report.errors.push(networkErr.message || "Network offline");
         break; // Stop draining while offline
+      } finally {
+        clearTimeout(timer);
+        parentSignal.removeEventListener("abort", abort);
       }
     }
   } finally {

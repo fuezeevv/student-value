@@ -1,3 +1,9 @@
+import { lessonTypeLabel } from "@studentvalue/mobile-contracts";
+import {
+  useTheme,
+  useThemedStyles,
+  type Palette,
+} from "../theme/ThemeProvider";
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
 import type { MobileLesson } from "@studentvalue/mobile-contracts";
@@ -19,7 +25,7 @@ const BUILDING_NAMES: Record<string, string> = {
   "11": "11-й корпус",
   "16": "16-й корпус",
   "Гл.": "Главный корпус",
-  "ГИ": "Гуманитарный институт",
+  ГИ: "Гуманитарный институт",
 };
 
 function formatRoom(rooms: string[]): string {
@@ -46,6 +52,9 @@ export const UpcomingLessonCard: React.FC<UpcomingLessonCardProps> = ({
   lesson,
   onPress,
 }) => {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(createStyles);
+
   return (
     <SpringPressable
       style={styles.cardContainer}
@@ -63,7 +72,7 @@ export const UpcomingLessonCard: React.FC<UpcomingLessonCardProps> = ({
 
       <View style={styles.detailsRow}>
         <Text style={styles.detailsText}>
-          {lesson.type ? `${lesson.type} · ` : ""}
+          {lesson.type ? `${lessonTypeLabel(lesson.type)} · ` : ""}
           {formatRoom(lesson.rooms)}
         </Text>
       </View>
@@ -75,55 +84,56 @@ export const UpcomingLessonCard: React.FC<UpcomingLessonCardProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
-  cardContainer: {
-    backgroundColor: "#111d33",
-    borderRadius: 18,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.07)",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  timeHeader: {
-    flexDirection: "row",
-    alignItems: "baseline",
-    gap: 8,
-    marginBottom: 6,
-  },
-  timeText: {
-    fontSize: 15,
-    fontWeight: "800",
-    color: "#93c5fd",
-    fontFamily: "monospace",
-  },
-  durationText: {
-    fontSize: 12,
-    color: "#64748b",
-    fontFamily: "monospace",
-  },
-  subjectText: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#f8fafc",
-    lineHeight: 22,
-    marginBottom: 6,
-  },
-  detailsRow: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  detailsText: {
-    fontSize: 13,
-    color: "#8a9bb5",
-  },
-  teacherText: {
-    fontSize: 12,
-    color: "#64748b",
-    marginTop: 4,
-  },
-});
+const createStyles = (colors: Palette) =>
+  StyleSheet.create({
+    cardContainer: {
+      backgroundColor: colors.surface,
+      borderRadius: 18,
+      padding: 16,
+      marginBottom: 12,
+      borderWidth: 1,
+      borderColor: "rgba(255, 255, 255, 0.07)",
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.2,
+      shadowRadius: 4,
+      elevation: 3,
+    },
+    timeHeader: {
+      flexDirection: "row",
+      alignItems: "baseline",
+      gap: 8,
+      marginBottom: 6,
+    },
+    timeText: {
+      fontSize: 15,
+      fontWeight: "800",
+      color: colors.link,
+      fontFamily: "monospace",
+    },
+    durationText: {
+      fontSize: 12,
+      color: colors.subtle,
+      fontFamily: "monospace",
+    },
+    subjectText: {
+      fontSize: 16,
+      fontWeight: "700",
+      color: colors.text,
+      lineHeight: 22,
+      marginBottom: 6,
+    },
+    detailsRow: {
+      flexDirection: "row",
+      alignItems: "center",
+    },
+    detailsText: {
+      fontSize: 13,
+      color: colors.muted,
+    },
+    teacherText: {
+      fontSize: 12,
+      color: colors.subtle,
+      marginTop: 4,
+    },
+  });

@@ -8,7 +8,10 @@ import {
   handleGetMobileProgress,
 } from "../src/server/adapters/mobile-progress";
 
-async function createTestStudent(nicknamePrefix: string, groupId = "test-group") {
+async function createTestStudent(
+  nicknamePrefix: string,
+  groupId = "test-group",
+) {
   const suffix = randomBytes(4).toString("hex");
   const user = await prisma.user.create({
     data: { nickname: `[TEST] ${nicknamePrefix}-${suffix}` },
@@ -148,7 +151,11 @@ describe("Mobile Progress & Outbox Idempotency (Stage B)", () => {
 
     // Verify initial XP is 20
     const xp1 = await prisma.xpEvent.aggregate({
-      where: { userId: user.id, taskId: task.id, ruleCode: { startsWith: "COMPLETION:" } },
+      where: {
+        userId: user.id,
+        taskId: task.id,
+        ruleCode: { startsWith: "COMPLETION:" },
+      },
       _sum: { points: true },
     });
     expect(xp1._sum.points).toBe(20);
@@ -171,7 +178,11 @@ describe("Mobile Progress & Outbox Idempotency (Stage B)", () => {
     expect(resRetry.status).toBe(200);
 
     const xpRetry = await prisma.xpEvent.aggregate({
-      where: { userId: user.id, taskId: task.id, ruleCode: { startsWith: "COMPLETION:" } },
+      where: {
+        userId: user.id,
+        taskId: task.id,
+        ruleCode: { startsWith: "COMPLETION:" },
+      },
       _sum: { points: true },
     });
     expect(xpRetry._sum.points).toBe(20); // Strict: Delta is 0, points remain 20!
@@ -193,7 +204,11 @@ describe("Mobile Progress & Outbox Idempotency (Stage B)", () => {
     expect(resUnmark.status).toBe(200);
 
     const xpUnmarked = await prisma.xpEvent.aggregate({
-      where: { userId: user.id, taskId: task.id, ruleCode: { startsWith: "COMPLETION:" } },
+      where: {
+        userId: user.id,
+        taskId: task.id,
+        ruleCode: { startsWith: "COMPLETION:" },
+      },
       _sum: { points: true },
     });
     expect(xpUnmarked._sum.points).toBe(0); // Net XP is now 0
@@ -215,7 +230,11 @@ describe("Mobile Progress & Outbox Idempotency (Stage B)", () => {
     expect(resRemark.status).toBe(200);
 
     const xpRemarked = await prisma.xpEvent.aggregate({
-      where: { userId: user.id, taskId: task.id, ruleCode: { startsWith: "COMPLETION:" } },
+      where: {
+        userId: user.id,
+        taskId: task.id,
+        ruleCode: { startsWith: "COMPLETION:" },
+      },
       _sum: { points: true },
     });
     expect(xpRemarked._sum.points).toBe(20); // Net XP is back to 20, never multiplied!
@@ -329,20 +348,23 @@ describe("Mobile Progress & Outbox Idempotency (Stage B)", () => {
 
     // 4. Delayed/out-of-order operation with OLD timestamp (e.g. earlier READY retry from network queue)
     const delayedOpId = randomUUID();
-    const reqDelayed = new NextRequest("http://localhost:3000/api/v1/progress", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${sessionToken}`,
+    const reqDelayed = new NextRequest(
+      "http://localhost:3000/api/v1/progress",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${sessionToken}`,
+        },
+        body: JSON.stringify({
+          operationId: delayedOpId,
+          taskId: task.id,
+          status: "READY",
+          // Created 1 minute in the past, older than the unmark
+          createdAt: new Date(Date.now() - 60000).toISOString(),
+        }),
       },
-      body: JSON.stringify({
-        operationId: delayedOpId,
-        taskId: task.id,
-        status: "READY",
-        // Created 1 minute in the past, older than the unmark
-        createdAt: new Date(Date.now() - 60000).toISOString(),
-      }),
-    });
+    );
     const resDelayed = await handleMobileProgress(reqDelayed);
     expect(resDelayed.status).toBe(200);
     const jsonDelayed = await resDelayed.json();
@@ -353,5 +375,162 @@ describe("Mobile Progress & Outbox Idempotency (Stage B)", () => {
       where: { taskId_userId: { taskId: task.id, userId: user.id } },
     });
     expect(dbCheck?.status).toBe("IN_PROGRESS");
+  });
+  it("atomically serializes concurrent retries, rejects changed payload and keeps notes out of audit", async () => {
+    const { user, sessionToken } = await createTestStudent("atomic");
+    const task = await createTestTask();
+    const operationId = randomUUID();
+    const payload = {
+      operationId,
+      taskId: task.id,
+      status: "READY",
+      notes: "[TEST] private mobile note",
+    };
+    const request = (body: object) =>
+      new NextRequest("http://localhost:3000/api/v1/progress", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${sessionToken}`,
+        },
+        body: JSON.stringify(body),
+      });
+    const responses = await Promise.all([
+      handleMobileProgress(request(payload)),
+      handleMobileProgress(request(payload)),
+    ]);
+    expect(responses.map((r) => r.status)).toEqual([200, 200]);
+    const bodies = await Promise.all(responses.map((r) => r.json()));
+    expect(bodies.filter((b) => b.replayed)).toHaveLength(1);
+    const receipt = await prisma.auditLog.findUniqueOrThrow({
+      where: { id: operationId },
+    });
+    expect(receipt.userId).toBe(user.id);
+    expect(JSON.stringify(receipt.details)).not.toContain(
+      "private mobile note",
+    );
+    expect(JSON.stringify(receipt.details)).not.toContain("studentNotes");
+    expect(
+      (
+        await handleMobileProgress(
+          request({ ...payload, status: "NOT_STARTED" }),
+        )
+      ).status,
+    ).toBe(409);
+
+    // A stale response must not restore the old READY state in the phone cache.
+    expect(
+      (
+        await handleMobileProgress(
+          request({
+            operationId: randomUUID(),
+            taskId: task.id,
+            status: "IN_PROGRESS",
+          }),
+        )
+      ).status,
+    ).toBe(200);
+    const replay = await handleMobileProgress(request(payload));
+    expect((await replay.json()).progress.status).toBe("IN_PROGRESS");
+
+    // Revoking the audience also revokes access to operation receipts.
+    await prisma.taskAudience.deleteMany({ where: { taskId: task.id } });
+    expect((await handleMobileProgress(request(payload))).status).toBe(403);
+  });
+  it("preserves two queued offline actions despite clock skew and detects an independent edit", async () => {
+    const { sessionToken } = await createTestStudent("queue-chain");
+    const task = await createTestTask();
+    const send = (body: object) =>
+      handleMobileProgress(
+        new NextRequest("http://localhost:3000/api/v1/progress", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${sessionToken}`,
+          },
+          body: JSON.stringify(body),
+        }),
+      );
+    const first = randomUUID();
+    const createdAt = "2020-01-01T00:00:00Z"; // Device clock is deliberately wrong.
+    const a = await send({
+      operationId: first,
+      taskId: task.id,
+      status: "READY",
+      baseUpdatedAt: null,
+      createdAt,
+    });
+    expect(a.status).toBe(200);
+    const firstVersion = (await a.json()).progress.updatedAt;
+    const b = await send({
+      operationId: randomUUID(),
+      taskId: task.id,
+      status: "IN_PROGRESS",
+      dependsOnOperationId: first,
+      createdAt,
+    });
+    expect(b.status).toBe(200);
+    expect((await b.json()).progress.status).toBe("IN_PROGRESS");
+    expect(
+      (
+        await send({
+          operationId: randomUUID(),
+          taskId: task.id,
+          status: "READY",
+          baseUpdatedAt: firstVersion,
+        })
+      ).status,
+    ).toBe(409);
+    expect(
+      (
+        await send({
+          operationId: randomUUID(),
+          taskId: task.id,
+          status: "READY",
+          dependsOnOperationId: randomUUID(),
+        })
+      ).status,
+    ).toBe(425);
+  });
+
+  it("rolls back the progress mutation when the operation receipt cannot be committed", async () => {
+    const { user, sessionToken } = await createTestStudent("receipt-rollback");
+    const task = await createTestTask();
+    const operationId = randomUUID();
+    const trigger = `test_receipt_${operationId.replaceAll("-", "")}`;
+    await prisma.$executeRawUnsafe(
+      `CREATE FUNCTION "${trigger}"() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.id = '${operationId}' THEN RAISE EXCEPTION 'test receipt storage unavailable'; END IF; RETURN NEW; END; $$`,
+    );
+    await prisma.$executeRawUnsafe(
+      `CREATE TRIGGER "${trigger}" BEFORE INSERT ON "AuditLog" FOR EACH ROW EXECUTE FUNCTION "${trigger}"()`,
+    );
+    try {
+      const response = await handleMobileProgress(
+        new NextRequest("http://localhost:3000/api/v1/progress", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${sessionToken}`,
+          },
+          body: JSON.stringify({
+            operationId,
+            taskId: task.id,
+            status: "READY",
+          }),
+        }),
+      );
+      expect(response.status).toBe(500);
+    } finally {
+      await prisma.$executeRawUnsafe(`DROP TRIGGER "${trigger}" ON "AuditLog"`);
+      await prisma.$executeRawUnsafe(`DROP FUNCTION "${trigger}"()`);
+    }
+    expect(
+      await prisma.studentTaskProgress.findUnique({
+        where: { taskId_userId: { taskId: task.id, userId: user.id } },
+      }),
+    ).toBeNull();
+    expect(
+      await prisma.auditLog.findUnique({ where: { id: operationId } }),
+    ).toBeNull();
   });
 });

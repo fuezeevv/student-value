@@ -1,3 +1,8 @@
+import {
+  useTheme,
+  useThemedStyles,
+  type Palette,
+} from "../theme/ThemeProvider";
 import React from "react";
 import {
   View,
@@ -15,6 +20,7 @@ interface TaskProgressCardProps {
   deadlineText: string;
   progress: UserTaskProgress | null;
   isLoggedIn: boolean;
+  readOnlyReason?: string;
   materialId?: string | null;
   materialTitle?: string | null;
   reminderScheduled?: boolean;
@@ -32,6 +38,7 @@ export const TaskProgressCard: React.FC<TaskProgressCardProps> = ({
   deadlineText,
   progress,
   isLoggedIn,
+  readOnlyReason,
   materialId,
   materialTitle,
   reminderScheduled = false,
@@ -41,8 +48,12 @@ export const TaskProgressCard: React.FC<TaskProgressCardProps> = ({
   onToggleReminder,
   loading = false,
 }) => {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(createStyles);
+
   const status = progress?.status || "NOT_STARTED";
-  const isReady = status === "READY" || status === "SUBMITTED";
+  const isAccepted = status === "ACCEPTED";
+  const isReady = status === "READY" || status === "SUBMITTED" || isAccepted;
   const syncState = progress?.syncState || "SYNCED";
 
   return (
@@ -100,6 +111,8 @@ export const TaskProgressCard: React.FC<TaskProgressCardProps> = ({
           <TouchableOpacity
             style={styles.reminderButton}
             onPress={onToggleReminder}
+            disabled={isReady}
+            accessibilityState={{ disabled: isReady }}
             accessibilityRole="button"
             accessibilityLabel={`Напоминание о дедлайне: ${reminderScheduled ? "Включено" : "Выключено"}`}
           >
@@ -108,9 +121,9 @@ export const TaskProgressCard: React.FC<TaskProgressCardProps> = ({
             </Text>
             <Text style={styles.reminderText}>
               {isReady
-                ? "Напоминание отменено (работа сдана)"
+                ? "Работа отмечена выполненной"
                 : reminderScheduled
-                  ? "Напоминание активно (за день до срока)"
+                  ? "Напоминание включено"
                   : "Включить напоминание о дедлайне"}
             </Text>
           </TouchableOpacity>
@@ -119,33 +132,51 @@ export const TaskProgressCard: React.FC<TaskProgressCardProps> = ({
 
       {/* Progress Action Area */}
       <View style={styles.actionRow}>
-        {!isLoggedIn ? (
+        {readOnlyReason ? (
+          <Text style={{ color: colors.muted, lineHeight: 20 }}>
+            {readOnlyReason}
+          </Text>
+        ) : !isLoggedIn ? (
           <TouchableOpacity
             style={styles.guestButton}
             onPress={onOpenLogin}
             accessibilityRole="button"
             accessibilityLabel="Войти для отметки выполнения"
           >
-            <Text style={styles.guestButtonText}>Войдите, чтобы отметить работу</Text>
+            <Text style={styles.guestButtonText}>
+              Войдите, чтобы отметить работу
+            </Text>
           </TouchableOpacity>
         ) : isReady ? (
           <View style={styles.readyContainer}>
             <View style={styles.readyBadge}>
               <Text style={styles.readyBadgeText}>✓ Выполнено</Text>
-              <Text style={styles.readySubtext}>(ожидает проверки)</Text>
+              <Text style={styles.readySubtext}>
+                {isAccepted
+                  ? progress?.isVerified
+                    ? "Подтверждено"
+                    : "Результат требует уточнения"
+                  : "Самостоятельная отметка"}
+              </Text>
             </View>
 
             <TouchableOpacity
               style={styles.unmarkButton}
               onPress={() => onToggleStatus(taskId, status)}
-              disabled={loading}
+              disabled={loading || isAccepted}
               accessibilityRole="button"
-              accessibilityLabel="Снять отметку о выполнении"
+              accessibilityLabel={
+                isAccepted
+                  ? "Подтверждённый результат изменяет проверяющий"
+                  : "Снять отметку о выполнении"
+              }
             >
               {loading ? (
-                <ActivityIndicator size="small" color="#8a9bb5" />
+                <ActivityIndicator size="small" color={colors.muted} />
               ) : (
-                <Text style={styles.unmarkButtonText}>Снять отметку</Text>
+                <Text style={styles.unmarkButtonText}>
+                  {isAccepted ? "Изменяет проверяющий" : "Снять отметку"}
+                </Text>
               )}
             </TouchableOpacity>
           </View>
@@ -160,7 +191,9 @@ export const TaskProgressCard: React.FC<TaskProgressCardProps> = ({
             {loading ? (
               <ActivityIndicator size="small" color="#ffffff" />
             ) : (
-              <Text style={styles.markReadyText}>Отметить выполненным (+20 XP)</Text>
+              <Text style={styles.markReadyText}>
+                Отметить выполненным (+20 XP)
+              </Text>
             )}
           </TouchableOpacity>
         )}
@@ -169,175 +202,176 @@ export const TaskProgressCard: React.FC<TaskProgressCardProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
-  card: {
-    backgroundColor: "#16253d",
-    borderRadius: 16,
-    padding: 16,
-    marginVertical: 8,
-    borderWidth: 1,
-    borderColor: "#223554",
-  },
-  headerRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: 8,
-  },
-  badgeGroup: {
-    flex: 1,
-    marginRight: 8,
-  },
-  subjectText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#60a5fa",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  deadlineBadge: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#cbd5e1",
-    marginTop: 2,
-  },
-  syncIndicator: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  syncDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  syncDotSynced: {
-    backgroundColor: "#10b981",
-  },
-  syncDotPending: {
-    backgroundColor: "#f59e0b",
-  },
-  syncDotFailed: {
-    backgroundColor: "#ef4444",
-  },
-  syncStateText: {
-    fontSize: 11,
-    color: "#8a9bb5",
-  },
-  titleText: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#f0f4f8",
-    lineHeight: 22,
-    marginVertical: 8,
-  },
-  materialRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "rgba(30, 41, 59, 0.7)",
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    marginTop: 8,
-    marginBottom: 6,
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.08)",
-  },
-  materialIcon: {
-    fontSize: 18,
-    marginRight: 10,
-  },
-  materialInfo: {
-    flex: 1,
-  },
-  materialLabel: {
-    fontSize: 10,
-    color: "#8a9bb5",
-    textTransform: "uppercase",
-    fontWeight: "700",
-  },
-  materialTitle: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#93c5fd",
-  },
-  materialArrow: {
-    fontSize: 18,
-    color: "#8a9bb5",
-    fontWeight: "700",
-  },
-  reminderRow: {
-    marginVertical: 6,
-  },
-  reminderButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingVertical: 6,
-  },
-  reminderIcon: {
-    fontSize: 14,
-  },
-  reminderText: {
-    fontSize: 12,
-    color: "#94a3b8",
-  },
-  actionRow: {
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: "rgba(255, 255, 255, 0.06)",
-  },
-  guestButton: {
-    backgroundColor: "#1e3a8a",
-    paddingVertical: 12,
-    borderRadius: 10,
-    alignItems: "center",
-  },
-  guestButtonText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#93c5fd",
-  },
-  readyContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  readyBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  readyBadgeText: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#10b981",
-  },
-  readySubtext: {
-    fontSize: 12,
-    color: "#6b7d96",
-  },
-  unmarkButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.15)",
-  },
-  unmarkButtonText: {
-    fontSize: 13,
-    color: "#8a9bb5",
-  },
-  markReadyButton: {
-    backgroundColor: "#2563eb",
-    paddingVertical: 12,
-    borderRadius: 10,
-    alignItems: "center",
-  },
-  markReadyText: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#ffffff",
-  },
-});
+const createStyles = (colors: Palette) =>
+  StyleSheet.create({
+    card: {
+      backgroundColor: colors.surface,
+      borderRadius: 16,
+      padding: 16,
+      marginVertical: 8,
+      borderWidth: 1,
+      borderColor: "#223554",
+    },
+    headerRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "flex-start",
+      marginBottom: 8,
+    },
+    badgeGroup: {
+      flex: 1,
+      marginRight: 8,
+    },
+    subjectText: {
+      fontSize: 12,
+      fontWeight: "700",
+      color: colors.link,
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+    },
+    deadlineBadge: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: colors.muted,
+      marginTop: 2,
+    },
+    syncIndicator: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+    },
+    syncDot: {
+      width: 6,
+      height: 6,
+      borderRadius: 3,
+    },
+    syncDotSynced: {
+      backgroundColor: "#10b981",
+    },
+    syncDotPending: {
+      backgroundColor: "#f59e0b",
+    },
+    syncDotFailed: {
+      backgroundColor: "#ef4444",
+    },
+    syncStateText: {
+      fontSize: 11,
+      color: colors.muted,
+    },
+    titleText: {
+      fontSize: 15,
+      fontWeight: "600",
+      color: "#f0f4f8",
+      lineHeight: 22,
+      marginVertical: 8,
+    },
+    materialRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: "rgba(30, 41, 59, 0.7)",
+      paddingVertical: 10,
+      paddingHorizontal: 12,
+      borderRadius: 10,
+      marginTop: 8,
+      marginBottom: 6,
+      borderWidth: 1,
+      borderColor: colors.line,
+    },
+    materialIcon: {
+      fontSize: 18,
+      marginRight: 10,
+    },
+    materialInfo: {
+      flex: 1,
+    },
+    materialLabel: {
+      fontSize: 10,
+      color: colors.muted,
+      textTransform: "uppercase",
+      fontWeight: "700",
+    },
+    materialTitle: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: colors.link,
+    },
+    materialArrow: {
+      fontSize: 18,
+      color: colors.muted,
+      fontWeight: "700",
+    },
+    reminderRow: {
+      marginVertical: 6,
+    },
+    reminderButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      paddingVertical: 6,
+    },
+    reminderIcon: {
+      fontSize: 14,
+    },
+    reminderText: {
+      fontSize: 12,
+      color: colors.muted,
+    },
+    actionRow: {
+      marginTop: 12,
+      paddingTop: 12,
+      borderTopWidth: 1,
+      borderTopColor: colors.line,
+    },
+    guestButton: {
+      backgroundColor: "#1e3a8a",
+      paddingVertical: 12,
+      borderRadius: 10,
+      alignItems: "center",
+    },
+    guestButtonText: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: colors.link,
+    },
+    readyContainer: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+    },
+    readyBadge: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+    },
+    readyBadgeText: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: colors.success,
+    },
+    readySubtext: {
+      fontSize: 12,
+      color: "#6b7d96",
+    },
+    unmarkButton: {
+      paddingVertical: 8,
+      paddingHorizontal: 16,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: "rgba(255, 255, 255, 0.15)",
+    },
+    unmarkButtonText: {
+      fontSize: 13,
+      color: colors.muted,
+    },
+    markReadyButton: {
+      backgroundColor: "#2563eb",
+      paddingVertical: 12,
+      borderRadius: 10,
+      alignItems: "center",
+    },
+    markReadyText: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: colors.onAccent,
+    },
+  });

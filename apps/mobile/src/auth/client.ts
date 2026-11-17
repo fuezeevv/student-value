@@ -1,3 +1,8 @@
+import {
+  invalidateSessionWork,
+  sessionGeneration,
+  isCurrentSession,
+} from "./session-lifecycle";
 import * as WebBrowser from "expo-web-browser";
 import {
   generateCodeVerifier,
@@ -24,6 +29,7 @@ export type AuthResult =
   | { kind: "ERROR"; message: string };
 
 export async function startMobileGoogleLogin(): Promise<AuthResult> {
+  const generation = sessionGeneration();
   const verifier = await generateCodeVerifier();
   const challenge = await generateCodeChallenge(verifier);
   const state = await generateState();
@@ -86,8 +92,24 @@ export async function startMobileGoogleLogin(): Promise<AuthResult> {
     }
 
     const data = await exchangeRes.json();
-    await saveSessionToken(data.token);
-    await saveSessionUser(data.user);
+    if (
+      !isCurrentSession(generation) ||
+      (await getActiveApiOrigin()) !== baseUrl
+    ) {
+      return {
+        kind: "ERROR",
+        message: "Сервер или сессия изменились во время входа. Повторите вход.",
+      };
+    }
+    invalidateSessionWork();
+    await saveSessionToken(data.token, baseUrl);
+    await saveSessionUser(data.user, baseUrl);
+    if ((await getActiveApiOrigin()) !== baseUrl) {
+      return {
+        kind: "ERROR",
+        message: "Сервер изменился во время входа. Повторите вход.",
+      };
+    }
 
     return {
       kind: "SUCCESS",
@@ -105,26 +127,38 @@ export async function startMobileGoogleLogin(): Promise<AuthResult> {
 export async function logoutMobile(
   onCleanCache?: () => Promise<void>,
 ): Promise<void> {
+  invalidateSessionWork();
   const token = await getSessionToken();
+  const user = await import("./token-storage").then((module) =>
+    module.getSessionUser(),
+  );
   const baseUrl = await getActiveApiOrigin();
-
+  // Local logout does not depend on a reachable server. Token revocation is
+  // bounded best effort; offline logout cannot promise immediate remote expiry.
+  await Promise.all([deleteSessionToken(), deleteSessionUser()]);
+  const { purgeAllUserMaterials } = await import("../materials/downloader");
+  const Notifications = await import("expo-notifications");
+  await Notifications.cancelAllScheduledNotificationsAsync();
+  await Notifications.dismissAllNotificationsAsync();
+  if (user) {
+    const { focusScope, focusStore } = await import("../focus/storage");
+    await focusStore.clear(focusScope(baseUrl, user.id));
+  }
+  if (user) await purgeAllUserMaterials(user.id);
+  if (onCleanCache) await onCleanCache();
   if (token) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 4000);
     try {
       await fetch(`${baseUrl}/api/v1/auth/mobile/logout`, {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { Authorization: `Bearer ${token}` },
+        signal: controller.signal,
       });
     } catch {
-      // Best-effort remote revocation
+      /* Local credentials are already removed. */
+    } finally {
+      clearTimeout(timer);
     }
-  }
-
-  await deleteSessionToken();
-  await deleteSessionUser();
-
-  if (onCleanCache) {
-    await onCleanCache();
   }
 }

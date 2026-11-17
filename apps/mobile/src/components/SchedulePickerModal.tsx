@@ -1,3 +1,8 @@
+import {
+  useTheme,
+  useThemedStyles,
+  type Palette,
+} from "../theme/ThemeProvider";
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import {
   Modal,
@@ -12,6 +17,7 @@ import {
 } from "react-native";
 import {
   KNOWN_API_ORIGINS,
+  DEVELOPMENT_SERVER_CONTROLS,
   searchRuzTeachers,
   searchRuzGroups,
   type RuzSearchTeacher,
@@ -19,26 +25,11 @@ import {
 } from "../api/client";
 import { getTimetableRepository } from "../storage/repository";
 
-export const PUBLIC_GROUPS = [
-  { code: "5130901/40101", track: "ИВТ", label: "101", ruzId: 45590 },
-  { code: "5130901/40102", track: "ИВТ", label: "102", ruzId: 45591, isDefault: true },
-  { code: "5130901/40201", track: "ИВТ", label: "201", ruzId: 45592 },
-  { code: "5130901/40202", track: "ИВТ", label: "202", ruzId: 45593 },
-  { code: "5130902/40201", track: "ИСиТ", label: "201", ruzId: 45594 },
-  { code: "5130902/40202", track: "ИСиТ", label: "202", ruzId: 45595 },
-  { code: "5130902/40203", track: "ИСиТ", label: "203", ruzId: 45596 },
-  { code: "5130902/40204", track: "ИСиТ", label: "204", ruzId: 45597 },
-] as const;
+import { PUBLIC_GROUPS } from "@studentvalue/mobile-contracts";
+export { PUBLIC_GROUPS };
 
-export const POPULAR_TEACHERS = [
-  { id: 5796, full_name: "Сиднев Александр Георгиевич", chair: "САПР / СППР" },
-  { id: 5938, full_name: "Тарасов Олег Михайлович", chair: "КПР / Компьютерная графика" },
-  { id: 18451, full_name: "Васильянов Георгий Сергеевич", chair: "Инженерная графика и VR" },
-  { id: 5780, full_name: "Семенов Владимир Петрович", chair: "СОВД (Лекции)" },
-  { id: 17290, full_name: "Кадркулов Рустам Рафаилевич", chair: "СОВД (Практика)" },
-  { id: 5312, full_name: "Нестеров Петр Владимирович", chair: "ММФП" },
-  { id: 5854, full_name: "Смирнов Николай Владимирович", chair: "Физика" },
-];
+// Search results come from RUZ. Do not seed unverified names, IDs or teaching roles.
+export const POPULAR_TEACHERS: RuzSearchTeacher[] = [];
 
 export type PinnedSchedule = {
   type: "group" | "teacher";
@@ -67,14 +58,35 @@ export const SchedulePickerModal: React.FC<SchedulePickerModalProps> = ({
   onSelectOrigin,
   onClose,
 }) => {
-  const [activeTab, setActiveTab] = useState<"groups" | "teachers" | "favorites">("groups");
+  const { colors } = useTheme();
+  const styles = useThemedStyles(createStyles);
+
+  const [activeTab, setActiveTab] = useState<
+    "groups" | "teachers" | "favorites"
+  >("groups");
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearching, setIsSearching] = useState(false);
-  const [groupSearchResults, setGroupSearchResults] = useState<RuzSearchGroup[]>([]);
-  const [teacherSearchResults, setTeacherSearchResults] = useState<RuzSearchTeacher[]>([]);
+  const [groupSearchResults, setGroupSearchResults] = useState<
+    RuzSearchGroup[]
+  >([]);
+  const [teacherSearchResults, setTeacherSearchResults] = useState<
+    RuzSearchTeacher[]
+  >([]);
   const [pinnedSchedules, setPinnedSchedules] = useState<PinnedSchedule[]>([
-    { type: "group", id: "5130901/40102", name: "5130901/40102", subtext: "ИВТ-102 (Моя группа)", ruzId: 45591 },
-    { type: "teacher", id: "5796", name: "Сиднев Александр Георгиевич", subtext: "САПР / СППР", ruzId: 5796 },
+    {
+      type: "group",
+      id: "5130901/40102",
+      name: "5130901/40102",
+      subtext: "ИВТ-102",
+      ruzId: 45591,
+    },
+    {
+      type: "teacher",
+      id: "5796",
+      name: "Сиднев Александр Георгиевич",
+      subtext: "САПР / СППР",
+      ruzId: 5796,
+    },
   ]);
 
   const repo = useMemo(() => getTimetableRepository(), []);
@@ -86,7 +98,7 @@ export const SchedulePickerModal: React.FC<SchedulePickerModalProps> = ({
         if (raw) {
           try {
             const parsed = JSON.parse(raw);
-            if (Array.isArray(parsed) && parsed.length > 0) {
+            if (Array.isArray(parsed) && parsed.length <= 100) {
               setPinnedSchedules(parsed);
             }
           } catch {}
@@ -128,6 +140,8 @@ export const SchedulePickerModal: React.FC<SchedulePickerModalProps> = ({
     [pinnedSchedules],
   );
 
+  const [searchError, setSearchError] = useState<string | null>(null);
+
   // Debounced search
   useEffect(() => {
     const q = searchQuery.trim();
@@ -138,19 +152,36 @@ export const SchedulePickerModal: React.FC<SchedulePickerModalProps> = ({
       return;
     }
 
+    let active = true;
     setIsSearching(true);
+    setSearchError(null);
     const timer = setTimeout(async () => {
-      if (activeTab === "groups") {
-        const groups = await searchRuzGroups(q);
-        setGroupSearchResults(groups);
-      } else if (activeTab === "teachers") {
-        const teachers = await searchRuzTeachers(q);
-        setTeacherSearchResults(teachers);
+      try {
+        if (activeTab === "groups") {
+          const groups = await searchRuzGroups(q);
+          if (active) setGroupSearchResults(groups);
+        } else if (activeTab === "teachers") {
+          const teachers = await searchRuzTeachers(q);
+          if (active) setTeacherSearchResults(teachers);
+        }
+      } catch (error) {
+        if (active) {
+          setGroupSearchResults([]);
+          setTeacherSearchResults([]);
+          setSearchError(
+            error instanceof Error
+              ? error.message
+              : "Поиск временно недоступен",
+          );
+        }
+      } finally {
+        if (active) setIsSearching(false);
       }
-      setIsSearching(false);
     }, 350);
-
-    return () => clearTimeout(timer);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
   }, [searchQuery, activeTab]);
 
   return (
@@ -245,7 +276,7 @@ export const SchedulePickerModal: React.FC<SchedulePickerModalProps> = ({
                     ? "Поиск группы (40102, ИВТ, 3530201)..."
                     : "Поиск преподавателя (Сиднев, Тарасов)..."
                 }
-                placeholderTextColor="#64748b"
+                placeholderTextColor={colors.subtle}
                 value={searchQuery}
                 onChangeText={setSearchQuery}
                 autoCorrect={false}
@@ -254,13 +285,21 @@ export const SchedulePickerModal: React.FC<SchedulePickerModalProps> = ({
               {isSearching && (
                 <ActivityIndicator
                   size="small"
-                  color="#93c5fd"
+                  color={colors.link}
                   style={styles.searchSpinner}
                 />
               )}
             </View>
           )}
 
+          {searchError && (
+            <Text
+              accessibilityRole="alert"
+              style={{ color: colors.danger, padding: 16 }}
+            >
+              {searchError}
+            </Text>
+          )}
           {/* Tab 1: Groups */}
           {activeTab === "groups" && (
             <ScrollView
@@ -270,7 +309,9 @@ export const SchedulePickerModal: React.FC<SchedulePickerModalProps> = ({
             >
               {groupSearchResults.length > 0 ? (
                 <View>
-                  <Text style={styles.sectionHeader}>Результаты поиска в РУЗ</Text>
+                  <Text style={styles.sectionHeader}>
+                    Результаты поиска в РУЗ
+                  </Text>
                   {groupSearchResults.map((g) => {
                     const isSelected = g.name === selectedSchedule;
                     const pinned = isPinned("group", g.name);
@@ -295,7 +336,10 @@ export const SchedulePickerModal: React.FC<SchedulePickerModalProps> = ({
                             {g.name}
                           </Text>
                           {g.faculty?.name && (
-                            <Text style={styles.resultSubtext} numberOfLines={1}>
+                            <Text
+                              style={styles.resultSubtext}
+                              numberOfLines={1}
+                            >
                               {g.faculty.name}
                             </Text>
                           )}
@@ -313,7 +357,12 @@ export const SchedulePickerModal: React.FC<SchedulePickerModalProps> = ({
                           }
                           accessibilityLabel="В избранное"
                         >
-                          <Text style={[styles.pinIcon, pinned && styles.pinIconActive]}>
+                          <Text
+                            style={[
+                              styles.pinIcon,
+                              pinned && styles.pinIconActive,
+                            ]}
+                          >
                             {pinned ? "★" : "☆"}
                           </Text>
                         </TouchableOpacity>
@@ -329,7 +378,9 @@ export const SchedulePickerModal: React.FC<SchedulePickerModalProps> = ({
                 </View>
               ) : (
                 <View>
-                  <Text style={styles.sectionHeader}>Официальные группы кафедры</Text>
+                  <Text style={styles.sectionHeader}>
+                    Официальные группы кафедры
+                  </Text>
                   <View style={styles.grid}>
                     {PUBLIC_GROUPS.map((g) => {
                       const isSelected = g.code === selectedSchedule;
@@ -438,7 +489,10 @@ export const SchedulePickerModal: React.FC<SchedulePickerModalProps> = ({
                             {t.full_name}
                           </Text>
                           {t.chair && (
-                            <Text style={styles.resultSubtext} numberOfLines={2}>
+                            <Text
+                              style={styles.resultSubtext}
+                              numberOfLines={2}
+                            >
                               {t.chair}
                             </Text>
                           )}
@@ -455,7 +509,12 @@ export const SchedulePickerModal: React.FC<SchedulePickerModalProps> = ({
                             })
                           }
                         >
-                          <Text style={[styles.pinIcon, pinned && styles.pinIconActive]}>
+                          <Text
+                            style={[
+                              styles.pinIcon,
+                              pinned && styles.pinIconActive,
+                            ]}
+                          >
                             {pinned ? "★" : "☆"}
                           </Text>
                         </TouchableOpacity>
@@ -471,7 +530,9 @@ export const SchedulePickerModal: React.FC<SchedulePickerModalProps> = ({
                 </View>
               ) : (
                 <View>
-                  <Text style={styles.sectionHeader}>Преподаватели семестра</Text>
+                  <Text style={styles.sectionHeader}>
+                    Найдите преподавателя по фамилии
+                  </Text>
                   {POPULAR_TEACHERS.map((t) => {
                     const isSelected = t.full_name === selectedSchedule;
                     const pinned = isPinned("teacher", String(t.id));
@@ -509,7 +570,12 @@ export const SchedulePickerModal: React.FC<SchedulePickerModalProps> = ({
                             })
                           }
                         >
-                          <Text style={[styles.pinIcon, pinned && styles.pinIconActive]}>
+                          <Text
+                            style={[
+                              styles.pinIcon,
+                              pinned && styles.pinIconActive,
+                            ]}
+                          >
                             {pinned ? "★" : "☆"}
                           </Text>
                         </TouchableOpacity>
@@ -531,9 +597,13 @@ export const SchedulePickerModal: React.FC<SchedulePickerModalProps> = ({
               {pinnedSchedules.length > 0 ? (
                 pinnedSchedules.map((item) => {
                   const isSelected =
-                    item.name === selectedSchedule || item.id === selectedSchedule;
+                    item.name === selectedSchedule ||
+                    item.id === selectedSchedule;
                   return (
-                    <View key={`${item.type}-${item.id}`} style={styles.searchResultRow}>
+                    <View
+                      key={`${item.type}-${item.id}`}
+                      style={styles.searchResultRow}
+                    >
                       <TouchableOpacity
                         style={[
                           styles.searchResultCard,
@@ -558,7 +628,9 @@ export const SchedulePickerModal: React.FC<SchedulePickerModalProps> = ({
                             ]}
                           >
                             <Text style={styles.badgeText}>
-                              {item.type === "teacher" ? "Преподаватель" : "Группа"}
+                              {item.type === "teacher"
+                                ? "Преподаватель"
+                                : "Группа"}
                             </Text>
                           </View>
                         </View>
@@ -571,14 +643,18 @@ export const SchedulePickerModal: React.FC<SchedulePickerModalProps> = ({
                           {item.name}
                         </Text>
                         {item.subtext && (
-                          <Text style={styles.resultSubtext}>{item.subtext}</Text>
+                          <Text style={styles.resultSubtext}>
+                            {item.subtext}
+                          </Text>
                         )}
                       </TouchableOpacity>
                       <TouchableOpacity
                         style={styles.pinBtn}
                         onPress={() => togglePin(item)}
                       >
-                        <Text style={[styles.pinIcon, styles.pinIconActive]}>★</Text>
+                        <Text style={[styles.pinIcon, styles.pinIconActive]}>
+                          ★
+                        </Text>
                       </TouchableOpacity>
                     </View>
                   );
@@ -586,7 +662,8 @@ export const SchedulePickerModal: React.FC<SchedulePickerModalProps> = ({
               ) : (
                 <View style={styles.emptySearchBox}>
                   <Text style={styles.emptySearchText}>
-                    Нет сохранённых расписаний.{"\n"}Нажмите ★ возле группы или преподавателя, чтобы добавить в избранное.
+                    Нет сохранённых расписаний.{"\n"}Нажмите ★ возле группы или
+                    преподавателя, чтобы добавить в избранное.
                   </Text>
                 </View>
               )}
@@ -594,7 +671,7 @@ export const SchedulePickerModal: React.FC<SchedulePickerModalProps> = ({
           )}
 
           {/* API Origin Selector */}
-          {onSelectOrigin && (
+          {DEVELOPMENT_SERVER_CONTROLS && onSelectOrigin && (
             <View style={styles.originSection}>
               <Text style={styles.originTitle}>Сервер API (Origin)</Text>
               <View style={styles.originRow}>
@@ -631,272 +708,273 @@ export const SchedulePickerModal: React.FC<SchedulePickerModalProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.65)",
-    justifyContent: "flex-end",
-  },
-  sheet: {
-    backgroundColor: "#0d1829",
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    paddingTop: 12,
-    paddingBottom: 36,
-    paddingHorizontal: 20,
-    borderWidth: 1,
-    borderColor: "#1e293b",
-    maxHeight: "88%",
-  },
-  handle: {
-    width: 44,
-    height: 5,
-    backgroundColor: "rgba(255, 255, 255, 0.2)",
-    borderRadius: 3,
-    alignSelf: "center",
-    marginBottom: 16,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: "#f8fafc",
-    letterSpacing: -0.3,
-  },
-  subtitle: {
-    fontSize: 13,
-    color: "#8a9bb5",
-    marginTop: 2,
-    marginBottom: 14,
-  },
-  segmentedRow: {
-    flexDirection: "row",
-    backgroundColor: "rgba(255, 255, 255, 0.05)",
-    borderRadius: 14,
-    padding: 3,
-    marginBottom: 12,
-  },
-  segmentButton: {
-    flex: 1,
-    paddingVertical: 8,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 11,
-  },
-  segmentButtonActive: {
-    backgroundColor: "#2563eb",
-  },
-  segmentText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#94a3b8",
-  },
-  segmentTextActive: {
-    color: "#ffffff",
-    fontWeight: "700",
-  },
-  searchContainer: {
-    position: "relative",
-    marginBottom: 12,
-  },
-  searchInput: {
-    backgroundColor: "rgba(255, 255, 255, 0.06)",
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    color: "#f8fafc",
-    fontSize: 14,
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.08)",
-  },
-  searchSpinner: {
-    position: "absolute",
-    right: 12,
-    top: 12,
-  },
-  scrollArea: {
-    maxHeight: 340,
-  },
-  scrollContent: {
-    paddingBottom: 12,
-  },
-  sectionHeader: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#64748b",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    marginBottom: 8,
-    marginTop: 4,
-  },
-  grid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  gridCardWrapper: {
-    width: "48%",
-    position: "relative",
-  },
-  groupButton: {
-    width: "100%",
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    borderRadius: 14,
-    backgroundColor: "rgba(255, 255, 255, 0.03)",
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.06)",
-  },
-  groupButtonSelected: {
-    backgroundColor: "rgba(37, 99, 235, 0.2)",
-    borderColor: "#3b82f6",
-  },
-  labelRow: {
-    flexDirection: "row",
-    alignItems: "baseline",
-    gap: 4,
-    marginBottom: 2,
-  },
-  trackText: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#93c5fd",
-  },
-  labelText: {
-    fontSize: 17,
-    fontWeight: "800",
-    color: "#f8fafc",
-  },
-  codeText: {
-    fontSize: 11,
-    color: "#64748b",
-    fontFamily: "monospace",
-  },
-  codeSelected: {
-    color: "#93c5fd",
-  },
-  textSelected: {
-    color: "#ffffff",
-  },
-  gridPinBtn: {
-    position: "absolute",
-    top: 6,
-    right: 6,
-    padding: 6,
-  },
-  pinIconSmall: {
-    fontSize: 14,
-    color: "#64748b",
-  },
-  searchResultRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 8,
-    gap: 8,
-  },
-  searchResultCard: {
-    flex: 1,
-    backgroundColor: "rgba(255, 255, 255, 0.03)",
-    borderRadius: 14,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.06)",
-  },
-  cardSelected: {
-    backgroundColor: "rgba(37, 99, 235, 0.2)",
-    borderColor: "#3b82f6",
-  },
-  resultTitle: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#f8fafc",
-    marginBottom: 2,
-  },
-  resultSubtext: {
-    fontSize: 12,
-    color: "#8a9bb5",
-    lineHeight: 16,
-  },
-  pinBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(255, 255, 255, 0.04)",
-  },
-  pinIcon: {
-    fontSize: 18,
-    color: "#64748b",
-  },
-  pinIconActive: {
-    color: "#f59e0b",
-  },
-  favoriteBadgeRow: {
-    marginBottom: 4,
-  },
-  badgePill: {
-    alignSelf: "flex-start",
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  badgeTeacher: {
-    backgroundColor: "rgba(168, 85, 247, 0.2)",
-  },
-  badgeGroup: {
-    backgroundColor: "rgba(59, 130, 246, 0.2)",
-  },
-  badgeText: {
-    fontSize: 10,
-    fontWeight: "700",
-    color: "#c084fc",
-  },
-  emptySearchBox: {
-    padding: 24,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  emptySearchText: {
-    fontSize: 13,
-    color: "#64748b",
-    textAlign: "center",
-    lineHeight: 18,
-  },
-  originSection: {
-    marginTop: 14,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: "rgba(255, 255, 255, 0.06)",
-  },
-  originTitle: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#64748b",
-    marginBottom: 8,
-  },
-  originRow: {
-    flexDirection: "row",
-    gap: 8,
-  },
-  originButton: {
-    flex: 1,
-    paddingVertical: 8,
-    borderRadius: 8,
-    backgroundColor: "rgba(255, 255, 255, 0.04)",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.06)",
-  },
-  originButtonSelected: {
-    borderColor: "#3b82f6",
-    backgroundColor: "rgba(59, 130, 246, 0.15)",
-  },
-  originButtonText: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: "#8a9bb5",
-  },
-  originButtonTextSelected: {
-    color: "#93c5fd",
-  },
-});
+const createStyles = (colors: Palette) =>
+  StyleSheet.create({
+    backdrop: {
+      flex: 1,
+      backgroundColor: "rgba(0, 0, 0, 0.65)",
+      justifyContent: "flex-end",
+    },
+    sheet: {
+      backgroundColor: colors.canvas,
+      borderTopLeftRadius: 28,
+      borderTopRightRadius: 28,
+      paddingTop: 12,
+      paddingBottom: 36,
+      paddingHorizontal: 20,
+      borderWidth: 1,
+      borderColor: colors.line,
+      maxHeight: "88%",
+    },
+    handle: {
+      width: 44,
+      height: 5,
+      backgroundColor: "rgba(255, 255, 255, 0.2)",
+      borderRadius: 3,
+      alignSelf: "center",
+      marginBottom: 16,
+    },
+    title: {
+      fontSize: 20,
+      fontWeight: "800",
+      color: colors.text,
+      letterSpacing: -0.3,
+    },
+    subtitle: {
+      fontSize: 13,
+      color: colors.muted,
+      marginTop: 2,
+      marginBottom: 14,
+    },
+    segmentedRow: {
+      flexDirection: "row",
+      backgroundColor: colors.soft,
+      borderRadius: 14,
+      padding: 3,
+      marginBottom: 12,
+    },
+    segmentButton: {
+      flex: 1,
+      paddingVertical: 8,
+      alignItems: "center",
+      justifyContent: "center",
+      borderRadius: 11,
+    },
+    segmentButtonActive: {
+      backgroundColor: "#2563eb",
+    },
+    segmentText: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: colors.muted,
+    },
+    segmentTextActive: {
+      color: colors.text,
+      fontWeight: "700",
+    },
+    searchContainer: {
+      position: "relative",
+      marginBottom: 12,
+    },
+    searchInput: {
+      backgroundColor: colors.soft,
+      borderRadius: 12,
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      color: colors.text,
+      fontSize: 14,
+      borderWidth: 1,
+      borderColor: colors.line,
+    },
+    searchSpinner: {
+      position: "absolute",
+      right: 12,
+      top: 12,
+    },
+    scrollArea: {
+      maxHeight: 340,
+    },
+    scrollContent: {
+      paddingBottom: 12,
+    },
+    sectionHeader: {
+      fontSize: 12,
+      fontWeight: "700",
+      color: colors.subtle,
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+      marginBottom: 8,
+      marginTop: 4,
+    },
+    grid: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 8,
+    },
+    gridCardWrapper: {
+      width: "48%",
+      position: "relative",
+    },
+    groupButton: {
+      width: "100%",
+      paddingVertical: 12,
+      paddingHorizontal: 12,
+      borderRadius: 14,
+      backgroundColor: colors.soft,
+      borderWidth: 1,
+      borderColor: colors.line,
+    },
+    groupButtonSelected: {
+      backgroundColor: "rgba(37, 99, 235, 0.2)",
+      borderColor: "#3b82f6",
+    },
+    labelRow: {
+      flexDirection: "row",
+      alignItems: "baseline",
+      gap: 4,
+      marginBottom: 2,
+    },
+    trackText: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: colors.link,
+    },
+    labelText: {
+      fontSize: 17,
+      fontWeight: "800",
+      color: colors.text,
+    },
+    codeText: {
+      fontSize: 11,
+      color: colors.subtle,
+      fontFamily: "monospace",
+    },
+    codeSelected: {
+      color: colors.link,
+    },
+    textSelected: {
+      color: colors.text,
+    },
+    gridPinBtn: {
+      position: "absolute",
+      top: 6,
+      right: 6,
+      padding: 6,
+    },
+    pinIconSmall: {
+      fontSize: 14,
+      color: colors.subtle,
+    },
+    searchResultRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginBottom: 8,
+      gap: 8,
+    },
+    searchResultCard: {
+      flex: 1,
+      backgroundColor: colors.soft,
+      borderRadius: 14,
+      padding: 12,
+      borderWidth: 1,
+      borderColor: colors.line,
+    },
+    cardSelected: {
+      backgroundColor: "rgba(37, 99, 235, 0.2)",
+      borderColor: "#3b82f6",
+    },
+    resultTitle: {
+      fontSize: 15,
+      fontWeight: "700",
+      color: colors.text,
+      marginBottom: 2,
+    },
+    resultSubtext: {
+      fontSize: 12,
+      color: colors.muted,
+      lineHeight: 16,
+    },
+    pinBtn: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: colors.soft,
+    },
+    pinIcon: {
+      fontSize: 18,
+      color: colors.subtle,
+    },
+    pinIconActive: {
+      color: "#f59e0b",
+    },
+    favoriteBadgeRow: {
+      marginBottom: 4,
+    },
+    badgePill: {
+      alignSelf: "flex-start",
+      paddingHorizontal: 8,
+      paddingVertical: 2,
+      borderRadius: 6,
+    },
+    badgeTeacher: {
+      backgroundColor: "rgba(168, 85, 247, 0.2)",
+    },
+    badgeGroup: {
+      backgroundColor: "rgba(59, 130, 246, 0.2)",
+    },
+    badgeText: {
+      fontSize: 10,
+      fontWeight: "700",
+      color: "#c084fc",
+    },
+    emptySearchBox: {
+      padding: 24,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    emptySearchText: {
+      fontSize: 13,
+      color: colors.subtle,
+      textAlign: "center",
+      lineHeight: 18,
+    },
+    originSection: {
+      marginTop: 14,
+      paddingTop: 12,
+      borderTopWidth: 1,
+      borderTopColor: colors.line,
+    },
+    originTitle: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: colors.subtle,
+      marginBottom: 8,
+    },
+    originRow: {
+      flexDirection: "row",
+      gap: 8,
+    },
+    originButton: {
+      flex: 1,
+      paddingVertical: 8,
+      borderRadius: 8,
+      backgroundColor: colors.soft,
+      alignItems: "center",
+      borderWidth: 1,
+      borderColor: colors.line,
+    },
+    originButtonSelected: {
+      borderColor: "#3b82f6",
+      backgroundColor: "rgba(59, 130, 246, 0.15)",
+    },
+    originButtonText: {
+      fontSize: 11,
+      fontWeight: "600",
+      color: colors.muted,
+    },
+    originButtonTextSelected: {
+      color: colors.link,
+    },
+  });
