@@ -2,13 +2,17 @@ import { focusScope } from "../focus/storage";
 import { useNetInfo } from "@react-native-community/netinfo";
 import { BrandMark, OfflineMark } from "../components/BrandMark";
 import { ComparedSchedule } from "../components/ComparedSchedule";
-import { showStudentScheduleSubject } from "@studentvalue/mobile-contracts";
+import {
+  calculateLessonProgress,
+  selectScheduleFlow,
+} from "@studentvalue/mobile-contracts";
 import {
   useTheme,
   useThemedStyles,
   type Palette,
 } from "../theme/ThemeProvider";
 import { useDaySwipe } from "../schedule/useDaySwipe";
+import { useTimetableWeek } from "../schedule/useTimetableWeek";
 import { logoutMobile } from "../auth/client";
 import {
   sessionGeneration,
@@ -41,18 +45,11 @@ import {
 import { StatusBar } from "expo-status-bar";
 import type {
   MobileLesson,
-  MobileTimetable,
   UserTaskProgress,
   CachedTask,
 } from "@studentvalue/mobile-contracts";
 import { getTimetableRepository } from "../storage/repository";
-import {
-  syncTimetableFromApi,
-  syncTeacherTimetableFromRuz,
-  syncGroupTimetableFromRuzId,
-  getActiveApiOrigin,
-  setActiveApiOrigin,
-} from "../api/client";
+import { getActiveApiOrigin, setActiveApiOrigin } from "../api/client";
 import {
   getSessionUser,
   getSessionToken,
@@ -60,7 +57,6 @@ import {
 } from "../auth/token-storage";
 import { enqueueProgressUpdate, flushOutbox } from "../sync/outbox";
 import { FlowHeroCard } from "../components/FlowHeroCard";
-import { UpcomingLessonCard } from "../components/UpcomingLessonCard";
 import { SchedulePickerModal } from "../components/SchedulePickerModal";
 import { DaySwitcher } from "../components/DaySwitcher";
 import { CampusMapModal } from "../components/CampusMapModal";
@@ -220,21 +216,87 @@ export const FlowTimetableScreen: React.FC = () => {
     getMoscowDateString(),
   );
 
-  // Storage states
-  const [isLoaded, setIsLoaded] = useState<boolean>(false);
-  const [lessons, setLessons] = useState<MobileLesson[]>([]);
-  const [weekLessons, setWeekLessons] = useState<MobileLesson[]>([]);
-  const [daysWithLessons, setDaysWithLessons] = useState<
-    Record<string, boolean>
-  >({});
-  const [savedAt, setSavedAt] = useState<string | null>(null);
-  const [sourceFetchedAt, setSourceFetchedAt] = useState<string | null>(null);
-  const [isStale, setIsStale] = useState<boolean>(false);
-  const [isSyncing, setIsSyncing] = useState<boolean>(false);
-  const [syncMessage, setSyncMessage] = useState<string | null>(null);
-  const [apiOrigin, setApiOrigin] = useState<string>(
-    "https://studentvalue1984.eu.cc",
+  const [apiOrigin, setApiOrigin] = useState("https://studentvalue1984.eu.cc");
+  const [heroHeight, setHeroHeight] = useState(0);
+  const isSelectedToday = selectedDate === todayStr;
+  const weekStart = weekStartFor(selectedDate);
+  const selection = {
+    group: selectedGroup,
+    week: weekStart,
+    teacherId: scheduleType === "teacher" ? selectedTeacherId : null,
+    groupId: scheduleType === "group" ? selectedRuzGroupId : null,
+    origin: apiOrigin,
+  };
+  const timetable = useTimetableWeek(selection, !isOffline);
+  const days = timetable.week?.days;
+  const isLoaded = Boolean(days);
+  const lessons = useMemo(
+    () => days?.find((day) => day.date === selectedDate)?.lessons ?? [],
+    [days, selectedDate],
   );
+  const weekLessons = useMemo(
+    () => days?.flatMap((day) => day.lessons) ?? [],
+    [days],
+  );
+  const daysWithLessons = useMemo(
+    () =>
+      Object.fromEntries(
+        days?.map((day) => [day.date, day.lessons.length > 0]) ?? [],
+      ),
+    [days],
+  );
+  const liveFlow = useMemo(
+    () => selectScheduleFlow(days ?? [], todayStr, nowMoscowMin),
+    [days, todayStr, nowMoscowMin],
+  );
+  const needNextWeek =
+    isSelectedToday &&
+    isLoaded &&
+    (!liveFlow.focus || liveFlow.focus === liveFlow.current);
+  const lookahead = useTimetableWeek(
+    { ...selection, week: isSelectedToday ? addDaysTo(weekStart, 7) : "" },
+    !isOffline && needNextWeek,
+  );
+  const flow = useMemo(
+    () =>
+      lookahead.week
+        ? selectScheduleFlow(
+            [...(days ?? []), ...lookahead.week.days],
+            todayStr,
+            nowMoscowMin,
+          )
+        : liveFlow,
+    [days, todayStr, nowMoscowMin, lookahead.week, liveFlow],
+  );
+  const focus = isSelectedToday
+    ? flow.focus
+    : lessons[0]
+      ? { date: selectedDate, lesson: lessons[0] }
+      : null;
+  const following = isSelectedToday
+    ? flow.following[0]
+    : lessons[1]
+      ? { date: selectedDate, lesson: lessons[1] }
+      : undefined;
+  const current =
+    isSelectedToday && flow.current
+      ? {
+          attachedToFocus: flow.current === focus,
+          subject: flow.current.lesson.subject,
+          progress: calculateLessonProgress(
+            flow.current.lesson.start,
+            nowMoscowMin,
+          ).progressPercent,
+        }
+      : undefined;
+  const shownWeek =
+    focus && weekStartFor(focus.date) !== weekStart
+      ? lookahead.week
+      : timetable.week;
+  const isStale = !!shownWeek?.stale;
+  const savedAt = shownWeek?.savedAt ?? null;
+  const sourceFetchedAt = shownWeek?.fetchedAt ?? null;
+  const isSyncing = timetable.syncing;
 
   // Auth and task progress states
   const [sessionUser, setSessionUser] = useState<MobileSessionUser | null>(
@@ -284,8 +346,7 @@ export const FlowTimetableScreen: React.FC = () => {
   const repo = useMemo(() => getTimetableRepository(), []);
   const taskReqGenRef = useRef(0);
   const [taskLoadMessage, setTaskLoadMessage] = useState<string | null>(null);
-  const scrollRef = useRef<any>(null);
-  const reqGenRef = useRef(0);
+  const scrollRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
 
   const handleSelectTab = useCallback((t: NavTab) => {
     setActiveTab(t);
@@ -474,59 +535,6 @@ export const FlowTimetableScreen: React.FC = () => {
     [repo],
   );
 
-  // Cold start directly from SQLite repository
-  const loadFromSqlite = useCallback(async () => {
-    const generation = reqGenRef.current;
-    try {
-      const res = await repo.getDayTimetable(selectedGroup, selectedDate);
-      if (generation !== reqGenRef.current) return;
-      if (res.status === "loaded") {
-        setIsLoaded(true);
-        setLessons(
-          res.lessons.filter((l) => showStudentScheduleSubject(l.subject)),
-        );
-        setSavedAt(res.savedAt);
-        setSourceFetchedAt(res.sourceFetchedAt);
-        setIsStale(
-          res.isStale ||
-            Date.now() - Date.parse(res.sourceFetchedAt) > 15 * 60 * 1000,
-        );
-      } else {
-        setIsLoaded(false);
-        setLessons([]);
-        setSavedAt(null);
-        setSourceFetchedAt(null);
-      }
-
-      const weekStart = weekStartFor(selectedDate);
-      const stored = await repo.getSnapshot(selectedGroup, weekStart);
-      if (generation !== reqGenRef.current) return;
-      setWeekLessons([]);
-      setDaysWithLessons({});
-      if (stored?.snapshot?.data?.days) {
-        const allWkLessons = stored.snapshot.data.days.flatMap(
-          (d: { lessons: MobileLesson[] }) => d.lessons,
-        );
-        setWeekLessons(
-          allWkLessons.filter((l) => showStudentScheduleSubject(l.subject)),
-        );
-        setDaysWithLessons(
-          Object.fromEntries(
-            stored.snapshot.data.days.map((day) => [
-              day.date,
-              day.lessons.some((l) => showStudentScheduleSubject(l.subject)),
-            ]),
-          ),
-        );
-      }
-    } catch {
-      if (generation !== reqGenRef.current) return;
-      setIsLoaded(false);
-      setLessons([]);
-      setWeekLessons([]);
-    }
-  }, [repo, selectedGroup, selectedDate]);
-
   // Ignore completions from the previous account or group selection.
   useEffect(() => {
     let active = true;
@@ -589,50 +597,6 @@ export const FlowTimetableScreen: React.FC = () => {
     };
   }, [repo]);
 
-  // Load timetable on date/group change
-  useEffect(() => {
-    const currentGen = ++reqGenRef.current;
-    loadFromSqlite().then(() => {
-      if (currentGen !== reqGenRef.current) return;
-      setIsSyncing(true);
-      const syncPromise =
-        scheduleType === "teacher" && selectedTeacherId
-          ? syncTeacherTimetableFromRuz(
-              selectedTeacherId,
-              selectedGroup,
-              selectedDate,
-            )
-          : selectedRuzGroupId &&
-              selectedRuzGroupId !== 45591 &&
-              !selectedGroup.startsWith("5130901/40102")
-            ? syncGroupTimetableFromRuzId(
-                selectedRuzGroupId,
-                selectedGroup,
-                selectedDate,
-              )
-            : syncTimetableFromApi(selectedGroup, selectedDate);
-
-      syncPromise.then((result) => {
-        if (currentGen !== reqGenRef.current) return;
-        setIsSyncing(false);
-        if (result.success) {
-          setSyncMessage(null);
-          loadFromSqlite();
-        } else {
-          setSyncMessage(result.message);
-        }
-      });
-    });
-  }, [
-    loadFromSqlite,
-    selectedGroup,
-    selectedDate,
-    scheduleType,
-    selectedTeacherId,
-    selectedRuzGroupId,
-  ]);
-
-  // Live timer for clock and midnight rollover
   useEffect(() => {
     const updateTime = () => {
       const newToday = getMoscowDateString();
@@ -672,50 +636,16 @@ export const FlowTimetableScreen: React.FC = () => {
       if (savedType === "teacher" && savedTeacherId) {
         setScheduleType("teacher");
         setSelectedTeacherId(Number(savedTeacherId));
-      } else if (savedRuzId) {
-        setSelectedRuzGroupId(Number(savedRuzId));
+      } else if (savedGroup) {
+        setSelectedRuzGroupId(savedRuzId ? Number(savedRuzId) : null);
       }
     });
   }, [repo]);
 
-  // Manual refresh trigger
-  const handleManualSync = async () => {
-    setIsSyncing(true);
-    setSyncMessage(null);
-
-    let result;
-    if (scheduleType === "teacher" && selectedTeacherId) {
-      result = await syncTeacherTimetableFromRuz(
-        selectedTeacherId,
-        selectedGroup,
-        selectedDate,
-      );
-    } else if (
-      selectedRuzGroupId &&
-      selectedRuzGroupId !== 45591 &&
-      !selectedGroup.startsWith("5130901/40102")
-    ) {
-      result = await syncGroupTimetableFromRuzId(
-        selectedRuzGroupId,
-        selectedGroup,
-        selectedDate,
-      );
-    } else {
-      result = await syncTimetableFromApi(selectedGroup, selectedDate);
-    }
-
-    setIsSyncing(false);
-
-    if (result.success) {
-      setSyncMessage(null);
-      await loadFromSqlite();
-    } else {
-      setSyncMessage(result.message);
-      await loadFromSqlite();
-    }
-
-    const u = await getSessionUser();
-    await loadTasks(selectedGroup, u);
+  const handleManualSync = () => {
+    timetable.refresh();
+    lookahead.refresh();
+    void loadTasks(selectedGroup, sessionUser);
   };
 
   const handleSelectGroup = (code: string, ruzId?: number) => {
@@ -725,9 +655,7 @@ export const FlowTimetableScreen: React.FC = () => {
     setSelectedRuzGroupId(ruzId || null);
     repo.setPreference("selected_group_code", code);
     repo.setPreference("selected_schedule_type", "group");
-    if (ruzId) {
-      repo.setPreference("selected_ruz_group_id", String(ruzId));
-    }
+    repo.setPreference("selected_ruz_group_id", ruzId ? String(ruzId) : "");
     setSchedulePickerVisible(false);
   };
 
@@ -751,24 +679,9 @@ export const FlowTimetableScreen: React.FC = () => {
     setTaskProgress({});
     setTasks([]);
     setPendingOpsCount(0);
-    setApiOrigin(newOrigin);
     await setActiveApiOrigin(newOrigin);
+    setApiOrigin(newOrigin);
     setSchedulePickerVisible(false);
-    setIsSyncing(true);
-    setSyncMessage(null);
-    const result = await syncTimetableFromApi(
-      selectedGroup,
-      selectedDate,
-      newOrigin,
-    );
-    setIsSyncing(false);
-    if (result.success) {
-      setSyncMessage(null);
-      await loadFromSqlite();
-    } else {
-      setSyncMessage(result.message);
-      await loadFromSqlite();
-    }
   };
 
   const handlePrevDay = useCallback(() => {
@@ -994,44 +907,13 @@ export const FlowTimetableScreen: React.FC = () => {
     }
   };
 
-  // Determine current hero lesson
-  const isSelectedToday = selectedDate === todayStr;
-  const parseMin = (t: string) => {
-    const [h, m] = t.split(":").map(Number);
-    return (h || 0) * 60 + (m || 0);
-  };
-
-  const heroLesson = useMemo(() => {
-    if (lessons.length === 0) return null;
-    if (!isSelectedToday) return lessons[0];
-
-    const ongoing = lessons.find((l) => {
-      const s = parseMin(l.start);
-      const e = s + 90;
-      return nowMoscowMin >= s && nowMoscowMin < e;
+  const openDaySchedule = (day = selectedDate) => {
+    setSelectedDate(day);
+    scrollRef.current?.scrollTo({
+      y: heroHeight || containerHeight,
+      animated: true,
     });
-    if (ongoing) return ongoing;
-
-    const upcoming = lessons.find((l) => parseMin(l.start) > nowMoscowMin);
-    if (upcoming) return upcoming;
-
-    return lessons[lessons.length - 1];
-  }, [lessons, isSelectedToday, nowMoscowMin]);
-
-  const allDoneToday = useMemo(() => {
-    if (lessons.length === 0 || !isSelectedToday) return false;
-    const last = lessons[lessons.length - 1];
-    return nowMoscowMin >= parseMin(last.start) + 90;
-  }, [lessons, isSelectedToday, nowMoscowMin]);
-
-  const remainingLessons = useMemo(() => {
-    if (!heroLesson) return [];
-    return lessons.filter((l) => l.id !== heroLesson.id);
-  }, [lessons, heroLesson]);
-
-  const dateFullLabel = useMemo(() => {
-    return formatFlowDate(selectedDate);
-  }, [selectedDate]);
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -1149,9 +1031,7 @@ export const FlowTimetableScreen: React.FC = () => {
             style={styles.scrollArea}
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
-            snapToOffsets={
-              containerHeight > 0 ? [0, containerHeight] : undefined
-            }
+            snapToOffsets={heroHeight > 0 ? [0, heroHeight] : undefined}
             snapToEnd={false}
             decelerationRate="fast"
             refreshControl={
@@ -1163,30 +1043,52 @@ export const FlowTimetableScreen: React.FC = () => {
               />
             }
           >
-            {/* Page 1: Immersive Fullscreen Hero */}
-            <FlowHeroCard
-              lesson={heroLesson}
-              groupCode={selectedGroup}
-              dateLabel={dateFullLabel}
-              isToday={isSelectedToday}
-              isLoaded={isLoaded}
-              totalLessonsToday={lessons.length}
-              allDoneToday={allDoneToday}
-              nowMoscowMinutes={nowMoscowMin}
-              containerHeight={containerHeight}
-              onSelectGroup={() => setSchedulePickerVisible(true)}
-              onOpenSubject={handleOpenLesson}
-              onPrevDay={handlePrevDay}
-              onNextDay={handleNextDay}
-              onResetToday={handleResetToday}
-              onScrollCuePress={() => {
-                const targetY = containerHeight > 0 ? containerHeight : 560;
-                scrollRef.current?.scrollTo({
-                  y: targetY,
-                  animated: true,
-                });
-              }}
-            />
+            <View
+              onLayout={(event) =>
+                setHeroHeight(event.nativeEvent.layout.height)
+              }
+            >
+              <FlowHeroCard
+                lesson={focus?.lesson ?? null}
+                focusDayLabel={
+                  focus && focus.date !== selectedDate
+                    ? formatFlowDate(focus.date)
+                    : undefined
+                }
+                dateLabel={formatFlowDate(selectedDate)}
+                isToday={isSelectedToday}
+                isLoaded={isLoaded}
+                totalLessonsToday={lessons.length}
+                current={current}
+                following={
+                  following && {
+                    lesson: following.lesson,
+                    dateLabel:
+                      following.date === selectedDate
+                        ? undefined
+                        : formatFlowDate(following.date),
+                  }
+                }
+                stale={isStale}
+                loading={isSyncing || lookahead.syncing}
+                error={
+                  isLoaded
+                    ? needNextWeek
+                      ? lookahead.error
+                      : undefined
+                    : timetable.error
+                }
+                containerHeight={containerHeight}
+                onOpenSubject={handleOpenLesson}
+                onPrevDay={handlePrevDay}
+                onNextDay={handleNextDay}
+                onResetToday={handleResetToday}
+                onScrollCuePress={() => openDaySchedule(focus?.date)}
+                onOpenFollowing={
+                  following ? () => openDaySchedule(following.date) : undefined
+                }
+              />
+            </View>
 
             {/* Page 2: Full Screen "Далее сегодня" + Дедлайны */}
             <View

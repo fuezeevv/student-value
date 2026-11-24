@@ -16,8 +16,9 @@
 .flow-teacher { margin-top: .4rem; font-size: .8rem; line-height: 1.5; color: var(--ink-muted); }
 .flow-course { display: inline-block; margin-top: 1rem; font-size: .8rem; color: var(--ink-secondary); }
 .flow-current { margin: .5rem 0 1.6rem; color: var(--ink-muted); font-size: .7rem; }
-.flow-current [role="progressbar"] { height: 3px; margin-top: .6rem; border-radius: 3px; background: var(--ink-faint); overflow: hidden; }
-.flow-current [role="progressbar"] > span { display: block; height: 100%; background: var(--wine); transition: width 1s linear; }
+.flow-progress { height: 3px; margin-top: .6rem; border-radius: 3px; background: var(--ink-faint); overflow: hidden; }
+.flow-progress > span { display: block; height: 100%; background: var(--wine); transition: width 1s linear; }
+.flow-time .flow-progress { width: min(100%, 12rem); margin-inline: auto; }
 .flow-stack { display: grid; gap: .45rem; }
 .flow-stack button { width: 100%; text-align: left; padding: .85rem 1rem; border-radius: 1.1rem; background: color-mix(in srgb, var(--ink) 5%, transparent); overflow-wrap: anywhere; }
 .flow-stack button + button { width: calc(100% - 1.2rem); margin: 0 auto; background: color-mix(in srgb, var(--ink) 3%, transparent); }
@@ -59,7 +60,8 @@
   .flow-teacher { grid-column: 3; margin: 0; font-size: .7rem; }
   .flow-course { grid-column: 2; grid-row: 4; margin: 0; font-size: .75rem; }
   .flow-current { flex-basis: 190px; margin: .5rem 0; }
-  .flow-stack, .flow-reveal { display: none; }
+  .flow-stack { display: none; }
+  .flow-reveal { flex-basis: 100%; justify-content: flex-end; min-height: 44px; margin: 0; }
   .schedule-details { display: flex; flex-direction: column; gap: 1rem; }
 }
 @media (max-width: 767px) {
@@ -73,7 +75,7 @@
   .schedule-details.is-open { display: flex; flex-direction: column; gap: .8rem; }
   .flow-collapse { display: block; min-height: 44px; margin: .5rem auto; color: var(--ink-muted); font-size: .8rem; }
 }
-@media (prefers-reduced-motion: reduce) { .flow-current [role="progressbar"] > span { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .flow-progress > span { transition: none; } }
 
 :root {
   /* Clean Editorial Light Palette */

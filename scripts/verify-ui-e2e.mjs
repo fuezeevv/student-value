@@ -5,6 +5,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { PrismaClient } from "@prisma/client";
 import { prepareTestDatabase, run, loadEnv } from "./test-db.mjs";
 import assert from "node:assert/strict";
+import { formatInTimeZone } from "date-fns-tz";
 loadEnv();
 const workingUrl = process.env.DATABASE_URL;
 const isolatedUrl = new URL(workingUrl);
@@ -680,15 +681,40 @@ try {
     assert(!(await body()).includes("[TEST] PRIVATE RESULT"), "Logout removes the current user's local copy");
     await page.setViewport({width:1280,height:900});
   });
-  await scenario("mobile flow opens next-week schedule through the same accessible control", async () => {
+  await scenario("mobile flow opens the selected lesson's actual day across weeks", async () => {
     await setUser("guest");
-    await page.setViewport({width:390,height:844});
-    await go("/browse/5130901-40102");
-    assert(await page.$(".schedule-flow"));
-    await page.click(".flow-reveal");
-    await page.waitForSelector("#full-day-schedule.is-open", {visible:true});
-    assert((await body()).includes("Пары и аудитории"));
-    await page.screenshot({path:".test-work/flow-mobile-schedule.png"});
+    const today = new Date(formatInTimeZone(new Date(), "Europe/Moscow", "yyyy-MM-dd") + "T12:00:00Z");
+    const dateAt = (offset) => new Date(today.getTime() + offset * 86400000).toISOString().slice(0, 10);
+    const mondayOffset = -((today.getUTCDay() + 6) % 7);
+    const group = await test.studyGroup.findUniqueOrThrow({ where: { code: "5130901/40102" } });
+    const where = { groupId_weekStart: { groupId: group.id, weekStart: dateAt(mondayOffset) } };
+    const current = await test.ruzScheduleCache.findUniqueOrThrow({ where });
+    await test.ruzScheduleCache.update({
+      where,
+      data: { payload: { ...current.payload, days: current.payload.days.map((day) => ({ ...day, lessons: [] })) } },
+    });
+    try {
+      await page.setViewport({ width: 390, height: 844 });
+      await go("/browse/5130901-40102");
+      await page.waitForSelector(".flow-stack button", { visible: true });
+      await page.screenshot({ path: ".test-work/flow-mobile-focus.png" });
+      assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+      await page.click(".flow-stack button");
+      const friday = dateAt(mondayOffset + 11);
+      await page.waitForSelector(
+        `#full-day-schedule.is-open [data-date="${friday}"][aria-pressed="true"]`,
+        { visible: true },
+      );
+      assert.equal(new URL(page.url()).searchParams.get("week"), friday);
+      assert((await body()).includes("[TEST] Практик 5130901/40102"));
+      await page.screenshot({ path: ".test-work/flow-mobile-schedule.png" });
+      await page.setViewport({ width: 1440, height: 900 });
+      await go("/browse/5130901-40102");
+      assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+      await page.screenshot({ path: ".test-work/flow-desktop-focus.png" });
+    } finally {
+      await test.ruzScheduleCache.update({ where, data: { payload: current.payload } });
+    }
     await setUser("user-dev-student");
     await page.setViewport({width:1280,height:900});
   });

@@ -27,9 +27,10 @@ export function ScheduleFlow({
   group: string;
   state: string;
   fetchedAt?: Date | string | null;
-  openSchedule: () => void;
+  openSchedule: (day?: string) => void;
 }) {
   const { focus, current, following } = scheduleFlow(days, date, time);
+  const active = current && lessonActivity(current.lesson.start, time);
   const gesture = useRef<{ x: number; y: number } | null>(null);
   const formatDate = (value: string) =>
     formatInTimeZone(
@@ -48,6 +49,9 @@ export function ScheduleFlow({
           event.touches.length === 1
             ? { x: touch.clientX, y: touch.clientY }
             : null;
+      }}
+      onTouchCancel={() => {
+        gesture.current = null;
       }}
       onTouchEnd={(event) => {
         const start = gesture.current;
@@ -77,7 +81,12 @@ export function ScheduleFlow({
       ) : focus ? (
         <div className="flow-focus">
           <p className="flow-date">{formatDate(focus.date)}</p>
-          <p className="flow-time">{focus.lesson.start}</p>
+          <div className="flow-time">
+            <p>{focus.lesson.start}</p>
+            {current === focus && active && (
+              <LessonProgress value={active.progress} />
+            )}
+          </div>
           <h2>{focus.lesson.subject}</h2>
           <p className="flow-format">{lessonType(focus.lesson.type)}</p>
           <p className="flow-room">
@@ -104,24 +113,10 @@ export function ScheduleFlow({
           </p>
         </div>
       )}
-      {current && (
+      {current && current !== focus && active && (
         <div className="flow-current">
           <p>{current.lesson.subject}</p>
-          <div
-            role="progressbar"
-            aria-label="Прогресс пары"
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuenow={Math.round(
-              lessonActivity(current.lesson.start, time).progress,
-            )}
-          >
-            <span
-              style={{
-                width: `${lessonActivity(current.lesson.start, time).progress}%`,
-              }}
-            />
-          </div>
+          <LessonProgress value={active.progress} />
         </div>
       )}
       {following.length > 0 && (
@@ -130,7 +125,7 @@ export function ScheduleFlow({
             <button
               type="button"
               key={`${eventDate}-${lesson.start}-${index}`}
-              onClick={openSchedule}
+              onClick={() => openSchedule(eventDate)}
             >
               <span>
                 {eventDate === focus?.date
@@ -163,11 +158,26 @@ export function ScheduleFlow({
       <button
         className="flow-reveal"
         type="button"
-        onClick={openSchedule}
+        onClick={() => openSchedule()}
         aria-controls="full-day-schedule"
       >
-        <span aria-hidden="true">↑</span> Всё расписание
+        <span aria-hidden="true">↓</span> Всё расписание
       </button>
     </section>
+  );
+}
+
+function LessonProgress({ value }: { value: number }) {
+  return (
+    <div
+      className="flow-progress"
+      role="progressbar"
+      aria-label="Прогресс пары"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={Math.round(value)}
+    >
+      <span style={{ width: `${value}%` }} />
+    </div>
   );
 }

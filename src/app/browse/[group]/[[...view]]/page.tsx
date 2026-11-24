@@ -394,6 +394,7 @@ export default async function PublicGroupPage({
             sourceUrl={ruzResult.data ? sourceUrl(ruzResult.data) : undefined}
             nowMoscowTime={nowMoscowTime}
             todayDateStr={todayDateStr}
+            requestedDay={query.week}
           />
 
           {/* RUZ Live Subjects for empty groups or browsing */}

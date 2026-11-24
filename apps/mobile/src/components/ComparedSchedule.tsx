@@ -5,6 +5,7 @@ import {
   mobileDayView,
   showStudentScheduleSubject,
   lessonTypeLabel,
+  teachingRoom,
   PUBLIC_GROUPS,
   type MobileLesson,
 } from "@studentvalue/mobile-contracts";
@@ -296,7 +297,9 @@ export function ComparedSchedule({
             </Text>
             <Text style={{ color: colors.muted, marginTop: 8, lineHeight: 20 }}>
               {lessonTypeLabel(lesson.type)}
-              {lesson.rooms.length ? ` · ${lesson.rooms.join(", ")}` : ""}
+              {lesson.rooms.length
+                ? ` · ${lesson.rooms.map(teachingRoom).join(" / ")}`
+                : ""}
             </Text>
             {lesson.teachers.length ? (
               <Text

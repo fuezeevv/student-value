@@ -1,630 +1,305 @@
-import { lessonTypeLabel } from "@studentvalue/mobile-contracts";
+import {
+  lessonTypeLabel,
+  teachingRoom,
+  type MobileLesson,
+} from "@studentvalue/mobile-contracts";
+import { View, Text, StyleSheet, Pressable } from "react-native";
 import {
   useTheme,
   useThemedStyles,
   type Palette,
 } from "../theme/ThemeProvider";
-import React from "react";
-import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
-import {
-  parseTimeToMinutes,
-  type MobileLesson,
-} from "@studentvalue/mobile-contracts";
-import { SpringPressable } from "./SpringPressable";
 import { ArrowUpRightIcon, ChevronDownIcon } from "./NativeIcons";
 
-export type FlowHeroCardProps = {
+type FlowHeroCardProps = {
   lesson: MobileLesson | null;
-  groupCode: string;
   dateLabel: string;
+  focusDayLabel?: string;
   isToday: boolean;
   isLoaded: boolean;
   totalLessonsToday: number;
-  allDoneToday: boolean;
-  nowMoscowMinutes: number;
-  containerHeight?: number;
-  onOpenSubject?: (lesson: MobileLesson) => void;
-  onSelectGroup?: () => void;
-  onScrollCuePress?: () => void;
-  onPrevDay?: () => void;
-  onNextDay?: () => void;
-  onResetToday?: () => void;
+  current?: { attachedToFocus: boolean; subject: string; progress: number };
+  following?: { lesson: MobileLesson; dateLabel?: string };
+  stale: boolean;
+  loading: boolean;
+  error?: string;
+  containerHeight: number;
+  onOpenSubject: (lesson: MobileLesson) => void;
+  onScrollCuePress: () => void;
+  onOpenFollowing?: () => void;
+  onPrevDay: () => void;
+  onNextDay: () => void;
+  onResetToday: () => void;
 };
 
-const BUILDING_NAMES: Record<string, string> = {
-  "1": "Первый корпус",
-  "2": "Второй корпус",
-  "3": "Третий корпус",
-  "4": "Четвёртый корпус",
-  "5": "Пятый корпус",
-  "9": "Девятый корпус",
-  "10": "Десятый корпус",
-  "11": "11-й корпус",
-  "16": "16-й корпус",
-  "Гл.": "Главный корпус",
-  ГИ: "Гуманитарный институт",
-};
-
-function formatPolytechRoom(rooms: string[]): string {
-  if (!rooms || rooms.length === 0) return "Аудитория уточняется";
-  return rooms
-    .map((r) => {
-      const trimmed = r.trim();
-      const kMatch = trimmed.match(/^(\d+|Гл|ГИ)\s*к\.?\s*(\S+)$/i);
-      if (kMatch) {
-        const b = BUILDING_NAMES[kMatch[1]] || `${kMatch[1]}-й корпус`;
-        return `${b} · аудитория ${kMatch[2]}`;
-      }
-      const dashMatch = trimmed.match(/^(\d+)-(\d+[a-zA-Zа-яА-Я]?)$/);
-      if (dashMatch) {
-        const b = BUILDING_NAMES[dashMatch[1]] || `${dashMatch[1]}-й корпус`;
-        return `${b} · аудитория ${dashMatch[2]}`;
-      }
-      return trimmed;
-    })
-    .join(", ");
-}
-
-export const FlowHeroCard: React.FC<FlowHeroCardProps> = ({
+export function FlowHeroCard({
   lesson,
-  groupCode,
   dateLabel,
+  focusDayLabel,
   isToday,
   isLoaded,
   totalLessonsToday,
-  allDoneToday,
-  nowMoscowMinutes,
+  current,
+  following,
+  stale,
+  loading,
+  error,
   containerHeight,
   onOpenSubject,
-  onSelectGroup,
   onScrollCuePress,
+  onOpenFollowing,
   onPrevDay,
   onNextDay,
   onResetToday,
-}) => {
+}: FlowHeroCardProps) {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
+  const emptyTitle = !isLoaded
+    ? loading
+      ? "Загружаем расписание"
+      : "Расписание пока недоступно"
+    : totalLessonsToday === 0
+      ? "В этот день пар нет"
+      : "Пары на сегодня закончились";
+  const emptyDetail = !isLoaded
+    ? (error ?? "На устройстве нет расписания на эту неделю.")
+    : isToday && error
+      ? "Расписание следующей недели пока недоступно."
+      : isToday && loading
+        ? "Проверяем расписание следующей недели."
+        : isToday
+          ? "Можно открыть другой день или перейти к работам."
+          : null;
 
-  const cardHeight =
-    containerHeight && containerHeight > 300 ? containerHeight : 560;
-
-  if (!isLoaded) {
-    return (
-      <View style={[styles.stateContainer, { height: cardHeight }]}>
-        <Text style={styles.stateTitle}>Расписание не загружено</Text>
-        <Text style={styles.stateSubtitle}>
-          Данные отсутствуют в памяти устройства. Потяните вниз для обновления.
-        </Text>
-      </View>
-    );
-  }
-
-  if (totalLessonsToday === 0) {
-    return (
-      <View style={[styles.stateContainer, { height: cardHeight }]}>
-        <View style={styles.dateNavRow}>
-          {onPrevDay && (
-            <TouchableOpacity
-              onPress={onPrevDay}
-              style={styles.heroDayArrow}
-              accessibilityRole="button"
-              accessibilityLabel="Предыдущий день"
-            >
-              <Text style={styles.heroDayArrowText}>‹</Text>
-            </TouchableOpacity>
-          )}
-          <Text style={styles.dateEyebrow}>{dateLabel}</Text>
-          {onNextDay && (
-            <TouchableOpacity
-              onPress={onNextDay}
-              style={styles.heroDayArrow}
-              accessibilityRole="button"
-              accessibilityLabel="Следующий день"
-            >
-              <Text style={styles.heroDayArrowText}>›</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-        {!isToday && onResetToday && (
-          <TouchableOpacity
-            onPress={onResetToday}
-            style={styles.heroTodayChip}
-            activeOpacity={0.7}
-            accessibilityRole="button"
-            accessibilityLabel="Вернуться к сегодняшнему дню"
-          >
-            <Text style={styles.heroTodayChipText}>Сегодня</Text>
-          </TouchableOpacity>
-        )}
-        <Text style={styles.bigEmptyTime}>—:—</Text>
-        <Text style={styles.stateTitle}>В этот день нет учебных пар</Text>
-        <Text style={styles.stateSubtitle}>
-          Можно перейти к работам или посмотреть другой день.
-        </Text>
-        {onScrollCuePress ? (
-          <TouchableOpacity
-            style={styles.scrollCueContainer}
-            onPress={onScrollCuePress}
-            accessibilityRole="button"
-          >
-            <Text style={styles.scrollCueText}>Работы и сроки ↓</Text>
-          </TouchableOpacity>
-        ) : null}
-      </View>
-    );
-  }
-
-  if (allDoneToday) {
-    return (
-      <View style={[styles.stateContainer, { height: cardHeight }]}>
-        <View style={styles.dateNavRow}>
-          {onPrevDay && (
-            <TouchableOpacity
-              onPress={onPrevDay}
-              style={styles.heroDayArrow}
-              accessibilityRole="button"
-              accessibilityLabel="Предыдущий день"
-            >
-              <Text style={styles.heroDayArrowText}>‹</Text>
-            </TouchableOpacity>
-          )}
-          <Text style={styles.dateEyebrow}>{dateLabel}</Text>
-          {onNextDay && (
-            <TouchableOpacity
-              onPress={onNextDay}
-              style={styles.heroDayArrow}
-              accessibilityRole="button"
-              accessibilityLabel="Следующий день"
-            >
-              <Text style={styles.heroDayArrowText}>›</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-        {!isToday && onResetToday && (
-          <TouchableOpacity
-            onPress={onResetToday}
-            style={styles.heroTodayChip}
-            activeOpacity={0.7}
-            accessibilityRole="button"
-            accessibilityLabel="Вернуться к сегодняшнему дню"
-          >
-            <Text style={styles.heroTodayChipText}>Сегодня</Text>
-          </TouchableOpacity>
-        )}
-        <Text style={styles.bigEmptyTime}>✓</Text>
-        <Text style={styles.stateTitle}>Занятия на сегодня завершены</Text>
-        <Text style={styles.stateSubtitle}>
-          Все пары подошли к концу. Листайте ниже для просмотра дедлайнов.
-        </Text>
-        {onScrollCuePress && (
-          <TouchableOpacity
-            style={styles.scrollCueContainer}
-            onPress={onScrollCuePress}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.scrollCueText}>Сроки и задания ↓</Text>
-            <ChevronDownIcon size={16} color={colors.link} />
-          </TouchableOpacity>
-        )}
-      </View>
-    );
-  }
-
-  if (!lesson) {
-    return null;
-  }
-
-  const startMin = parseTimeToMinutes(lesson.start);
-  const endMin = startMin + 90;
-  const isOngoing =
-    isToday && nowMoscowMinutes >= startMin && nowMoscowMinutes < endMin;
-  const isPast = isToday && nowMoscowMinutes >= endMin;
-  const isFuture = isToday && nowMoscowMinutes < startMin;
-
-  const totalDuration = Math.max(1, endMin - startMin);
-  const elapsed = Math.max(
-    0,
-    Math.min(totalDuration, nowMoscowMinutes - startMin),
+  const progress = current && (
+    <View
+      style={styles.progressTrack}
+      accessible
+      accessibilityRole="progressbar"
+      accessibilityLabel="Прогресс пары"
+      accessibilityValue={{
+        min: 0,
+        max: 100,
+        now: Math.round(current.progress),
+      }}
+    >
+      <View style={[styles.progressBar, { width: `${current.progress}%` }]} />
+    </View>
   );
-  const remaining = Math.max(0, endMin - nowMoscowMinutes);
-  const progressPercent = Math.min(
-    100,
-    Math.max(0, Math.round((elapsed / totalDuration) * 100)),
-  );
-  const minutesUntilStart = startMin - nowMoscowMinutes;
 
   return (
-    <View style={[styles.heroFullscreenContainer, { height: cardHeight }]}>
-      {/* Top section: Group and Date with day arrows and return to today */}
-      <View style={styles.heroTopGroup}>
-        <View style={styles.dateNavRow}>
-          {onPrevDay && (
-            <TouchableOpacity
-              onPress={onPrevDay}
-              style={styles.heroDayArrow}
-              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-              accessibilityRole="button"
-              accessibilityLabel="Предыдущий день"
-            >
-              <Text style={styles.heroDayArrowText}>‹</Text>
-            </TouchableOpacity>
-          )}
-          <Text style={styles.dateEyebrow}>{dateLabel}</Text>
-          {onNextDay && (
-            <TouchableOpacity
-              onPress={onNextDay}
-              style={styles.heroDayArrow}
-              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-              accessibilityRole="button"
-              accessibilityLabel="Следующий день"
-            >
-              <Text style={styles.heroDayArrowText}>›</Text>
-            </TouchableOpacity>
-          )}
+    <View style={[styles.container, { minHeight: containerHeight || 560 }]}>
+      <View style={styles.dateBlock}>
+        <View style={styles.dateNav}>
+          <Pressable
+            onPress={onPrevDay}
+            style={styles.dayArrow}
+            accessibilityRole="button"
+            accessibilityLabel="Предыдущий день"
+          >
+            <Text style={styles.arrowText}>‹</Text>
+          </Pressable>
+          <Text style={styles.date}>{dateLabel}</Text>
+          <Pressable
+            onPress={onNextDay}
+            style={styles.dayArrow}
+            accessibilityRole="button"
+            accessibilityLabel="Следующий день"
+          >
+            <Text style={styles.arrowText}>›</Text>
+          </Pressable>
         </View>
-        {!isToday && onResetToday && (
-          <TouchableOpacity
+        {!isToday && (
+          <Pressable
             onPress={onResetToday}
-            style={styles.heroTodayChip}
-            activeOpacity={0.7}
+            style={styles.action}
             accessibilityRole="button"
-            accessibilityLabel="Вернуться к сегодняшнему дню"
           >
-            <Text style={styles.heroTodayChipText}>Сегодня</Text>
-          </TouchableOpacity>
+            <Text style={styles.actionText}>Сегодня</Text>
+          </Pressable>
         )}
       </View>
 
-      {/* Center section: Clock, Progress breakdown, Title, Format, Room, Teacher, Link */}
-      <View style={styles.heroCenterGroup}>
-        <View style={styles.timeWrapper}>
-          <Text style={styles.bigTimeText}>{lesson.start}</Text>
-
-          {/* Ongoing Lesson: Smooth filling bar directly under the time */}
-          {isOngoing && (
-            <View style={styles.ongoingContainer}>
-              <View style={styles.progressTrack}>
-                <View
-                  style={[
-                    styles.progressBar,
-                    {
-                      width: `${Math.min(100, Math.max(3, progressPercent))}%`,
-                    },
-                  ]}
-                />
-              </View>
-            </View>
-          )}
-
-          {/* Upcoming lesson countdown */}
-          {isFuture && (
-            <View style={styles.statusBadge}>
-              <Text style={styles.statusBadgeText}>
-                {minutesUntilStart <= 120
-                  ? `До начала: ${minutesUntilStart} мин`
-                  : `Начало в ${lesson.start}`}
-              </Text>
-            </View>
-          )}
-
-          {/* Completed lesson label */}
-          {isPast && (
-            <View style={styles.statusBadge}>
-              <Text style={styles.statusBadgePastText}>
-                Пара завершена{" "}
-                {lesson.scheduledEnd ? `в ${lesson.scheduledEnd}` : ""}
-              </Text>
-            </View>
-          )}
-
-          {!isToday && (
-            <View style={styles.statusBadge}>
-              <Text style={styles.statusBadgeText}>
-                {lesson.scheduledEnd
-                  ? `${lesson.start} — ${lesson.scheduledEnd}`
-                  : "90 минут"}
-              </Text>
-            </View>
-          )}
-        </View>
-
-        <Text style={styles.subjectTitleHero} numberOfLines={4}>
-          {lesson.subject.toUpperCase()}
-        </Text>
-
-        {lesson.type ? (
-          <Text style={styles.lessonTypeHero}>
-            {lessonTypeLabel(lesson.type)}
-          </Text>
-        ) : null}
-
-        <Text style={styles.roomHero}>{formatPolytechRoom(lesson.rooms)}</Text>
-
-        {lesson.teachers.length > 0 && (
-          <Text style={styles.teacherHero}>{lesson.teachers.join(", ")}</Text>
-        )}
-
-        <SpringPressable
-          style={styles.openSubjectButton}
-          activeScale={0.95}
-          onPress={() => onOpenSubject?.(lesson)}
-          accessibilityRole="button"
-          accessibilityLabel={`Открыть предмет ${lesson.subject}`}
-        >
-          <Text style={styles.openSubjectText}>Открыть предмет</Text>
-          <ArrowUpRightIcon size={14} color={colors.link} />
-        </SpringPressable>
-      </View>
-
-      {/* Bottom section: Action cue to scroll to "Далее сегодня" full screen */}
-      <View style={styles.heroBottomGroup}>
-        {totalLessonsToday > 1 ? (
-          <TouchableOpacity
-            style={styles.scrollCueContainer}
-            onPress={onScrollCuePress}
-            activeOpacity={0.7}
-            accessibilityRole="button"
-            accessibilityLabel="Открыть расписание на день"
-          >
-            <Text style={styles.scrollCueText}>
-              Далее сегодня ({totalLessonsToday - 1}) ↓
+      <View style={styles.center}>
+        {lesson ? (
+          <>
+            {focusDayLabel && <Text style={styles.muted}>{focusDayLabel}</Text>}
+            <Text style={styles.time}>{lesson.start}</Text>
+            {current?.attachedToFocus && (
+              <View style={styles.underTime}>{progress}</View>
+            )}
+            <Text style={styles.subject}>{lesson.subject}</Text>
+            <Text style={styles.type}>{lessonTypeLabel(lesson.type)}</Text>
+            <Text style={styles.room}>
+              {lesson.rooms.map(teachingRoom).join(" / ") ||
+                "Аудитория не указана"}
             </Text>
-            <ChevronDownIcon size={16} color={colors.link} />
-          </TouchableOpacity>
+            {lesson.teachers.length > 0 && (
+              <Text style={styles.muted}>{lesson.teachers.join(", ")}</Text>
+            )}
+            {lesson.note && <Text style={styles.muted}>{lesson.note}</Text>}
+            <Pressable
+              style={styles.action}
+              onPress={() => onOpenSubject(lesson)}
+              accessibilityRole="button"
+              accessibilityLabel={`Открыть предмет ${lesson.subject}`}
+            >
+              <Text style={styles.actionText}>Открыть предмет</Text>
+              <ArrowUpRightIcon size={14} color={colors.link} />
+            </Pressable>
+          </>
         ) : (
-          <TouchableOpacity
-            style={styles.scrollCueContainer}
-            onPress={onScrollCuePress}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.scrollCueText}>Дедлайны и задания ↓</Text>
-            <ChevronDownIcon size={16} color={colors.link} />
-          </TouchableOpacity>
+          <>
+            <Text style={styles.emptyTitle}>{emptyTitle}</Text>
+            {emptyDetail && <Text style={styles.muted}>{emptyDetail}</Text>}
+          </>
         )}
+      </View>
+
+      <View style={styles.bottom}>
+        {current && !current.attachedToFocus && (
+          <View style={styles.current}>
+            <Text style={styles.muted} numberOfLines={2}>
+              {current.subject}
+            </Text>
+            {progress}
+          </View>
+        )}
+        {following && onOpenFollowing && (
+          <Pressable
+            onPress={onOpenFollowing}
+            style={styles.following}
+            accessibilityRole="button"
+            accessibilityLabel={`Открыть день: ${following.dateLabel ?? dateLabel}, ${following.lesson.start}, ${following.lesson.subject}`}
+          >
+            <View style={styles.followingContent}>
+              <Text style={styles.type}>
+                {following.dateLabel ?? "Дальше"} · {following.lesson.start}
+              </Text>
+              <Text style={styles.followingTitle} numberOfLines={2}>
+                {following.lesson.subject}
+              </Text>
+            </View>
+            <ChevronDownIcon size={16} color={colors.muted} />
+          </Pressable>
+        )}
+        {stale && <Text style={styles.cache}>Сохранённое расписание РУЗ</Text>}
+        <Pressable
+          style={styles.action}
+          onPress={onScrollCuePress}
+          accessibilityRole="button"
+        >
+          <Text style={styles.actionText}>
+            {lesson || totalLessonsToday ? "Все пары на день" : "Расписание и сроки"}
+          </Text>
+          <ChevronDownIcon size={16} color={colors.link} />
+        </Pressable>
       </View>
     </View>
   );
-};
+}
 
 const createStyles = (colors: Palette) =>
   StyleSheet.create({
-    heroFullscreenContainer: {
-      alignItems: "center",
-      justifyContent: "space-between",
-      paddingHorizontal: 20,
-      paddingTop: 16,
-      paddingBottom: 20,
-    },
-    heroTopGroup: {
-      alignItems: "center",
-      paddingTop: 8,
-    },
-    groupCodeEyebrow: {
-      fontSize: 13,
-      fontWeight: "600",
-      color: colors.subtle,
-      letterSpacing: 0.8,
-    },
-    groupCodeRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 4,
-      marginBottom: 4,
-      paddingVertical: 2,
-      paddingHorizontal: 8,
-      borderRadius: 8,
-      backgroundColor: colors.soft,
-    },
-    dateNavRow: {
+    container: { paddingHorizontal: 20, paddingVertical: 10 },
+    dateBlock: { alignItems: "center" },
+    dateNav: {
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "center",
-      gap: 12,
+      gap: 8,
     },
-    heroDayArrow: {
-      width: 28,
-      height: 28,
-      borderRadius: 14,
+    dayArrow: {
+      width: 44,
+      height: 44,
       alignItems: "center",
       justifyContent: "center",
-      backgroundColor: colors.soft,
     },
-    heroDayArrowText: {
-      fontSize: 18,
-      color: colors.muted,
-      fontWeight: "700",
-      lineHeight: 20,
-    },
-    heroTodayChip: {
-      marginTop: 6,
-      paddingVertical: 3,
-      paddingHorizontal: 10,
-      borderRadius: 10,
-      backgroundColor: "rgba(59, 130, 246, 0.15)",
-      borderWidth: 1,
-      borderColor: "rgba(147, 197, 253, 0.3)",
-    },
-    heroTodayChipText: {
-      fontSize: 11,
-      fontWeight: "700",
-      color: colors.link,
-    },
-    dateEyebrow: {
+    arrowText: { fontSize: 23, color: colors.link },
+    date: {
+      flexShrink: 1,
       fontSize: 15,
-      fontWeight: "500",
+      fontWeight: "600",
       color: colors.muted,
-      textTransform: "capitalize",
+      textAlign: "center",
     },
-    heroCenterGroup: {
+    center: {
       alignItems: "center",
       justifyContent: "center",
-      width: "100%",
+      flexGrow: 1,
       paddingVertical: 10,
+      gap: 5,
     },
-    timeWrapper: {
-      alignItems: "center",
-      justifyContent: "center",
-      marginBottom: 12,
-      minWidth: 220,
-    },
-    bigTimeText: {
-      fontSize: 66,
-      fontWeight: "300",
-      color: colors.text,
-      letterSpacing: -1.5,
+    time: {
       fontFamily: "monospace",
-      textAlign: "center",
-    },
-    bigEmptyTime: {
-      fontSize: 52,
+      fontSize: 58,
       fontWeight: "300",
-      color: "#475569",
-      marginVertical: 12,
+      letterSpacing: -3,
+      color: colors.text,
       textAlign: "center",
     },
-    ongoingContainer: {
-      width: "100%",
-      maxWidth: 220,
-      alignItems: "center",
-      marginTop: 6,
-      marginBottom: 6,
-    },
+    underTime: { width: "60%", maxWidth: 220, marginBottom: 7 },
     progressTrack: {
       width: "100%",
       height: 4,
-      backgroundColor: "rgba(255, 255, 255, 0.12)",
+      marginTop: 4,
       borderRadius: 2,
+      backgroundColor: colors.line,
       overflow: "hidden",
-      marginBottom: 8,
     },
     progressBar: {
       height: "100%",
-      backgroundColor: colors.link,
+      backgroundColor: colors.danger,
       borderRadius: 2,
     },
-    ongoingInfoRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 6,
-    },
-    liveDot: {
-      width: 6,
-      height: 6,
-      borderRadius: 3,
-      backgroundColor: "#10b981",
-    },
-    timeRemainingText: {
-      fontSize: 12,
-      fontWeight: "600",
-      color: colors.muted,
-      letterSpacing: 0.2,
-    },
-    statusBadge: {
-      backgroundColor: colors.soft,
-      paddingHorizontal: 12,
-      paddingVertical: 4,
-      borderRadius: 12,
-      marginTop: 4,
-      borderWidth: 1,
-      borderColor: colors.line,
-    },
-    statusBadgeText: {
-      fontSize: 12,
-      fontWeight: "600",
-      color: colors.link,
-    },
-    statusBadgePastText: {
-      fontSize: 12,
-      color: colors.subtle,
-    },
-    subjectTitleHero: {
-      fontSize: 22,
-      fontWeight: "800",
-      color: colors.text,
-      textAlign: "center",
-      lineHeight: 30,
-      letterSpacing: 0.5,
-      marginBottom: 10,
-      maxWidth: 340,
-    },
-    lessonTypeHero: {
-      fontSize: 14,
-      fontWeight: "600",
-      color: colors.danger,
-      textAlign: "center",
-      marginBottom: 6,
-      letterSpacing: 0.3,
-    },
-    roomHero: {
-      fontSize: 15,
-      fontWeight: "500",
-      color: colors.muted,
-      textAlign: "center",
-      marginBottom: 4,
-    },
-    teacherHero: {
-      fontSize: 14,
-      color: colors.muted,
-      textAlign: "center",
-      marginBottom: 14,
-    },
-    openSubjectButton: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "center",
-      gap: 6,
-      paddingVertical: 10,
-      paddingHorizontal: 20,
-      backgroundColor: "rgba(51, 120, 255, 0.1)",
-      borderWidth: 1,
-      borderColor: "rgba(96, 165, 250, 0.25)",
-      borderRadius: 24,
-      marginTop: 2,
-    },
-    openSubjectText: {
-      fontSize: 14,
-      fontWeight: "600",
-      color: colors.link,
-    },
-    heroBottomGroup: {
-      alignItems: "center",
-      paddingBottom: 4,
-    },
-    scrollCueContainer: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "center",
-      gap: 6,
-      paddingVertical: 10,
-      paddingHorizontal: 20,
-      backgroundColor: colors.soft,
-      borderRadius: 20,
-      borderWidth: 1,
-      borderColor: colors.line,
-    },
-    scrollCueText: {
-      fontSize: 13,
-      fontWeight: "600",
-      color: colors.link,
-    },
-    stateContainer: {
-      alignItems: "center",
-      justifyContent: "center",
-      paddingHorizontal: 24,
-      paddingVertical: 32,
-    },
-    stateTitle: {
-      fontSize: 20,
+    subject: {
+      maxWidth: 440,
+      fontSize: 24,
       fontWeight: "700",
+      lineHeight: 30,
+      textAlign: "center",
+      color: colors.text,
+    },
+    type: { fontSize: 13, fontWeight: "600", color: colors.danger },
+    room: { color: colors.text, fontSize: 15, textAlign: "center" },
+    muted: { color: colors.muted, fontSize: 14, textAlign: "center" },
+    emptyTitle: {
       color: colors.text,
       textAlign: "center",
-      marginBottom: 8,
+      fontSize: 22,
+      fontWeight: "700",
     },
-    stateSubtitle: {
+    bottom: { width: "100%", maxWidth: 440, alignSelf: "center", gap: 3 },
+    current: { paddingBottom: 7 },
+    following: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      backgroundColor: colors.soft,
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      borderRadius: 13,
+    },
+    followingContent: { flex: 1 },
+    followingTitle: {
+      marginTop: 3,
+      color: colors.text,
       fontSize: 14,
-      color: colors.muted,
-      textAlign: "center",
-      lineHeight: 20,
-      maxWidth: 320,
+      fontWeight: "600",
     },
+    cache: {
+      color: colors.muted,
+      fontSize: 11,
+      textAlign: "center",
+      marginTop: 4,
+    },
+    action: {
+      minHeight: 44,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 6,
+      paddingHorizontal: 8,
+    },
+    actionText: { color: colors.link, fontSize: 14, fontWeight: "600" },
   });

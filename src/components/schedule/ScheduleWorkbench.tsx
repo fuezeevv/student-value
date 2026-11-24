@@ -79,6 +79,7 @@ export type ScheduleWorkbenchProps = {
   sourceUrl?: string;
   nowMoscowTime?: string; // "HH:mm"
   todayDateStr?: string; // "YYYY-MM-DD"
+  requestedDay?: string;
 };
 
 export function ScheduleWorkbench({
@@ -98,6 +99,7 @@ export function ScheduleWorkbench({
   sourceUrl = "https://ruz.spbstu.ru",
   nowMoscowTime = "12:00",
   todayDateStr,
+  requestedDay,
 }: ScheduleWorkbenchProps) {
   const router = useRouter();
   const [fullSchedule, setFullSchedule] = useState(false);
@@ -137,6 +139,8 @@ export function ScheduleWorkbench({
   // Determine initial selected day: today if present, or next day with lessons, or first day
   const defaultDate = useMemo(() => {
     if (!days.length) return "";
+    if (requestedDay && days.some((day) => day.date === requestedDay))
+      return requestedDay;
     const today = days.find((d) =>
       todayDateStr ? d.date === todayDateStr : d.isToday,
     );
@@ -151,24 +155,20 @@ export function ScheduleWorkbench({
     if (anyWithLessons) return anyWithLessons.date;
 
     return days[0]?.date ?? "";
-  }, [days, todayDateStr]);
+  }, [days, requestedDay, todayDateStr]);
 
   const [selectedDate, setSelectedDate] = useState<string>(defaultDate);
   useEffect(() => setSelectedDate(defaultDate), [defaultDate]);
-  const openSchedule = () => {
-    const focus = scheduleFlow(
-      flowDays ?? days,
-      todayDateStr || "",
-      clock,
-    ).focus;
+  const openSchedule = (targetDay?: string) => {
+    const day =
+      targetDay ??
+      scheduleFlow(flowDays ?? days, todayDateStr ?? "", clock).focus?.date;
     setFullSchedule(true);
-    if (focus && !days.some((day) => day.date === focus.date)) {
-      router.push(
-        `${isGuest ? publicBase : "/"}?week=${focus.date}#full-day-schedule`,
-      );
+    if (day && !days.some((entry) => entry.date === day)) {
+      router.push(`${publicBase ?? "/"}?week=${day}#full-day-schedule`);
       return;
     }
-    if (focus) setSelectedDate(focus.date);
+    if (day) setSelectedDate(day);
     requestAnimationFrame(() =>
       document
         .getElementById("full-day-schedule")
@@ -196,7 +196,7 @@ export function ScheduleWorkbench({
           ?.scrollIntoView({ block: "start" }),
       );
     }
-  }, [days]);
+  }, [requestedDay]);
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
   const [tasks, setTasks] = useState<WorkbenchTask[]>(initialTasks);
   const [xp, setXp] = useState<number>(initialXp);
@@ -367,7 +367,7 @@ export function ScheduleWorkbench({
         className={`schedule-details ${fullSchedule ? "is-open" : ""}`}
       >
         <button type="button" className="flow-collapse" onClick={closeSchedule}>
-          Вернуться в поток ↓
+          Вернуться в поток ↑
         </button>
         {/* ==================== 1. ПОЛИК-СТИЛЬ: ШАПКА НЕДЕЛИ И МЕСЯЦА ==================== */}
         <div className="flex items-center justify-between w-full max-w-xs mx-auto px-1 py-0.5">
@@ -376,7 +376,7 @@ export function ScheduleWorkbench({
             onClick={() => {
               if (days[0])
                 router.push(
-                  `${isGuest ? publicBase : "/"}?week=${addDays(days[0].date, -7)}`,
+                  `${publicBase ?? "/"}?week=${addDays(days[0].date, -7)}#full-day-schedule`,
                 );
             }}
             className="w-8 h-8 shrink-0 rounded-full hover:bg-black/5 dark:hover:bg-white/10 flex items-center justify-center text-base text-[var(--ink-secondary)] hover:text-[var(--ink)] cursor-pointer transition-colors"
@@ -434,7 +434,7 @@ export function ScheduleWorkbench({
             onClick={() => {
               if (days[0])
                 router.push(
-                  `${isGuest ? publicBase : "/"}?week=${addDays(days[0].date, 7)}`,
+                  `${publicBase ?? "/"}?week=${addDays(days[0].date, 7)}#full-day-schedule`,
                 );
             }}
             className="w-8 h-8 shrink-0 rounded-full hover:bg-black/5 dark:hover:bg-white/10 flex items-center justify-center text-base text-[var(--ink-secondary)] hover:text-[var(--ink)] cursor-pointer transition-colors"
@@ -461,6 +461,8 @@ export function ScheduleWorkbench({
               <button
                 key={day.date}
                 type="button"
+                aria-pressed={isActive}
+                data-date={day.date}
                 onClick={() => setSelectedDate(day.date)}
                 className={`flex flex-col items-center justify-center py-2 sm:py-2.5 px-0.5 rounded-2xl transition-all cursor-pointer ${
                   isActive
