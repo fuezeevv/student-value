@@ -1,3 +1,4 @@
+import { GlassFill } from "./GlassFill";
 import {
   useTheme,
   useThemedStyles,
@@ -50,6 +51,7 @@ export const TaskProgressCard: React.FC<TaskProgressCardProps> = ({
 }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
+  const { isDark } = useTheme();
 
   const status = progress?.status || "NOT_STARTED";
   const isAccepted = status === "ACCEPTED";
@@ -58,6 +60,7 @@ export const TaskProgressCard: React.FC<TaskProgressCardProps> = ({
 
   return (
     <View style={styles.card}>
+      <GlassFill dark={isDark} />
       <View style={styles.headerRow}>
         <View style={styles.badgeGroup}>
           <Text style={styles.subjectText}>{subject}</Text>
@@ -205,12 +208,13 @@ export const TaskProgressCard: React.FC<TaskProgressCardProps> = ({
 const createStyles = (colors: Palette) =>
   StyleSheet.create({
     card: {
+      overflow: "hidden",
       backgroundColor: colors.surface,
       borderRadius: 16,
       padding: 16,
       marginVertical: 8,
       borderWidth: 1,
-      borderColor: "#223554",
+      borderColor: colors.line,
     },
     headerRow: {
       flexDirection: "row",

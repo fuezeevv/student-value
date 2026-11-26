@@ -1,3 +1,4 @@
+import { GlassFill } from "../GlassFill";
 import { DEVELOPMENT_SERVER_CONTROLS } from "../../api/client";
 import {
   useTheme,
@@ -49,7 +50,7 @@ export const ProfileTab = React.memo<ProfileTabProps>(
     onOpenCampusMap,
     onOpenNews,
   }) => {
-    const { colors, choice, setChoice } = useTheme();
+    const { isDark, colors, choice, setChoice } = useTheme();
     const [managementOpen, setManagementOpen] = useState(false);
     const styles = useThemedStyles(createStyles);
 
@@ -104,6 +105,7 @@ export const ProfileTab = React.memo<ProfileTabProps>(
         </View>
 
         <View style={styles.card}>
+          <GlassFill dark={isDark} />
           <Text style={styles.cardSectionTitle}>Оформление приложения</Text>
           <View
             style={{
@@ -162,6 +164,7 @@ export const ProfileTab = React.memo<ProfileTabProps>(
         />
         {/* Account Card */}
         <View style={styles.card}>
+          <GlassFill dark={isDark} />
           <View style={styles.accountRow}>
             <View style={styles.avatarCircle}>
               <Text style={styles.avatarInitials}>
@@ -211,6 +214,7 @@ export const ProfileTab = React.memo<ProfileTabProps>(
         </View>
 
         <View style={styles.card}>
+          <GlassFill dark={isDark} />
           <Text style={styles.cardSectionTitle}>Возможности сайта</Text>
           <Text style={styles.serverInfoText}>
             Эти разделы откроются в браузере. Вход на сайте отдельный; нативный
@@ -234,6 +238,7 @@ export const ProfileTab = React.memo<ProfileTabProps>(
 
         {/* Group Card */}
         <View style={styles.card}>
+          <GlassFill dark={isDark} />
           <Text style={styles.cardSectionTitle}>Учебная группа</Text>
           <View style={styles.groupInfoRow}>
             <View>
@@ -252,6 +257,7 @@ export const ProfileTab = React.memo<ProfileTabProps>(
 
         {/* Campus Services Card */}
         <View style={styles.card}>
+          <GlassFill dark={isDark} />
           <Text style={styles.cardSectionTitle}>Сервисы Политеха</Text>
 
           {onOpenCampusMap && (
@@ -304,6 +310,7 @@ export const ProfileTab = React.memo<ProfileTabProps>(
 
         {/* Offline Storage Card */}
         <View style={styles.card}>
+          <GlassFill dark={isDark} />
           <Text style={styles.cardSectionTitle}>Данные без интернета</Text>
           <View style={styles.statRow}>
             <Text style={styles.statLabel}>Сохранено пар в расписании:</Text>
@@ -332,6 +339,7 @@ export const ProfileTab = React.memo<ProfileTabProps>(
         {/* Server Endpoint Card */}
         {DEVELOPMENT_SERVER_CONTROLS ? (
           <View style={styles.card}>
+            <GlassFill dark={isDark} />
             <Text style={styles.cardSectionTitle}>Серверный эндпоинт</Text>
             <Text style={styles.serverInfoText}>Текущий: {apiOrigin}</Text>
 
@@ -386,7 +394,7 @@ const createStyles = (colors: Palette) =>
   StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: colors.canvas,
+      backgroundColor: "transparent",
     },
     contentContainer: {
       padding: 20,
@@ -406,8 +414,9 @@ const createStyles = (colors: Palette) =>
       color: colors.muted,
     },
     card: {
+      overflow: "hidden",
       backgroundColor: colors.surface,
-      borderRadius: 20,
+      borderRadius: 24,
       padding: 18,
       marginBottom: 16,
       borderWidth: 1,
@@ -422,7 +431,7 @@ const createStyles = (colors: Palette) =>
       width: 48,
       height: 48,
       borderRadius: 24,
-      backgroundColor: "#3378ff",
+      backgroundColor: "#4556cb",
       alignItems: "center",
       justifyContent: "center",
       marginRight: 14,
@@ -446,7 +455,7 @@ const createStyles = (colors: Palette) =>
       color: colors.muted,
     },
     loginButton: {
-      backgroundColor: "#3378ff",
+      backgroundColor: "#4556cb",
       paddingVertical: 12,
       borderRadius: 14,
       alignItems: "center",
@@ -499,7 +508,7 @@ const createStyles = (colors: Palette) =>
       paddingVertical: 8,
       borderRadius: 14,
       borderWidth: 1,
-      borderColor: "#223554",
+      borderColor: colors.line,
     },
     changeGroupText: {
       fontSize: 13,
@@ -555,11 +564,11 @@ const createStyles = (colors: Palette) =>
       paddingVertical: 8,
       borderRadius: 12,
       borderWidth: 1,
-      borderColor: "#223554",
+      borderColor: colors.line,
     },
     originChipActive: {
       backgroundColor: "rgba(51, 120, 255, 0.25)",
-      borderColor: "#3378ff",
+      borderColor: colors.link,
     },
     originChipText: {
       fontSize: 12,

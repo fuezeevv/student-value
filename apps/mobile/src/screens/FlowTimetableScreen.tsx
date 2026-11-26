@@ -1,4 +1,4 @@
-import Svg, { Defs, LinearGradient, Rect, Stop } from "react-native-svg";
+import { GradientFill } from "../components/GradientFill";
 import { focusScope } from "../focus/storage";
 import { useNetInfo } from "@react-native-community/netinfo";
 import { BrandMark, OfflineMark } from "../components/BrandMark";
@@ -73,8 +73,7 @@ import { ProfileTab } from "../components/tabs/ProfileTab";
 import { SpringPressable } from "../components/SpringPressable";
 import { WellbeingModal } from "../components/WellbeingModal";
 import { AppInfoModal } from "../components/AppInfoModal";
-import { AmbientBottomGlow } from "../components/AmbientBottomGlow";
-import { MapIcon, NewsIcon, ChevronDownIcon } from "../components/NativeIcons";
+import { NewsIcon, ChevronDownIcon } from "../components/NativeIcons";
 import {
   scheduleDeadlineReminder,
   activeReminderFlags,
@@ -213,13 +212,12 @@ export const FlowTimetableScreen: React.FC = () => {
   const [nowMoscowMin, setNowMoscowMin] = useState<number>(() =>
     getMoscowNowMinutes(),
   );
-  const [selectedDate, setSelectedDate] = useState<string>(() =>
-    getMoscowDateString(),
-  );
+  const [browsedDate, setSelectedDate] = useState<string | null>(null);
+  const selectedDate = browsedDate ?? todayStr;
+  const followsClock = browsedDate === null;
 
   const [apiOrigin, setApiOrigin] = useState("https://studentvalue1984.eu.cc");
   const [heroHeight, setHeroHeight] = useState(0);
-  const isSelectedToday = selectedDate === todayStr;
   const weekStart = weekStartFor(selectedDate);
   const selection = {
     group: selectedGroup,
@@ -251,11 +249,11 @@ export const FlowTimetableScreen: React.FC = () => {
     [days, todayStr, nowMoscowMin],
   );
   const needNextWeek =
-    isSelectedToday &&
+    followsClock &&
     isLoaded &&
     (!liveFlow.focus || liveFlow.focus === liveFlow.current);
   const lookahead = useTimetableWeek(
-    { ...selection, week: isSelectedToday ? addDaysTo(weekStart, 7) : "" },
+    { ...selection, week: followsClock ? addDaysTo(weekStart, 7) : "" },
     !isOffline && needNextWeek,
   );
   const flow = useMemo(
@@ -269,12 +267,12 @@ export const FlowTimetableScreen: React.FC = () => {
         : liveFlow,
     [days, todayStr, nowMoscowMin, lookahead.week, liveFlow],
   );
-  const focus = isSelectedToday
+  const focus = followsClock
     ? (flow.current ?? flow.focus)
     : lessons[0]
       ? { date: selectedDate, lesson: lessons[0] }
       : null;
-  const following = isSelectedToday
+  const following = followsClock
     ? flow.current && flow.focus !== flow.current
       ? (flow.focus ?? undefined)
       : flow.following[0]
@@ -282,7 +280,7 @@ export const FlowTimetableScreen: React.FC = () => {
       ? { date: selectedDate, lesson: lessons[1] }
       : undefined;
   const currentProgress =
-    isSelectedToday && flow.current
+    followsClock && flow.current
       ? calculateLessonProgress(flow.current.lesson.start, nowMoscowMin)
           .progressPercent
       : undefined;
@@ -599,13 +597,7 @@ export const FlowTimetableScreen: React.FC = () => {
       const newToday = getMoscowDateString();
       const newMin = getMoscowNowMinutes();
       setNowMoscowMin(newMin);
-      setTodayStr((prevToday) => {
-        if (prevToday !== newToday) {
-          setSelectedDate((curr) => (curr === prevToday ? newToday : curr));
-          return newToday;
-        }
-        return prevToday;
-      });
+      setTodayStr(newToday);
     };
 
     const interval = setInterval(updateTime, 10000);
@@ -682,26 +674,26 @@ export const FlowTimetableScreen: React.FC = () => {
   };
 
   const handlePrevDay = useCallback(() => {
-    setSelectedDate((prev) => addDaysTo(prev, -1));
-  }, []);
+    setSelectedDate((prev) => addDaysTo(prev ?? todayStr, -1));
+  }, [todayStr]);
 
   const handleNextDay = useCallback(() => {
-    setSelectedDate((prev) => addDaysTo(prev, 1));
-  }, []);
+    setSelectedDate((prev) => addDaysTo(prev ?? todayStr, 1));
+  }, [todayStr]);
 
   const daySwipe = useDaySwipe(handlePrevDay, handleNextDay);
 
   const handlePrevWeek = useCallback(() => {
-    setSelectedDate((prev) => addDaysTo(prev, -7));
-  }, []);
+    setSelectedDate((prev) => addDaysTo(prev ?? todayStr, -7));
+  }, [todayStr]);
 
   const handleNextWeek = useCallback(() => {
-    setSelectedDate((prev) => addDaysTo(prev, 7));
-  }, []);
+    setSelectedDate((prev) => addDaysTo(prev ?? todayStr, 7));
+  }, [todayStr]);
 
   const handleResetToday = useCallback(() => {
-    setSelectedDate(todayStr);
-  }, [todayStr]);
+    setSelectedDate(null);
+  }, []);
 
   const monthYearLabel = useMemo(() => {
     return getMonthYearLabel(selectedDate);
@@ -915,6 +907,14 @@ export const FlowTimetableScreen: React.FC = () => {
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar style={isDark ? "light" : "dark"} />
+      <GradientFill
+        diagonal
+        stops={[
+          { offset: 0, color: colors.canvas },
+          { offset: 0.6, color: isDark ? "#202955" : "#e0e7ff" },
+          { offset: 1, color: isDark ? "#22274a" : "#f5f2ff" },
+        ]}
+      />
 
       {/* Top Header - clean, minimal, camera notch protected */}
       <View style={styles.topHeader}>
@@ -930,7 +930,7 @@ export const FlowTimetableScreen: React.FC = () => {
           accessibilityRole="button"
           accessibilityLabel="О приложении и статус сети"
         >
-          <BrandMark size={34} />
+          <BrandMark size={33} />
         </TouchableOpacity>
 
         {/* Schedule Selector Chip (current group or teacher) */}
@@ -941,10 +941,15 @@ export const FlowTimetableScreen: React.FC = () => {
           accessibilityRole="button"
           accessibilityLabel={`Расписание: ${selectedGroup}. Нажмите для смены группы или преподавателя.`}
         >
-          <Text style={styles.headerScheduleText} numberOfLines={1}>
-            {selectedGroup}
-          </Text>
-          <ChevronDownIcon size={12} color={colors.link} />
+          <View style={styles.headerIdentity}>
+            <Text style={styles.headerBrand}>Student Value</Text>
+            <View style={styles.headerGroup}>
+              <Text style={styles.headerScheduleText} numberOfLines={1}>
+                {selectedGroup}
+              </Text>
+              <ChevronDownIcon size={12} color={colors.link} />
+            </View>
+          </View>
         </TouchableOpacity>
 
         {/* Right header actions: Campus Map, News, Wellbeing badge */}
@@ -961,22 +966,12 @@ export const FlowTimetableScreen: React.FC = () => {
           ) : null}
           <TouchableOpacity
             style={styles.headerIconBtn}
-            onPress={() => setMapModalVisible(true)}
-            activeOpacity={0.7}
-            accessibilityRole="button"
-            accessibilityLabel="Карта кампуса СПбПУ"
-          >
-            <MapIcon size={18} color={colors.muted} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.headerIconBtn}
             onPress={() => setNewsModalVisible(true)}
             activeOpacity={0.7}
             accessibilityRole="button"
             accessibilityLabel="Новости и анонсы"
           >
-            <NewsIcon size={18} color={colors.muted} />
+            <NewsIcon size={19} color={colors.text} />
           </TouchableOpacity>
 
           {/* Circular Wellbeing / Focus Badge (matches '0' in user's design) */}
@@ -1021,9 +1016,9 @@ export const FlowTimetableScreen: React.FC = () => {
         <View
           style={[styles.tabPane, activeTab !== "flow" && styles.hiddenPane]}
           pointerEvents={activeTab === "flow" ? "auto" : "none"}
+          {...daySwipe}
         >
           <ScrollView
-            {...daySwipe.panHandlers}
             ref={scrollRef}
             style={styles.scrollArea}
             contentContainerStyle={styles.scrollContent}
@@ -1040,32 +1035,16 @@ export const FlowTimetableScreen: React.FC = () => {
               />
             }
           >
-            <View>
-              <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-                <Svg width="100%" height="100%">
-                  <Defs>
-                    <LinearGradient
-                      id="flowSky"
-                      x1="0%"
-                      y1="0%"
-                      x2="18%"
-                      y2="100%"
-                    >
-                      <Stop
-                        offset="0"
-                        stopColor={isDark ? colors.canvas : "#d0dbff"}
-                      />
-                      <Stop
-                        offset="0.48"
-                        stopColor={isDark ? "#526dd2" : "#adbef7"}
-                      />
-                      <Stop offset="1" stopColor="#e6eaff" />
-                    </LinearGradient>
-                  </Defs>
-                  <Rect width="100%" height="100%" fill="url(#flowSky)" />
-                </Svg>
-              </View>
+            <View style={{ minHeight: containerHeight }}>
+              <GradientFill
+                stops={[
+                  { offset: 0, color: isDark ? colors.canvas : "#d0dbff" },
+                  { offset: 0.48, color: isDark ? "#526dd2" : "#adbef7" },
+                  { offset: 1, color: "#e6eaff" },
+                ]}
+              />
               <View
+                style={styles.heroSlot}
                 onLayout={(event) =>
                   setHeroHeight(event.nativeEvent.layout.height)
                 }
@@ -1078,7 +1057,7 @@ export const FlowTimetableScreen: React.FC = () => {
                       : undefined
                   }
                   dateLabel={formatFlowDate(selectedDate)}
-                  isToday={isSelectedToday}
+                  isToday={followsClock}
                   isLoaded={isLoaded}
                   totalLessonsToday={lessons.length}
                   currentProgress={currentProgress}
@@ -1100,11 +1079,8 @@ export const FlowTimetableScreen: React.FC = () => {
                         : undefined
                       : timetable.error
                   }
-                  containerHeight={Math.max(0, containerHeight - 148)}
                   onOpenSubject={handleOpenLesson}
-                  onPrevDay={handlePrevDay}
-                  onNextDay={handleNextDay}
-                  onResetToday={handleResetToday}
+                  onResetToday={followsClock ? undefined : handleResetToday}
                   onScrollCuePress={() => openDaySchedule(focus?.date)}
                   onOpenFollowing={
                     following
@@ -1117,7 +1093,10 @@ export const FlowTimetableScreen: React.FC = () => {
               <DaySwitcher
                 days={daySwitcherDays}
                 selectedDate={selectedDate}
-                onSelectDate={setSelectedDate}
+                onSelectDate={(day) => {
+                  setSelectedDate(day);
+                  scrollRef.current?.scrollTo({ y: 0, animated: false });
+                }}
                 onPrevWeek={handlePrevWeek}
                 onNextWeek={handleNextWeek}
                 monthYearLabel={monthYearLabel}
@@ -1265,9 +1244,6 @@ export const FlowTimetableScreen: React.FC = () => {
         </View>
       </View>
 
-      {/* Ambient bottom reflection glow */}
-      <AmbientBottomGlow />
-
       {/* Persistent Bottom Navigation Bar */}
       <BottomNavBar activeTab={activeTab} onSelectTab={handleSelectTab} />
 
@@ -1388,9 +1364,10 @@ const createStyles = (colors: Palette) =>
     topHeader: {
       flexDirection: "row",
       alignItems: "center",
-      justifyContent: "space-between",
+      gap: 10,
       paddingHorizontal: 16,
-      paddingVertical: 10,
+      paddingTop: 10,
+      paddingBottom: 12,
       backgroundColor: colors.canvas,
     },
     logoButton: {
@@ -1401,23 +1378,15 @@ const createStyles = (colors: Palette) =>
       height: 34,
       borderRadius: 8,
     },
-    headerScheduleChip: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 6,
-      backgroundColor: colors.soft,
-      paddingVertical: 6,
-      paddingHorizontal: 12,
-      borderRadius: 16,
-      borderWidth: 1,
-      borderColor: colors.line,
-      maxWidth: 165,
-    },
+    headerScheduleChip: { flex: 1, minHeight: 44, justifyContent: "center" },
+    headerIdentity: { minWidth: 0, gap: 2 },
+    headerBrand: { color: colors.text, fontWeight: "800", fontSize: 17 },
+    headerGroup: { flexDirection: "row", alignItems: "center", gap: 5 },
     headerScheduleText: {
+      flexShrink: 1,
       fontSize: 12,
-      fontWeight: "700",
-      color: colors.text,
-      fontFamily: "monospace",
+      fontWeight: "600",
+      color: colors.muted,
     },
     topHeaderRight: {
       flexDirection: "row",
@@ -1481,6 +1450,7 @@ const createStyles = (colors: Palette) =>
       borderRadius: 3.5,
       backgroundColor: "#f59e0b",
     },
+    heroSlot: { flexGrow: 1 },
     bodyContainer: {
       flex: 1,
     },
@@ -1497,7 +1467,8 @@ const createStyles = (colors: Palette) =>
       paddingBottom: 40,
     },
     page2Container: {
-      paddingTop: 8,
+      paddingTop: 18,
+      paddingHorizontal: 16,
     },
     page2HeaderRow: {
       flexDirection: "row",

@@ -1,153 +1,89 @@
-import {
-  useTheme,
-  useThemedStyles,
-  type Palette,
-} from "../theme/ThemeProvider";
-import React from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  Platform,
-  TouchableOpacity,
-  type StyleProp,
-  type ViewStyle,
-} from "react-native";
-import { ListIcon, BookIcon, ClockIcon, ProfileIcon } from "./NativeIcons";
+import { memo } from "react";
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import Svg, { Path } from "react-native-svg";
+import { BookIcon, ProfileIcon } from "./NativeIcons";
+import { GlassFill } from "./GlassFill";
 
 export type NavTab = "flow" | "subjects" | "deadlines" | "profile";
 
-export interface BottomNavBarProps {
-  activeTab: NavTab;
-  onSelectTab: (tab: NavTab) => void;
-  style?: StyleProp<ViewStyle>;
-}
-
-interface TabDef {
-  key: NavTab;
-  label: string;
-  renderIcon: (active: boolean) => React.ReactNode;
-}
-
-const TABS: TabDef[] = [
-  {
-    key: "flow",
-    label: "Поток",
-    renderIcon: (active) => (
-      <ListIcon size={20} color={active ? "#1e1b4b" : "#64748b"} />
-    ),
-  },
-  {
-    key: "subjects",
-    label: "Предметы",
-    renderIcon: (active) => (
-      <BookIcon size={20} color={active ? "#1e1b4b" : "#64748b"} />
-    ),
-  },
+const tabs = [
+  { key: "flow", label: "Поток", path: "M3 10 12 3l9 7v10H3z M9 20v-6h6v6" },
+  { key: "subjects", label: "Предметы", icon: BookIcon },
   {
     key: "deadlines",
     label: "Сроки",
-    renderIcon: (active) => (
-      <ClockIcon size={20} color={active ? "#1e1b4b" : "#64748b"} />
-    ),
+    path: "M4 6h16v14H4z M4 10h16 M8 3v5 M16 3v5 M8 14h2 M14 14h2",
   },
-  {
-    key: "profile",
-    label: "Профиль",
-    renderIcon: (active) => (
-      <ProfileIcon size={20} color={active ? "#1e1b4b" : "#64748b"} />
-    ),
+  { key: "profile", label: "Профиль", icon: ProfileIcon },
+] as const;
+
+export const BottomNavBar = memo(function BottomNavBar({
+  activeTab,
+  onSelectTab,
+}: {
+  activeTab: NavTab;
+  onSelectTab: (tab: NavTab) => void;
+}) {
+  return (
+    <View style={styles.bar}>
+      <GlassFill />
+      {tabs.map((tab) => {
+        const selected = activeTab === tab.key;
+        const color = selected ? "#ffffff" : "#414e76";
+        return (
+          <TouchableOpacity
+            key={tab.key}
+            onPress={() => onSelectTab(tab.key)}
+            style={[styles.tab, selected && styles.selected]}
+            accessibilityRole="tab"
+            accessibilityState={{ selected }}
+            accessibilityLabel={tab.label}
+          >
+            {"icon" in tab ? (
+              <tab.icon size={20} color={color} />
+            ) : (
+              <Svg width={20} height={20} viewBox="0 0 24 24">
+                <Path
+                  d={tab.path}
+                  stroke={color}
+                  strokeWidth={1.8}
+                  fill="none"
+                  strokeLinejoin="round"
+                  strokeLinecap="round"
+                />
+              </Svg>
+            )}
+            <Text style={[styles.label, { color }]}>{tab.label}</Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+});
+
+const styles = StyleSheet.create({
+  bar: {
+    flexDirection: "row",
+    marginHorizontal: 12,
+    marginTop: 5,
+    marginBottom: 9,
+    padding: 4,
+    borderRadius: 28,
+    borderWidth: 1,
+    borderColor: "#ffffff",
+    overflow: "hidden",
+    backgroundColor: "#e9eeff",
   },
-];
-
-export const BottomNavBar = React.memo<BottomNavBarProps>(
-  ({ activeTab, onSelectTab, style }) => {
-    const { colors } = useTheme();
-    const styles = useThemedStyles(createStyles);
-
-    return (
-      <View style={[styles.bottomBarContainer, style]}>
-        {TABS.map((tab) => {
-          const isActive = activeTab === tab.key;
-          return (
-            <TouchableOpacity
-              key={tab.key}
-              onPress={() => onSelectTab(tab.key)}
-              style={styles.tabItem}
-              activeOpacity={0.7}
-              accessibilityRole="tab"
-              accessibilityState={{ selected: isActive }}
-              accessibilityLabel={`Вкладка ${tab.label}`}
-            >
-              <View style={[styles.iconWrapper, isActive && styles.activePill]}>
-                {tab.renderIcon(isActive)}
-              </View>
-              <Text
-                style={[
-                  styles.tabLabel,
-                  isActive ? styles.activeLabel : styles.inactiveLabel,
-                ]}
-              >
-                {tab.label}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-    );
+  tab: {
+    flex: 1,
+    minHeight: 48,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 24,
+    gap: 3,
+    paddingHorizontal: 2,
+    paddingVertical: 4,
   },
-);
-
-const createStyles = (colors: Palette) =>
-  StyleSheet.create({
-    bottomBarContainer: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-around",
-      backgroundColor: colors.navigation,
-      borderTopWidth: 1,
-      borderTopColor: "rgba(217, 133, 159, 0.12)",
-      paddingTop: 8,
-      paddingBottom: Platform.OS === "ios" ? 24 : 12,
-      paddingHorizontal: 8,
-      elevation: 8,
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: -2 },
-      shadowOpacity: 0.3,
-      shadowRadius: 6,
-    },
-    tabItem: {
-      flex: 1,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    tabItemPressed: {
-      opacity: 0.75,
-    },
-    iconWrapper: {
-      width: 60,
-      height: 32,
-      borderRadius: 16,
-      alignItems: "center",
-      justifyContent: "center",
-      marginBottom: 4,
-      overflow: "hidden",
-    },
-    activePill: {
-      backgroundColor: "#c7d2fe",
-      borderRadius: 16,
-      overflow: "hidden",
-    },
-    tabLabel: {
-      fontSize: 12,
-      letterSpacing: 0.2,
-    },
-    activeLabel: {
-      color: colors.text,
-      fontWeight: "700",
-    },
-    inactiveLabel: {
-      color: colors.subtle,
-      fontWeight: "500",
-    },
-  });
+  selected: { backgroundColor: "#4556cb" },
+  label: { fontSize: 11, fontWeight: "700", textAlign: "center" },
+});

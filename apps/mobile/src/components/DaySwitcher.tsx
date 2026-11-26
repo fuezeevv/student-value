@@ -1,3 +1,4 @@
+import { GlassFill } from "./GlassFill";
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 
@@ -32,6 +33,7 @@ export const DaySwitcher: React.FC<DaySwitcherProps> = ({
 
   return (
     <View style={styles.container}>
+      <GlassFill />
       {/* Month, Parity and Week navigation */}
       <View style={styles.headerRow}>
         <View style={styles.arrowGroup}>
@@ -130,10 +132,10 @@ const createStyles = StyleSheet.create({
   container: {
     paddingVertical: 8,
     paddingHorizontal: 8,
-    backgroundColor: "rgba(249,250,255,0.82)",
-    borderRadius: 18,
+    overflow: "hidden",
+    borderRadius: 24,
     marginHorizontal: 16,
-    marginBottom: 16,
+    marginBottom: 8,
     borderWidth: 1,
     borderColor: "#f7f8ff",
   },
@@ -141,7 +143,7 @@ const createStyles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 10,
+    marginBottom: 2,
     paddingHorizontal: 4,
   },
   arrowGroup: {

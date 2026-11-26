@@ -1,3 +1,4 @@
+import { GlassFill } from "../GlassFill";
 import {
   useTheme,
   useThemedStyles,
@@ -29,7 +30,7 @@ interface SubjectSummary {
 
 export const SubjectsTab = React.memo<SubjectsTabProps>(
   ({ lessons, tasks, groupCode, onOpenLesson, onOpenSubjectTasks }) => {
-    const { colors } = useTheme();
+    const { isDark, colors } = useTheme();
     const styles = useThemedStyles(createStyles);
 
     // Aggregate subjects from timetable lessons (memoized)
@@ -116,6 +117,7 @@ export const SubjectsTab = React.memo<SubjectsTabProps>(
               accessibilityRole="button"
               accessibilityLabel={`Предмет ${s.title}`}
             >
+              <GlassFill dark={isDark} />
               <View style={styles.cardHeader}>
                 <View style={styles.typeRow}>
                   {s.types.map((type) => (
@@ -167,7 +169,7 @@ const createStyles = (colors: Palette) =>
   StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: colors.canvas,
+      backgroundColor: "transparent",
     },
     contentContainer: {
       padding: 20,
@@ -187,8 +189,9 @@ const createStyles = (colors: Palette) =>
       color: colors.muted,
     },
     subjectCard: {
+      overflow: "hidden",
       backgroundColor: colors.surface,
-      borderRadius: 20,
+      borderRadius: 24,
       padding: 18,
       marginBottom: 14,
       borderWidth: 1,

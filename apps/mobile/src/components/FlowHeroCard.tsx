@@ -4,11 +4,8 @@ import {
   type MobileLesson,
 } from "@studentvalue/mobile-contracts";
 import { View, Text, StyleSheet, Pressable } from "react-native";
-import {
-  useTheme,
-  useThemedStyles,
-  type Palette,
-} from "../theme/ThemeProvider";
+import { useTheme } from "../theme/ThemeProvider";
+import { GlassFill } from "./GlassFill";
 import { ArrowUpRightIcon, ChevronDownIcon } from "./NativeIcons";
 
 type FlowHeroCardProps = {
@@ -23,13 +20,10 @@ type FlowHeroCardProps = {
   stale: boolean;
   loading: boolean;
   error?: string;
-  containerHeight: number;
   onOpenSubject: (lesson: MobileLesson) => void;
   onScrollCuePress: () => void;
   onOpenFollowing?: () => void;
-  onPrevDay: () => void;
-  onNextDay: () => void;
-  onResetToday: () => void;
+  onResetToday?: () => void;
 };
 
 export function FlowHeroCard({
@@ -44,16 +38,13 @@ export function FlowHeroCard({
   stale,
   loading,
   error,
-  containerHeight,
   onOpenSubject,
   onScrollCuePress,
   onOpenFollowing,
-  onPrevDay,
-  onNextDay,
   onResetToday,
 }: FlowHeroCardProps) {
   const { isDark } = useTheme();
-  const styles = useThemedStyles(createStyles);
+
   const emptyTitle = !isLoaded
     ? loading
       ? "Загружаем расписание"
@@ -88,33 +79,15 @@ export function FlowHeroCard({
   );
 
   return (
-    <View style={[styles.container, { minHeight: containerHeight || 560 }]}>
+    <View style={styles.container}>
       <View style={styles.dateBlock}>
-        <View style={styles.dateNav}>
-          <Pressable
-            onPress={onPrevDay}
-            style={styles.dayArrow}
-            accessibilityRole="button"
-            accessibilityLabel="Предыдущий день"
-          >
-            <Text style={[styles.arrowText, isDark && styles.darkDate]}>‹</Text>
-          </Pressable>
-          <Text style={[styles.date, isDark && styles.darkDate]}>
-            {dateLabel}
-          </Text>
-          <Pressable
-            onPress={onNextDay}
-            style={styles.dayArrow}
-            accessibilityRole="button"
-            accessibilityLabel="Следующий день"
-          >
-            <Text style={[styles.arrowText, isDark && styles.darkDate]}>›</Text>
-          </Pressable>
-        </View>
-        {!isToday && (
+        <Text style={[styles.date, isDark && styles.darkDate]}>
+          {dateLabel}
+        </Text>
+        {onResetToday && (
           <Pressable
             onPress={onResetToday}
-            style={styles.action}
+            style={styles.todayAction}
             accessibilityRole="button"
           >
             <Text style={[styles.actionText, isDark && styles.darkDate]}>
@@ -125,6 +98,7 @@ export function FlowHeroCard({
       </View>
 
       <View style={styles.center}>
+        <GlassFill />
         {lesson ? (
           <>
             <Text style={styles.eyebrow}>
@@ -148,7 +122,9 @@ export function FlowHeroCard({
             {lesson.teachers.length > 0 && (
               <Text style={styles.muted}>{lesson.teachers.join(", ")}</Text>
             )}
-            {lesson.note && <Text style={styles.muted}>{lesson.note}</Text>}
+            {lesson.note && lesson.note.trim().toLowerCase() !== "поток" && (
+              <Text style={styles.muted}>{lesson.note}</Text>
+            )}
             <Pressable
               style={[styles.action, styles.subjectAction]}
               onPress={() => onOpenSubject(lesson)}
@@ -175,6 +151,7 @@ export function FlowHeroCard({
             accessibilityRole="button"
             accessibilityLabel={`Открыть день: ${following.dateLabel ?? dateLabel}, ${following.lesson.start}, ${following.lesson.subject}`}
           >
+            <GlassFill />
             <View style={styles.followingContent}>
               <Text style={styles.eyebrow}>
                 {following.dateLabel ?? "Дальше"} · {following.lesson.start}
@@ -204,115 +181,109 @@ export function FlowHeroCard({
   );
 }
 
-const createStyles = (colors: Palette) =>
-  StyleSheet.create({
-    container: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 4 },
-    darkDate: { color: "#f0f3ff" },
-    eyebrow: { fontSize: 14, fontWeight: "600", color: "#3d476a" },
-    dateBlock: { alignItems: "center" },
-    dateNav: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "center",
-      gap: 8,
-    },
-    dayArrow: {
-      width: 44,
-      height: 44,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    arrowText: { fontSize: 23, color: colors.link },
-    date: {
-      flexShrink: 1,
-      fontSize: 15,
-      fontWeight: "600",
-      color: colors.muted,
-      textAlign: "center",
-    },
-    center: {
-      justifyContent: "center",
-      flexGrow: 1,
-      paddingHorizontal: 22,
-      paddingVertical: 22,
-      marginVertical: 5,
-      backgroundColor: "rgba(245,247,255,0.92)",
-      borderRadius: 27,
-      borderWidth: 1,
-      borderColor: "rgba(255,255,255,0.8)",
-      gap: 6,
-    },
-    time: {
-      fontVariant: ["tabular-nums"],
-      fontSize: 60,
-      fontWeight: "800",
-      letterSpacing: -3,
-      color: "#161e3a",
-      textAlign: "left",
-    },
-    underTime: { width: "100%", marginBottom: 7 },
-    progressTrack: {
-      width: "100%",
-      height: 4,
-      marginTop: 4,
-      borderRadius: 2,
-      backgroundColor: "#c1c9e8",
-      overflow: "hidden",
-    },
-    progressBar: {
-      height: "100%",
-      backgroundColor: "#922454",
-      borderRadius: 2,
-    },
-    subject: {
-      maxWidth: 440,
-      fontSize: 24,
-      fontWeight: "700",
-      lineHeight: 30,
-      textAlign: "left",
-      color: "#161e3a",
-    },
-    type: { fontSize: 13, fontWeight: "700", color: "#334597" },
-    room: { color: "#303a59", fontSize: 15 },
-    muted: { color: "#485373", fontSize: 13 },
-    emptyTitle: {
-      color: "#161e3a",
-      textAlign: "left",
-      fontSize: 22,
-      fontWeight: "700",
-    },
-    bottom: { width: "100%", maxWidth: 440, alignSelf: "center", gap: 3 },
-    current: { paddingBottom: 7 },
-    following: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 10,
-      backgroundColor: "rgba(245,247,255,0.77)",
-      paddingHorizontal: 14,
-      paddingVertical: 10,
-      borderRadius: 13,
-    },
-    followingContent: { flex: 1 },
-    followingTitle: {
-      marginTop: 3,
-      color: "#161e3a",
-      fontSize: 14,
-      fontWeight: "600",
-    },
-    cache: {
-      color: "#414c74",
-      fontSize: 11,
-      textAlign: "center",
-      marginTop: 4,
-    },
-    action: {
-      minHeight: 44,
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "center",
-      gap: 6,
-      paddingHorizontal: 8,
-    },
-    subjectAction: { alignSelf: "flex-start", paddingHorizontal: 0 },
-    actionText: { color: "#273ca7", fontSize: 14, fontWeight: "700" },
-  });
+const styles = StyleSheet.create({
+  container: { flexGrow: 1, paddingHorizontal: 16 },
+  darkDate: { color: "#f0f3ff" },
+  eyebrow: { fontSize: 14, fontWeight: "600", color: "#3d476a" },
+  dateBlock: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    minHeight: 42,
+    paddingHorizontal: 4,
+    gap: 8,
+    marginBottom: 8,
+  },
+  date: { flexShrink: 1, fontSize: 16, fontWeight: "600", color: "#344270" },
+  todayAction: {
+    minHeight: 44,
+    justifyContent: "center",
+    paddingHorizontal: 6,
+  },
+  center: {
+    justifyContent: "center",
+    flexGrow: 1,
+    paddingHorizontal: 22,
+    paddingVertical: 13,
+    marginBottom: 8,
+    overflow: "hidden",
+    borderRadius: 27,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.8)",
+    gap: 4,
+  },
+  time: {
+    fontVariant: ["tabular-nums"],
+    fontSize: 54,
+    fontWeight: "800",
+    letterSpacing: -3,
+    color: "#161e3a",
+    textAlign: "left",
+  },
+  underTime: { width: "100%", marginBottom: 7 },
+  progressTrack: {
+    width: "100%",
+    height: 4,
+    marginTop: 4,
+    borderRadius: 2,
+    backgroundColor: "#c1c9e8",
+    overflow: "hidden",
+  },
+  progressBar: {
+    height: "100%",
+    backgroundColor: "#922454",
+    borderRadius: 2,
+  },
+  subject: {
+    maxWidth: 440,
+    fontSize: 24,
+    fontWeight: "700",
+    lineHeight: 30,
+    textAlign: "left",
+    color: "#161e3a",
+  },
+  type: { fontSize: 13, fontWeight: "700", color: "#334597" },
+  room: { color: "#303a59", fontSize: 15 },
+  muted: { color: "#485373", fontSize: 13 },
+  emptyTitle: {
+    color: "#161e3a",
+    textAlign: "left",
+    fontSize: 22,
+    fontWeight: "700",
+  },
+  bottom: { width: "100%", maxWidth: 440, alignSelf: "center", gap: 3 },
+  following: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.82)",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 22,
+  },
+  followingContent: { flex: 1 },
+  followingTitle: {
+    marginTop: 3,
+    color: "#161e3a",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  cache: {
+    color: "#414c74",
+    fontSize: 11,
+    textAlign: "center",
+    marginTop: 4,
+  },
+  action: {
+    minHeight: 44,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingHorizontal: 8,
+  },
+  subjectAction: { alignSelf: "flex-start", paddingHorizontal: 0 },
+  actionText: { color: "#273ca7", fontSize: 14, fontWeight: "700" },
+});

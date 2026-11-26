@@ -179,7 +179,7 @@ const createStyles = (colors: Palette) =>
   StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: colors.canvas,
+      backgroundColor: "transparent",
     },
     contentContainer: {
       padding: 20,
@@ -209,10 +209,10 @@ const createStyles = (colors: Palette) =>
       paddingVertical: 8,
       borderRadius: 16,
       borderWidth: 1,
-      borderColor: "#223554",
+      borderColor: colors.line,
     },
     filterChipActive: {
-      backgroundColor: "#3378ff",
+      backgroundColor: "#4556cb",
       borderColor: colors.link,
     },
     filterChipText: {
