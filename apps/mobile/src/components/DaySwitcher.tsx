@@ -1,3 +1,4 @@
+import { GlassFill } from "./GlassFill";
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 
@@ -13,31 +14,26 @@ export type DaySwitcherProps = {
   days: DayItem[];
   selectedDate: string;
   onSelectDate: (date: string) => void;
-  onPrevDay: () => void;
-  onNextDay: () => void;
   onPrevWeek?: () => void;
   onNextWeek?: () => void;
-  onResetToday?: () => void;
   monthYearLabel: string;
   weekParity: string;
-  isTodaySelected?: boolean;
 };
 
 export const DaySwitcher: React.FC<DaySwitcherProps> = ({
   days,
   selectedDate,
   onSelectDate,
-  onPrevDay,
-  onNextDay,
   onPrevWeek,
   onNextWeek,
-  onResetToday,
   monthYearLabel,
   weekParity,
-  isTodaySelected,
 }) => {
+  const styles = createStyles;
+
   return (
     <View style={styles.container}>
+      <GlassFill />
       {/* Month, Parity and Week navigation */}
       <View style={styles.headerRow}>
         <View style={styles.arrowGroup}>
@@ -51,30 +47,16 @@ export const DaySwitcher: React.FC<DaySwitcherProps> = ({
               <Text style={styles.weekArrowText}>«</Text>
             </TouchableOpacity>
           )}
-          <TouchableOpacity
-            onPress={onPrevDay}
-            style={styles.navArrow}
-            accessibilityLabel="Предыдущий день"
-            accessibilityRole="button"
-          >
-            <Text style={styles.arrowText}>‹</Text>
-          </TouchableOpacity>
         </View>
 
         <View style={styles.headerCenter}>
-          <Text style={styles.monthText}>{monthYearLabel}</Text>
-          <Text style={styles.parityText}>{weekParity}</Text>
+          <Text style={styles.monthText}>Неделя</Text>
+          <Text style={styles.parityText}>
+            {monthYearLabel} · {weekParity}
+          </Text>
         </View>
 
         <View style={styles.arrowGroup}>
-          <TouchableOpacity
-            onPress={onNextDay}
-            style={styles.navArrow}
-            accessibilityLabel="Следующий день"
-            accessibilityRole="button"
-          >
-            <Text style={styles.arrowText}>›</Text>
-          </TouchableOpacity>
           {onNextWeek && (
             <TouchableOpacity
               onPress={onNextWeek}
@@ -142,39 +124,26 @@ export const DaySwitcher: React.FC<DaySwitcherProps> = ({
           );
         })}
       </View>
-
-      {/* Quick return to today button if viewing another day/week */}
-      {isTodaySelected === false && onResetToday && (
-        <TouchableOpacity
-          onPress={onResetToday}
-          style={styles.todayBar}
-          activeOpacity={0.7}
-          accessibilityRole="button"
-          accessibilityLabel="Вернуться к сегодняшнему дню"
-        >
-          <Text style={styles.todayBarText}>Вернуться к сегодняшнему дню</Text>
-        </TouchableOpacity>
-      )}
     </View>
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = StyleSheet.create({
   container: {
     paddingVertical: 8,
     paddingHorizontal: 8,
-    backgroundColor: "rgba(15, 23, 42, 0.4)",
-    borderRadius: 18,
+    overflow: "hidden",
+    borderRadius: 24,
     marginHorizontal: 16,
-    marginBottom: 16,
+    marginBottom: 8,
     borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.04)",
+    borderColor: "#f7f8ff",
   },
   headerRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 10,
+    marginBottom: 2,
     paddingHorizontal: 4,
   },
   arrowGroup: {
@@ -182,31 +151,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 4,
   },
-  navArrow: {
-    width: 36,
-    height: 36,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 18,
-    backgroundColor: "rgba(255, 255, 255, 0.05)",
-  },
   weekArrow: {
-    width: 36,
-    height: 36,
+    width: 44,
+    height: 44,
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 18,
     backgroundColor: "rgba(147, 197, 253, 0.08)",
   },
-  arrowText: {
-    fontSize: 20,
-    color: "#cbd5e1",
-    fontWeight: "700",
-    lineHeight: 22,
-  },
   weekArrowText: {
     fontSize: 16,
-    color: "#93c5fd",
+    color: "#273ca7",
     fontWeight: "700",
     lineHeight: 18,
   },
@@ -216,13 +171,13 @@ const styles = StyleSheet.create({
   monthText: {
     fontSize: 15,
     fontWeight: "700",
-    color: "#f8fafc",
+    color: "#161e3a",
     letterSpacing: -0.2,
     textTransform: "capitalize",
   },
   parityText: {
     fontSize: 11,
-    color: "#94a3b8",
+    color: "#475373",
     fontWeight: "600",
     marginTop: 1,
   },
@@ -240,7 +195,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   dayPillActive: {
-    backgroundColor: "#cfc6ff",
+    backgroundColor: "#4256c5",
   },
   dayPillToday: {
     borderWidth: 1,
@@ -262,19 +217,19 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   textActive: {
-    color: "#0b1a2d",
+    color: "#ffffff",
   },
   textInactive: {
-    color: "#f1f5f9",
+    color: "#161e3a",
   },
   textToday: {
-    color: "#93c5fd",
+    color: "#273ca7",
   },
   labelActive: {
-    color: "#0b1a2d",
+    color: "#ffffff",
   },
   labelInactive: {
-    color: "#64748b",
+    color: "#515d7a",
   },
   dotContainer: {
     height: 4,
@@ -288,7 +243,7 @@ const styles = StyleSheet.create({
     borderRadius: 2,
   },
   dotActive: {
-    backgroundColor: "#0b1a2d",
+    backgroundColor: "#ffffff",
   },
   dotInactive: {
     backgroundColor: "#818cf8",
@@ -296,19 +251,5 @@ const styles = StyleSheet.create({
   dotSpacer: {
     width: 4,
     height: 4,
-  },
-  todayBar: {
-    marginTop: 8,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 8,
-    backgroundColor: "rgba(147, 197, 253, 0.08)",
-  },
-  todayBarText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#93c5fd",
   },
 });

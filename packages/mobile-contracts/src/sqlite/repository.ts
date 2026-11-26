@@ -255,9 +255,6 @@ export class TimetableSqliteRepository {
       INSERT INTO pending_operations (
         id, user_id, task_id, action, payload_json, created_at, status
       ) VALUES (?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(id) DO UPDATE SET
-        payload_json = excluded.payload_json,
-        status = excluded.status
       `,
       [
         op.id,
@@ -282,7 +279,7 @@ export class TimetableSqliteRepository {
       created_at: string;
       status: "PENDING" | "SYNCING" | "FAILED";
     }>(
-      `SELECT * FROM pending_operations WHERE user_id = ? ORDER BY created_at ASC`,
+      `SELECT * FROM pending_operations WHERE user_id = ? ORDER BY rowid ASC`,
       [userId],
     );
     return rows.map((r) => ({
@@ -314,7 +311,25 @@ export class TimetableSqliteRepository {
 
   async clearUserPendingOperations(userId: string): Promise<void> {
     await this.init();
-    await this.db.run(`DELETE FROM pending_operations WHERE user_id = ?`, [userId]);
+    await this.db.run(`DELETE FROM pending_operations WHERE user_id = ?`, [
+      userId,
+    ]);
+  }
+
+  async enqueueProgressOperation(
+    progress: UserTaskProgress,
+    operation: PendingOperation,
+  ): Promise<void> {
+    await this.init();
+    if (
+      progress.userId !== operation.userId ||
+      progress.taskId !== operation.taskId
+    )
+      throw Error("Operation scope mismatch");
+    await this.db.transaction(async () => {
+      await this.saveUserProgress(progress);
+      await this.addPendingOperation(operation);
+    });
   }
 
   async saveUserProgress(progress: UserTaskProgress): Promise<void> {
@@ -345,6 +360,14 @@ export class TimetableSqliteRepository {
     );
   }
 
+  async deleteUserProgress(userId: string, taskId: string): Promise<void> {
+    await this.init();
+    await this.db.run(
+      `DELETE FROM user_task_progress WHERE user_id = ? AND task_id = ?`,
+      [userId, taskId],
+    );
+  }
+
   async getUserProgress(
     userId: string,
     taskId: string,
@@ -353,16 +376,17 @@ export class TimetableSqliteRepository {
     const row = await this.db.get<{
       user_id: string;
       task_id: string;
-      status: "NOT_STARTED" | "IN_PROGRESS" | "READY" | "SUBMITTED" | "ACCEPTED";
+      status:
+        "NOT_STARTED" | "IN_PROGRESS" | "READY" | "SUBMITTED" | "ACCEPTED";
       is_verified: number;
       student_notes: string | null;
       completed_at: string | null;
       updated_at: string;
       sync_state: "SYNCED" | "PENDING_SYNC" | "FAILED";
-    }>(
-      `SELECT * FROM user_task_progress WHERE user_id = ? AND task_id = ?`,
-      [userId, taskId],
-    );
+    }>(`SELECT * FROM user_task_progress WHERE user_id = ? AND task_id = ?`, [
+      userId,
+      taskId,
+    ]);
     if (!row) return null;
     return {
       userId: row.user_id,
@@ -381,16 +405,14 @@ export class TimetableSqliteRepository {
     const rows = await this.db.all<{
       user_id: string;
       task_id: string;
-      status: "NOT_STARTED" | "IN_PROGRESS" | "READY" | "SUBMITTED" | "ACCEPTED";
+      status:
+        "NOT_STARTED" | "IN_PROGRESS" | "READY" | "SUBMITTED" | "ACCEPTED";
       is_verified: number;
       student_notes: string | null;
       completed_at: string | null;
       updated_at: string;
       sync_state: "SYNCED" | "PENDING_SYNC" | "FAILED";
-    }>(
-      `SELECT * FROM user_task_progress WHERE user_id = ?`,
-      [userId],
-    );
+    }>(`SELECT * FROM user_task_progress WHERE user_id = ?`, [userId]);
     return rows.map((row) => ({
       userId: row.user_id,
       taskId: row.task_id,
@@ -455,7 +477,9 @@ export class TimetableSqliteRepository {
     };
   }
 
-  async getAllDownloadedMaterials(userId: string): Promise<DownloadedMaterial[]> {
+  async getAllDownloadedMaterials(
+    userId: string,
+  ): Promise<DownloadedMaterial[]> {
     await this.init();
     const rows = await this.db.all<{
       material_id: string;
@@ -485,7 +509,10 @@ export class TimetableSqliteRepository {
     }));
   }
 
-  async deleteDownloadedMaterial(userId: string, materialId: string): Promise<void> {
+  async deleteDownloadedMaterial(
+    userId: string,
+    materialId: string,
+  ): Promise<void> {
     await this.init();
     await this.db.run(
       `DELETE FROM downloaded_materials WHERE user_id = ? AND material_id = ?`,
@@ -493,7 +520,9 @@ export class TimetableSqliteRepository {
     );
   }
 
-  async saveScheduledNotification(notif: ScheduledNotificationRecord): Promise<void> {
+  async saveScheduledNotification(
+    notif: ScheduledNotificationRecord,
+  ): Promise<void> {
     await this.init();
     await this.db.run(
       `INSERT OR REPLACE INTO scheduled_notifications
@@ -514,7 +543,9 @@ export class TimetableSqliteRepository {
     );
   }
 
-  async getScheduledNotification(id: string): Promise<ScheduledNotificationRecord | null> {
+  async getScheduledNotification(
+    id: string,
+  ): Promise<ScheduledNotificationRecord | null> {
     await this.init();
     const row = await this.db.get<{
       id: string;
@@ -602,96 +633,75 @@ export class TimetableSqliteRepository {
 
   async clearUserData(userId: string): Promise<void> {
     await this.init();
-    await this.db.run(`DELETE FROM pending_operations WHERE user_id = ?`, [userId]);
-    await this.db.run(`DELETE FROM user_task_progress WHERE user_id = ?`, [userId]);
-    await this.db.run(`DELETE FROM downloaded_materials WHERE user_id = ?`, [userId]);
-    await this.db.run(`DELETE FROM scheduled_notifications WHERE user_id = ?`, [userId]);
+    const scope = `user:${userId}`;
+    const prefix = `${scope}|origin:`;
+    await this.db.run(
+      `DELETE FROM scoped_cached_tasks WHERE scope_key = ? OR substr(scope_key,1,?) = ?`,
+      [scope, prefix.length, prefix],
+    );
+    await this.db.run(`DELETE FROM pending_operations WHERE user_id = ?`, [
+      userId,
+    ]);
+    await this.db.run(`DELETE FROM user_task_progress WHERE user_id = ?`, [
+      userId,
+    ]);
+    await this.db.run(`DELETE FROM downloaded_materials WHERE user_id = ?`, [
+      userId,
+    ]);
+    await this.db.run(`DELETE FROM scheduled_notifications WHERE user_id = ?`, [
+      userId,
+    ]);
   }
 
   async saveCachedTasksForGroup(
     groupCode: string,
     tasks: CachedTask[],
+    userId?: string,
+    apiOrigin?: string,
   ): Promise<void> {
     await this.init();
+    const baseScope = userId ? `user:${userId}` : "guest";
+    const scope = apiOrigin
+      ? `${baseScope}|origin:${new URL(apiOrigin).origin}`
+      : baseScope;
     await this.db.transaction(async () => {
-      await this.db.run(`DELETE FROM cached_tasks WHERE group_code = ?`, [groupCode]);
-      const now = new Date().toISOString();
-      for (const t of tasks) {
+      await this.db.run(
+        `DELETE FROM scoped_cached_tasks WHERE scope_key = ? AND group_code = ?`,
+        [scope, groupCode],
+      );
+      for (const task of tasks) {
+        if (task.groupCode !== groupCode)
+          throw Error("Task cache group mismatch");
         await this.db.run(
-          `INSERT INTO cached_tasks (
-            id, group_code, title, subject, type,
-            deadline_id, deadline_date, deadline_moscow_str, deadline_status,
-            material_id, material_title, material_filename, material_byte_size,
-            material_mime_type, material_sha256, updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO scoped_cached_tasks (scope_key, group_code, id, payload_json, updated_at) VALUES (?, ?, ?, ?, ?)`,
           [
-            t.id,
+            scope,
             groupCode,
-            t.title,
-            t.subject,
-            t.type,
-            t.deadlineId,
-            t.deadlineDate,
-            t.deadlineMoscowStr,
-            t.deadlineStatus,
-            t.materialId,
-            t.materialTitle,
-            t.materialFilename,
-            t.materialByteSize,
-            t.materialMimeType,
-            t.materialSha256,
-            now,
+            task.id,
+            JSON.stringify(task),
+            new Date().toISOString(),
           ],
         );
       }
     });
   }
 
-  async getCachedTasksForGroup(groupCode: string): Promise<CachedTask[]> {
+  async getCachedTasksForGroup(
+    groupCode: string,
+    userId?: string,
+    apiOrigin?: string,
+  ): Promise<CachedTask[]> {
     await this.init();
-    // Prune any legacy test artifacts so real academic work is never polluted
-    await this.db.run(
-      `DELETE FROM cached_tasks WHERE title LIKE '%[TEST]%' OR id LIKE 'test-%' OR id LIKE 'e2e-%'`,
+    // Legacy unscoped cache is deliberately not read: its audience is unknown.
+    // Preserve it rather than guessing ownership or deleting by title prefixes.
+    const baseScope = userId ? `user:${userId}` : "guest";
+    const scope = apiOrigin
+      ? `${baseScope}|origin:${new URL(apiOrigin).origin}`
+      : baseScope;
+    const rows = await this.db.all<{ payload_json: string }>(
+      `SELECT payload_json FROM scoped_cached_tasks WHERE scope_key = ? AND group_code = ? ORDER BY id`,
+      [scope, groupCode],
     );
-    const rows = await this.db.all<{
-      id: string;
-      group_code: string;
-      title: string;
-      subject: string;
-      type: string;
-      deadline_id: string | null;
-      deadline_date: string | null;
-      deadline_moscow_str: string | null;
-      deadline_status: string | null;
-      material_id: string | null;
-      material_title: string | null;
-      material_filename: string | null;
-      material_byte_size: number | null;
-      material_mime_type: string | null;
-      material_sha256: string | null;
-      updated_at: string;
-    }>(
-      `SELECT * FROM cached_tasks WHERE group_code = ? AND title NOT LIKE '%[TEST]%' ORDER BY deadline_date ASC, id ASC`,
-      [groupCode],
-    );
-
-    return rows.map((r) => ({
-      id: r.id,
-      groupCode: r.group_code,
-      title: r.title,
-      subject: r.subject,
-      type: r.type,
-      deadlineId: r.deadline_id,
-      deadlineDate: r.deadline_date,
-      deadlineMoscowStr: r.deadline_moscow_str,
-      deadlineStatus: r.deadline_status,
-      materialId: r.material_id,
-      materialTitle: r.material_title,
-      materialFilename: r.material_filename,
-      materialByteSize: r.material_byte_size,
-      materialMimeType: r.material_mime_type,
-      materialSha256: r.material_sha256,
-      updatedAt: r.updated_at,
-    }));
+    return rows.map((row) => JSON.parse(row.payload_json) as CachedTask);
   }
 }

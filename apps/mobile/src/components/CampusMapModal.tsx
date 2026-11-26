@@ -1,726 +1,466 @@
-import React, { useState, useMemo } from "react";
+import { WebView } from "react-native-webview";
+import {
+  useTheme,
+  useThemedStyles,
+  type Palette,
+} from "../theme/ThemeProvider";
+import React, { useMemo, useRef, useState } from "react";
 import {
   Modal,
   View,
   Text,
-  TouchableOpacity,
-  StyleSheet,
   Pressable,
-  ScrollView,
+  StyleSheet,
   TextInput,
+  ScrollView,
+  PanResponder,
+  Image as NativeImage,
   Linking,
-  Platform,
 } from "react-native";
+import Svg, { Image, Polyline, Circle } from "react-native-svg";
+import { indoorRoute, type IndoorNode } from "@studentvalue/mobile-contracts";
+import graph from "../../assets/indoor/main-building.json";
 
-export type CampusBuilding = {
-  id: string;
-  number: string;
-  name: string;
-  shortName: string;
-  category: "study" | "food" | "sport" | "admin" | "transport";
-  address: string;
-  coords: { lat: number; lng: number };
-  description: string;
-  typicalClasses: string;
-  entranceTips: string;
-  floorsInfo?: string;
-  hasDining?: boolean;
-};
-
-export const CAMPUS_BUILDINGS: CampusBuilding[] = [
-  {
-    id: "b3",
-    number: "3",
-    name: "3-й учебный корпус",
-    shortName: "3 к. (ФИСТ / ИКНК)",
-    category: "study",
-    address: "Политехническая ул., 29, лит. Н",
-    coords: { lat: 60.0028, lng: 30.3739 },
-    description: "Основной корпус для студентов направлений ИВТ и ИСиТ. Здесь расположены кафедры компьютерных технологий и аудитории компьютерной графики.",
-    typicalClasses: "Компьютерная графика, САПР, СОВД, Программирование (ауд. 402, 406, 408)",
-    entranceTips: "Вход с центральной аллеи парка. В холле гардероб и проходная по пропускам. Лифты расположены по центру.",
-    floorsInfo: "1 этаж: Буфет, гардероб. 4 этаж: Ауд. 402, 406, 408, деканат ИКНК.",
-    hasDining: true,
-  },
-  {
-    id: "guk",
-    number: "ГУК",
-    name: "Главный учебный корпус",
-    shortName: "Главный корпус (ГУК)",
-    category: "admin",
-    address: "Политехническая ул., 29",
-    coords: { lat: 60.0072, lng: 30.3722 },
-    description: "Историческое сердце университета с колоннами и парком. Здесь находятся Белый зал, Фундаментальная библиотека и Ректорат.",
-    typicalClasses: "Лекции общих потоков, торжественные мероприятия, Белый зал",
-    entranceTips: "Центральный парадный вход с широкой лестницей напротив метро Политехническая.",
-    floorsInfo: "1 этаж: Ректорат, гардероб. 2 этаж: Белый зал. 3 этаж: Фундаментальная библиотека.",
-    hasDining: true,
-  },
-  {
-    id: "nik",
-    number: "НИК",
-    name: "Научно-исследовательский корпус",
-    shortName: "НИК",
-    category: "study",
-    address: "Политехническая ул., 29АФ",
-    coords: { lat: 60.0051, lng: 30.3794 },
-    description: "Современный высокотехнологичный комплекс со стеклянным атриумом, лекториями, хакатонами и выставочными пространствами.",
-    typicalClasses: "Научные конференции, проектная деятельность, открытые лекции",
-    entranceTips: "Парадный стеклянный вход со стороны ул. Политехническая и парка.",
-    floorsInfo: "Атриум с кофейней, конференц-залы «Семенов», «Лезгинцев», лаборатории.",
-    hasDining: true,
-  },
-  {
-    id: "b1",
-    number: "1",
-    name: "1-й учебный корпус",
-    shortName: "1 к. (ФизМех)",
-    category: "study",
-    address: "Политехническая ул., 29Б",
-    coords: { lat: 60.0061, lng: 30.3745 },
-    description: "Физико-механический институт и кафедры высшей математики и теоретической механики.",
-    typicalClasses: "Математический анализ, общая физика, лекционные аудитории",
-    entranceTips: "Вход со стороны парка между ГУК и 2-м корпусом.",
-    floorsInfo: "Большая столовая на 1 этаже, лекционные аудитории 100-х и 200-х номеров.",
-    hasDining: true,
-  },
-  {
-    id: "b2",
-    number: "2",
-    name: "2-й учебный корпус",
-    shortName: "2 к. (Энерго)",
-    category: "study",
-    address: "Политехническая ул., 29В",
-    coords: { lat: 60.0053, lng: 30.3758 },
-    description: "Институт энергетики, кафедры электротехники и автоматики.",
-    typicalClasses: "Электротехника, схемотехника, электроника",
-    entranceTips: "Вход с аллеи со стороны Гидробашни.",
-    hasDining: false,
-  },
-  {
-    id: "b4",
-    number: "4",
-    name: "4-й учебный корпус",
-    shortName: "4 к. (Лабораторный)",
-    category: "study",
-    address: "Политехническая ул., 29, корп. 4",
-    coords: { lat: 60.0039, lng: 30.3725 },
-    description: "Физические лаборатории и специализированные исследовательские практикумы.",
-    typicalClasses: "Лабораторные работы по общей физике",
-    entranceTips: "Вход через двор со стороны 3-го корпуса.",
-    hasDining: false,
-  },
-  {
-    id: "b11",
-    number: "11",
-    name: "11-й учебный корпус",
-    shortName: "11 к. (Аудиторный)",
-    category: "study",
-    address: "Политехническая ул., 29, корп. 11",
-    coords: { lat: 60.0019, lng: 30.3781 },
-    description: "Учебные поточные аудитории и вычислительные лаборатории.",
-    typicalClasses: "Семинары, практики, иностранные языки",
-    entranceTips: "Вход со стороны ул. Гидротехников.",
-    hasDining: true,
-  },
-  {
-    id: "gidro",
-    number: "Гидро",
-    name: "Гидрокорпус-1 и Гидрокорпус-2",
-    shortName: "Гидрокорпус",
-    category: "study",
-    address: "Политехническая ул., 29, корп. 1-2",
-    coords: { lat: 60.0042, lng: 30.3775 },
-    description: "Инженерно-строительный институт и гидравлические лаборатории.",
-    typicalClasses: "Сопромат, гидравлика, строительная механика",
-    entranceTips: "Вход рядом со знаменитой водонапорной башней Политеха.",
-    hasDining: true,
-  },
-  {
-    id: "sport",
-    number: "СК",
-    name: "Спорткомплекс «Политехник»",
-    shortName: "Спорткомплекс",
-    category: "sport",
-    address: "Политехническая ул., 27",
-    coords: { lat: 60.0011, lng: 30.3698 },
-    description: "Главная спортивная арена СПбПУ: бассейн 50м, стадион, тренажёрные залы, секции.",
-    typicalClasses: "Физическая культура, сдача нормативов, спортивные секции",
-    entranceTips: "Вход с ул. Политехническая напротив парка.",
-    hasDining: false,
-  },
-  {
-    id: "imop",
-    number: "15",
-    name: "15-й корпус (ИМОП)",
-    shortName: "15 к. (ИМОП)",
-    category: "study",
-    address: "Гражданский пр., 28",
-    coords: { lat: 60.0058, lng: 30.3951 },
-    description: "Институт международных образовательных программ. Языковые кафедры.",
-    typicalClasses: "Иностранные языки, международные программы",
-    entranceTips: "Отдельный кампус у метро «Академическая». Вход с Гражданского проспекта.",
-    hasDining: true,
-  },
-  {
-    id: "metro_poly",
-    number: "М",
-    name: "Станция метро «Политехническая»",
-    shortName: "Метро Политехническая",
-    category: "transport",
-    address: "Политехническая пл.",
-    coords: { lat: 60.0089, lng: 30.3712 },
-    description: "Основной выход к ГУК, 1-му, 2-му и 3-му корпусам (красная 1-я линия метро).",
-    typicalClasses: "Транспортный узел",
-    entranceTips: "Выход из метро прямо в парк Политеха.",
-    hasDining: true,
-  },
-  {
-    id: "metro_acad",
-    number: "М",
-    name: "Станция метро «Академическая»",
-    shortName: "Метро Академическая",
-    category: "transport",
-    address: "Гражданский пр. / пр. Науки",
-    coords: { lat: 60.0125, lng: 30.3962 },
-    description: "Ближайшая станция к ИМОП (15-й корпус) и студенческому городку на ул. Хлопина.",
-    typicalClasses: "Транспортный узел",
-    entranceTips: "Пешком 5 минут до 15-го корпуса (Гражданский, 28).",
-    hasDining: true,
-  },
+const floors = [
+  require("../../assets/indoor/first_floor.png"),
+  require("../../assets/indoor/second_floor.png"),
+  require("../../assets/indoor/third_floor.png"),
 ];
-
-export type CampusMapModalProps = {
-  visible: boolean;
-  onClose: () => void;
-  initialBuildingNumber?: string;
-};
-
-export const CampusMapModal: React.FC<CampusMapModalProps> = ({
+const nodes: IndoorNode[] = graph.nodes;
+const rooms = nodes
+  .filter((n) => !n.intermediate && n.room && n.room !== "*Unknown*")
+  .sort((a, b) => a.room.localeCompare(b.room, "ru", { numeric: true }));
+const full = { x: 0, y: 0, width: graph.width, height: graph.height };
+export function CampusMapModal({
   visible,
   onClose,
-  initialBuildingNumber,
-}) => {
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState<string>("all");
-  const [selectedBuilding, setSelectedBuilding] = useState<CampusBuilding>(
-    () =>
-      CAMPUS_BUILDINGS.find((b) => b.number === initialBuildingNumber) ||
-      CAMPUS_BUILDINGS[0], // default 3rd building
+}: {
+  visible: boolean;
+  onClose: () => void;
+}) {
+  const { colors } = useTheme();
+  const s = useThemedStyles(createStyles);
+
+  const [view, setView] = useState<"campus" | "indoor">("indoor");
+  const [mapFailed, setMapFailed] = useState(false);
+  const [mapReload, setMapReload] = useState(0);
+  const [floor, setFloor] = useState(1);
+  const [query, setQuery] = useState("");
+  const [from, setFrom] = useState<IndoorNode | null>(null);
+  const [to, setTo] = useState<IndoorNode | null>(null);
+  const [mode, setMode] = useState<"from" | "to">("to");
+  const [box, setBox] = useState(full);
+  const size = useRef({ width: 1, height: 1 });
+  const start = useRef(full);
+  const pinch = useRef(0);
+  const boxRef = useRef(box);
+  boxRef.current = box;
+  const route = useMemo(
+    () => (from && to ? indoorRoute(nodes, from.id, to.id) : []),
+    [from, to],
   );
-
-  const filteredBuildings = useMemo(() => {
-    return CAMPUS_BUILDINGS.filter((b) => {
-      const matchCat =
-        selectedCategory === "all" ||
-        (selectedCategory === "study" && b.category === "study") ||
-        (selectedCategory === "food" && b.hasDining) ||
-        (selectedCategory === "sport" && b.category === "sport") ||
-        (selectedCategory === "transport" && b.category === "transport");
-
-      if (!matchCat) return false;
-
-      if (!searchQuery.trim()) return true;
-      const q = searchQuery.toLowerCase().trim();
-      return (
-        b.name.toLowerCase().includes(q) ||
-        b.number.toLowerCase().includes(q) ||
-        b.shortName.toLowerCase().includes(q) ||
-        b.address.toLowerCase().includes(q) ||
-        b.typicalClasses.toLowerCase().includes(q)
-      );
-    });
-  }, [searchQuery, selectedCategory]);
-
-  const handleOpenNavigation = (building: CampusBuilding) => {
-    const query = encodeURIComponent(`СПбПУ ${building.name} ${building.address}`);
-    const yandexUrl = `https://yandex.ru/maps/?text=${query}`;
-    Linking.openURL(yandexUrl).catch(() => {});
+  const responders = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: () => true,
+        onPanResponderGrant: (e) => {
+          start.current = boxRef.current;
+          const t = e.nativeEvent.touches;
+          pinch.current =
+            t.length === 2
+              ? Math.hypot(t[0].pageX - t[1].pageX, t[0].pageY - t[1].pageY)
+              : 0;
+        },
+        onPanResponderMove: (e, g) => {
+          const t = e.nativeEvent.touches;
+          const initial = start.current;
+          if (t.length === 2) {
+            const distance = Math.hypot(
+              t[0].pageX - t[1].pageX,
+              t[0].pageY - t[1].pageY,
+            );
+            if (!pinch.current) {
+              pinch.current = distance;
+              start.current = boxRef.current;
+              return;
+            }
+            const width = Math.max(
+              180,
+              Math.min(
+                graph.width,
+                (initial.width * pinch.current) / Math.max(distance, 1),
+              ),
+            );
+            const height = (width * graph.height) / graph.width;
+            setBox({
+              x: initial.x + (initial.width - width) / 2,
+              y: initial.y + (initial.height - height) / 2,
+              width,
+              height,
+            });
+          } else if (t.length === 1) {
+            const scale = Math.max(
+              initial.width / size.current.width,
+              initial.height / size.current.height,
+            );
+            setBox({
+              ...initial,
+              x: Math.max(
+                -initial.width / 2,
+                Math.min(
+                  graph.width - initial.width / 2,
+                  initial.x - g.dx * scale,
+                ),
+              ),
+              y: Math.max(
+                -initial.height / 2,
+                Math.min(
+                  graph.height - initial.height / 2,
+                  initial.y - g.dy * scale,
+                ),
+              ),
+            });
+          }
+        },
+      }),
+    [],
+  );
+  const select = (node: IndoorNode) => {
+    if (mode === "from") setFrom(node);
+    else setTo(node);
+    setFloor(node.floor);
+    setQuery("");
+    setBox({ x: node.x - 400, y: node.y - 225, width: 800, height: 450 });
   };
-
-  return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={onClose}
-    >
-      <Pressable style={styles.backdrop} onPress={onClose}>
-        <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
-          <View style={styles.handle} />
-
-          {/* Header */}
-          <View style={styles.headerRow}>
-            <View>
-              <Text style={styles.title}>Карта кампуса СПбПУ</Text>
-              <Text style={styles.subtitle}>
-                Корпуса, аудитории, столовые и входы Политеха
-              </Text>
-            </View>
-            <TouchableOpacity
-              onPress={onClose}
-              style={styles.closeBtn}
-              accessibilityRole="button"
-              accessibilityLabel="Закрыть карту"
-            >
-              <Text style={styles.closeBtnText}>✕</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Search Bar */}
-          <View style={styles.searchBarContainer}>
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Поиск корпуса (3, НИК, ГУК, столовая)..."
-              placeholderTextColor="#64748b"
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              autoCorrect={false}
-              clearButtonMode="while-editing"
-            />
-          </View>
-
-          {/* Category Filter Chips */}
-          <View style={styles.categoriesRow}>
-            {[
-              { id: "all", label: "Все" },
-              { id: "study", label: "Учебные" },
-              { id: "food", label: "Столовые" },
-              { id: "sport", label: "Спорт" },
-              { id: "transport", label: "Метро" },
-            ].map((cat) => {
-              const isActive = selectedCategory === cat.id;
-              return (
-                <TouchableOpacity
-                  key={cat.id}
-                  onPress={() => setSelectedCategory(cat.id)}
-                  style={[
-                    styles.catChip,
-                    isActive && styles.catChipActive,
-                  ]}
-                  accessibilityRole="button"
-                >
-                  <Text
-                    style={[
-                      styles.catChipText,
-                      isActive && styles.catChipTextActive,
-                    ]}
-                  >
-                    {cat.label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-
-          {/* Visual Campus Park Layout Schematic */}
-          <View style={styles.mapVisualContainer}>
-            <View style={styles.parkBackground}>
-              <View style={styles.parkTreeRow}>
-                <Text style={styles.parkLabel}>Парк Политехнического университета</Text>
-              </View>
-
-              {/* Interactive building badges on the mini-map */}
-              <View style={styles.miniMapGrid}>
-                {CAMPUS_BUILDINGS.slice(0, 9).map((b) => {
-                  const isSelected = selectedBuilding.id === b.id;
-                  return (
-                    <TouchableOpacity
-                      key={b.id}
-                      onPress={() => setSelectedBuilding(b)}
-                      style={[
-                        styles.mapPin,
-                        isSelected && styles.mapPinSelected,
-                        b.id === "b3" && styles.mapPinHome,
-                      ]}
-                      activeOpacity={0.7}
-                    >
-                      <Text
-                        style={[
-                          styles.mapPinText,
-                          isSelected && styles.mapPinTextSelected,
-                        ]}
-                      >
-                        {b.number}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            </View>
-          </View>
-
-          {/* Detail Card for Selected Building */}
-          {selectedBuilding && (
-            <View style={styles.buildingDetailCard}>
-              <View style={styles.detailHeaderRow}>
-                <View style={styles.detailTitleCol}>
-                  <View style={styles.numberBadge}>
-                    <Text style={styles.numberBadgeText}>
-                      {selectedBuilding.number}
-                    </Text>
-                  </View>
-                  <View style={styles.titleTextCol}>
-                    <Text style={styles.detailTitleText}>
-                      {selectedBuilding.name}
-                    </Text>
-                    <Text style={styles.detailAddressText}>
-                      {selectedBuilding.address}
-                    </Text>
-                  </View>
-                </View>
-
-                <TouchableOpacity
-                  onPress={() => handleOpenNavigation(selectedBuilding)}
-                  style={styles.routeBtn}
-                  accessibilityRole="button"
-                  accessibilityLabel="Открыть в Яндекс Картах"
-                >
-                  <Text style={styles.routeBtnText}>Маршрут ↗</Text>
-                </TouchableOpacity>
-              </View>
-
-              <ScrollView
-                style={styles.detailScroll}
-                showsVerticalScrollIndicator={false}
-              >
-                <View style={styles.infoBlock}>
-                  <Text style={styles.infoLabel}>Занятия и институты:</Text>
-                  <Text style={styles.infoContent}>
-                    {selectedBuilding.typicalClasses}
-                  </Text>
-                </View>
-
-                <View style={styles.infoBlock}>
-                  <Text style={styles.infoLabel}>Как войти и ориентироваться:</Text>
-                  <Text style={styles.infoContent}>
-                    {selectedBuilding.entranceTips}
-                  </Text>
-                </View>
-
-                {selectedBuilding.floorsInfo && (
-                  <View style={styles.infoBlock}>
-                    <Text style={styles.infoLabel}>Этажи и навигация:</Text>
-                    <Text style={styles.infoContent}>
-                      {selectedBuilding.floorsInfo}
-                    </Text>
-                  </View>
-                )}
-              </ScrollView>
-            </View>
-          )}
-
-          {/* Quick List of All Campus Buildings */}
-          <ScrollView
-            style={styles.buildingsListScroll}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.buildingsListContent}
-          >
-            {filteredBuildings.map((b) => {
-              const isSelected = selectedBuilding.id === b.id;
-              return (
-                <TouchableOpacity
-                  key={b.id}
-                  onPress={() => setSelectedBuilding(b)}
-                  style={[
-                    styles.buildingPill,
-                    isSelected && styles.buildingPillSelected,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.buildingPillNumber,
-                      isSelected && styles.buildingPillNumberSelected,
-                    ]}
-                  >
-                    {b.number}
-                  </Text>
-                  <Text
-                    style={[
-                      styles.buildingPillName,
-                      isSelected && styles.buildingPillNameSelected,
-                    ]}
-                    numberOfLines={1}
-                  >
-                    {b.shortName}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
+  const zoom = (factor: number) =>
+    setBox((v) => {
+      const width = Math.min(graph.width, Math.max(180, v.width * factor));
+      const height = (width * graph.height) / graph.width;
+      return {
+        x: v.x + (v.width - width) / 2,
+        y: v.y + (v.height - height) / 2,
+        width,
+        height,
+      };
+    });
+  const tabs = (
+    <View style={[s.row, { marginVertical: 10 }]}>
+      {(
+        [
+          { id: "campus", label: "Кампус" },
+          { id: "indoor", label: "Внутри главного" },
+        ] as const
+      ).map((tab) => (
+        <Pressable
+          key={tab.id}
+          accessibilityRole="tab"
+          accessibilityState={{ selected: view === tab.id }}
+          onPress={() => setView(tab.id)}
+          style={[s.chip, view === tab.id && s.active]}
+        >
+          <Text style={s.text}>{tab.label}</Text>
         </Pressable>
-      </Pressable>
+      ))}
+    </View>
+  );
+  if (view === "campus")
+    return (
+      <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
+        <View style={s.page}>
+          <View style={s.row}>
+            <Text style={s.title}>Кампус СПбПУ</Text>
+            <Pressable style={s.button} onPress={onClose}>
+              <Text style={s.link}>Закрыть</Text>
+            </Pressable>
+          </View>
+          {tabs}
+          <Text style={s.caption}>
+            Официальная схема университета · для загрузки нужен интернет
+          </Text>
+          {mapFailed ? (
+            <View style={{ flex: 1, justifyContent: "center" }}>
+              <Text style={s.text}>
+                Карта кампуса не загрузилась. Планы главного здания доступны без
+                интернета.
+              </Text>
+              <Pressable
+                style={s.button}
+                onPress={() => {
+                  setMapFailed(false);
+                  setMapReload((n) => n + 1);
+                }}
+              >
+                <Text style={s.link}>Повторить загрузку</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <WebView
+              key={mapReload}
+              style={{ flex: 1, backgroundColor: colors.canvas }}
+              source={{ uri: "https://yandex.ru/map-widget/v1/-/CCUMF8SFsC" }}
+              originWhitelist={["https://yandex.ru", "https://*.yandex.ru"]}
+              sharedCookiesEnabled={false}
+              thirdPartyCookiesEnabled={false}
+              incognito
+              geolocationEnabled={false}
+              allowFileAccess={false}
+              allowUniversalAccessFromFileURLs={false}
+              mixedContentMode="never"
+              setSupportMultipleWindows={false}
+              onError={() => setMapFailed(true)}
+              onHttpError={(event) => {
+                if (event.nativeEvent.statusCode >= 400) setMapFailed(true);
+              }}
+              onShouldStartLoadWithRequest={(request) => {
+                try {
+                  const url = new URL(request.url);
+                  return (
+                    url.protocol === "https:" &&
+                    (url.hostname === "yandex.ru" ||
+                      url.hostname.endsWith(".yandex.ru")) &&
+                    (url.pathname.startsWith("/map-widget/") ||
+                      url.pathname.startsWith("/maps/"))
+                  );
+                } catch {
+                  return false;
+                }
+              }}
+            />
+          )}
+          <Pressable
+            style={s.button}
+            onPress={() =>
+              Linking.openURL("https://www.spbstu.ru/campus-map/").catch(
+                () => {},
+              )
+            }
+          >
+            <Text style={s.credit}>Источник: СПбПУ · Яндекс.Карты ↗</Text>
+          </Pressable>
+        </View>
+      </Modal>
+    );
+  return (
+    <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
+      <View style={s.page}>
+        <View style={s.row}>
+          <Text style={s.title}>Главное здание</Text>
+          <Pressable
+            onPress={onClose}
+            accessibilityRole="button"
+            style={s.button}
+          >
+            <Text style={s.link}>Закрыть</Text>
+          </Pressable>
+        </View>
+        {tabs}
+        <Text style={s.caption}>
+          Планы трёх этажей · доступны без интернета
+        </Text>
+        <View style={s.row}>
+          {([1, 2, 3] as const).map((n) => (
+            <Pressable
+              key={n}
+              onPress={() => setFloor(n)}
+              style={[s.chip, n === floor && s.active]}
+            >
+              <Text style={s.text}>{n} этаж</Text>
+            </Pressable>
+          ))}
+          <Pressable onPress={() => setBox(full)} style={s.button}>
+            <Text style={s.link}>Весь план</Text>
+          </Pressable>
+        </View>
+        <View style={s.row}>
+          <Pressable
+            style={[s.endpoint, mode === "from" && s.active]}
+            onPress={() => setMode("from")}
+          >
+            <Text style={s.text}>Откуда: {from?.room ?? "выбрать"}</Text>
+          </Pressable>
+          <Pressable
+            style={[s.endpoint, mode === "to" && s.active]}
+            onPress={() => setMode("to")}
+          >
+            <Text style={s.text}>Куда: {to?.room ?? "выбрать"}</Text>
+          </Pressable>
+        </View>
+        <TextInput
+          style={s.input}
+          placeholder={
+            mode === "from"
+              ? "Начальная аудитория"
+              : "Найти аудиторию, например 225"
+          }
+          placeholderTextColor={colors.muted}
+          value={query}
+          onChangeText={setQuery}
+          autoCorrect={false}
+        />
+        {query.trim() ? (
+          <ScrollView style={{ maxHeight: 140 }}>
+            {rooms
+              .filter((n) =>
+                n.room
+                  .toLocaleLowerCase("ru")
+                  .includes(query.trim().toLocaleLowerCase("ru")),
+              )
+              .slice(0, 20)
+              .map((n) => (
+                <Pressable
+                  key={n.id}
+                  style={s.result}
+                  onPress={() => select(n)}
+                >
+                  <Text style={s.text}>
+                    {n.room} · {n.floor} этаж
+                  </Text>
+                </Pressable>
+              ))}
+          </ScrollView>
+        ) : null}
+        <View
+          style={s.map}
+          onLayout={(e) => {
+            size.current = e.nativeEvent.layout;
+          }}
+          {...responders.panHandlers}
+        >
+          <Svg
+            width="100%"
+            height="100%"
+            viewBox={`${box.x} ${box.y} ${box.width} ${box.height}`}
+          >
+            <Image
+              href={NativeImage.resolveAssetSource(floors[floor - 1])}
+              x={0}
+              y={0}
+              width={graph.width}
+              height={graph.height}
+            />
+            {route.map((node, i) =>
+              i > 0 && node.floor === floor && route[i - 1].floor === floor ? (
+                <Polyline
+                  key={node.id}
+                  points={`${route[i - 1].x},${route[i - 1].y} ${node.x},${node.y}`}
+                  stroke="#1969d9"
+                  strokeWidth={8}
+                  fill="none"
+                />
+              ) : null,
+            )}
+            {[from, to]
+              .filter((n): n is IndoorNode => n !== null && n.floor === floor)
+              .map((n, i) => (
+                <Circle
+                  key={`${n.id}-${i}`}
+                  cx={n.x}
+                  cy={n.y}
+                  r={15}
+                  fill={n.id === from?.id ? "#19804a" : "#ba244c"}
+                  stroke="white"
+                  strokeWidth={4}
+                />
+              ))}
+          </Svg>
+        </View>
+        <View style={s.row}>
+          <Pressable
+            accessibilityLabel="Уменьшить карту"
+            style={s.chip}
+            onPress={() => zoom(1.5)}
+          >
+            <Text style={s.text}>−</Text>
+          </Pressable>
+          <Pressable
+            accessibilityLabel="Увеличить карту"
+            style={s.chip}
+            onPress={() => zoom(1 / 1.5)}
+          >
+            <Text style={s.text}>＋</Text>
+          </Pressable>
+          <Text style={[s.caption, { flex: 1 }]}>
+            Двигайте и масштабируйте двумя пальцами
+          </Text>
+        </View>
+        {from && to ? (
+          <Text style={s.text}>
+            {route.length
+              ? `Маршрут: ${from.room} → ${to.room}${from.floor !== to.floor ? " · переход по лестнице, переключите этаж" : ""}`
+              : "В исходном графе маршрут не найден"}
+          </Text>
+        ) : null}
+        <Text style={s.caption}>
+          Неофициальная историческая схема PolyNavi. Покрытие: только главное
+          здание. Это не схема эвакуации; доступность проходов не подтверждена.
+        </Text>
+        <Pressable
+          onPress={() =>
+            Linking.openURL(
+              "https://github.com/AleksandrStarovoitov/PolyNavi",
+            ).catch(() => {})
+          }
+        >
+          <Text style={s.credit}>
+            Планы: Aleksandr Starovoitov · CC BY-NC-SA 4.0. Граф: PolyNavi · MIT
+            ↗
+          </Text>
+        </Pressable>
+      </View>
     </Modal>
   );
-};
-
-const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.65)",
-    justifyContent: "flex-end",
-  },
-  sheet: {
-    backgroundColor: "#0d1829",
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    paddingTop: 12,
-    paddingBottom: 36,
-    paddingHorizontal: 20,
-    borderWidth: 1,
-    borderColor: "#1e293b",
-    maxHeight: "92%",
-  },
-  handle: {
-    width: 44,
-    height: 5,
-    backgroundColor: "rgba(255, 255, 255, 0.2)",
-    borderRadius: 3,
-    alignSelf: "center",
-    marginBottom: 14,
-  },
-  headerRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    marginBottom: 12,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: "#f8fafc",
-    letterSpacing: -0.3,
-  },
-  subtitle: {
-    fontSize: 13,
-    color: "#8a9bb5",
-    marginTop: 2,
-  },
-  closeBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: "rgba(255, 255, 255, 0.06)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  closeBtnText: {
-    fontSize: 16,
-    color: "#94a3b8",
-    fontWeight: "700",
-  },
-  searchBarContainer: {
-    marginBottom: 10,
-  },
-  searchInput: {
-    backgroundColor: "rgba(255, 255, 255, 0.06)",
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    color: "#f8fafc",
-    fontSize: 14,
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.08)",
-  },
-  categoriesRow: {
-    flexDirection: "row",
-    gap: 6,
-    marginBottom: 12,
-  },
-  catChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    backgroundColor: "rgba(255, 255, 255, 0.04)",
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.06)",
-  },
-  catChipActive: {
-    backgroundColor: "rgba(59, 130, 246, 0.2)",
-    borderColor: "#3b82f6",
-  },
-  catChipText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#8a9bb5",
-  },
-  catChipTextActive: {
-    color: "#93c5fd",
-    fontWeight: "700",
-  },
-  mapVisualContainer: {
-    height: 110,
-    borderRadius: 16,
-    overflow: "hidden",
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.08)",
-  },
-  parkBackground: {
-    flex: 1,
-    backgroundColor: "#132338",
-    padding: 10,
-    justifyContent: "space-between",
-  },
-  parkTreeRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  parkLabel: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: "#64748b",
-    letterSpacing: 0.5,
-    textTransform: "uppercase",
-  },
-  miniMapGrid: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 6,
-  },
-  mapPin: {
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    borderRadius: 10,
-    backgroundColor: "rgba(255, 255, 255, 0.08)",
-    alignItems: "center",
-    justifyContent: "center",
-    minWidth: 32,
-  },
-  mapPinSelected: {
-    backgroundColor: "#2563eb",
-  },
-  mapPinHome: {
-    borderWidth: 1,
-    borderColor: "#38bdf8",
-  },
-  mapPinText: {
-    fontSize: 12,
-    fontWeight: "800",
-    color: "#cbd5e1",
-  },
-  mapPinTextSelected: {
-    color: "#ffffff",
-  },
-  buildingDetailCard: {
-    backgroundColor: "rgba(255, 255, 255, 0.03)",
-    borderRadius: 16,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.08)",
-    marginBottom: 12,
-  },
-  detailHeaderRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 10,
-    paddingBottom: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(255, 255, 255, 0.06)",
-  },
-  detailTitleCol: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    flex: 1,
-  },
-  numberBadge: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "#2563eb",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  numberBadgeText: {
-    fontSize: 14,
-    fontWeight: "800",
-    color: "#ffffff",
-  },
-  titleTextCol: {
-    flex: 1,
-  },
-  detailTitleText: {
-    fontSize: 16,
-    fontWeight: "800",
-    color: "#f8fafc",
-  },
-  detailAddressText: {
-    fontSize: 12,
-    color: "#8a9bb5",
-    marginTop: 1,
-  },
-  routeBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
-    backgroundColor: "rgba(59, 130, 246, 0.15)",
-    borderWidth: 1,
-    borderColor: "rgba(96, 165, 250, 0.3)",
-  },
-  routeBtnText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#93c5fd",
-  },
-  detailScroll: {
-    maxHeight: 120,
-  },
-  infoBlock: {
-    marginBottom: 8,
-  },
-  infoLabel: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#64748b",
-    textTransform: "uppercase",
-    marginBottom: 2,
-  },
-  infoContent: {
-    fontSize: 13,
-    color: "#e2e8f0",
-    lineHeight: 18,
-  },
-  buildingsListScroll: {
-    marginTop: 4,
-  },
-  buildingsListContent: {
-    gap: 8,
-    paddingVertical: 4,
-  },
-  buildingPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 12,
-    backgroundColor: "rgba(255, 255, 255, 0.04)",
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.06)",
-  },
-  buildingPillSelected: {
-    backgroundColor: "rgba(37, 99, 235, 0.2)",
-    borderColor: "#3b82f6",
-  },
-  buildingPillNumber: {
-    fontSize: 12,
-    fontWeight: "800",
-    color: "#93c5fd",
-  },
-  buildingPillNumberSelected: {
-    color: "#ffffff",
-  },
-  buildingPillName: {
-    fontSize: 12,
-    color: "#cbd5e1",
-    fontWeight: "600",
-  },
-  buildingPillNameSelected: {
-    color: "#ffffff",
-  },
-});
+}
+const createStyles = (colors: Palette) =>
+  StyleSheet.create({
+    page: {
+      flex: 1,
+      backgroundColor: colors.canvas,
+      padding: 16,
+      paddingTop: 32,
+      paddingBottom: 24,
+    },
+    title: { color: colors.text, fontSize: 24, fontWeight: "700", flex: 1 },
+    row: { flexDirection: "row", alignItems: "center", gap: 8 },
+    button: { minHeight: 48, justifyContent: "center", paddingHorizontal: 6 },
+    link: { color: colors.link, fontSize: 14 },
+    text: { color: colors.text, fontSize: 14, lineHeight: 20 },
+    caption: {
+      color: colors.muted,
+      fontSize: 12,
+      lineHeight: 17,
+      marginVertical: 8,
+    },
+    credit: { color: colors.link, fontSize: 11, lineHeight: 16 },
+    chip: {
+      paddingHorizontal: 16,
+      minHeight: 44,
+      justifyContent: "center",
+      borderRadius: 16,
+      backgroundColor: colors.surface,
+    },
+    active: { backgroundColor: colors.raised },
+    endpoint: {
+      flex: 1,
+      padding: 12,
+      borderRadius: 12,
+      backgroundColor: colors.surface,
+      minHeight: 48,
+    },
+    input: {
+      color: colors.text,
+      backgroundColor: colors.surface,
+      borderRadius: 12,
+      padding: 12,
+      marginVertical: 8,
+      minHeight: 48,
+    },
+    result: { padding: 12, borderBottomWidth: 1, borderColor: colors.line },
+    map: {
+      flex: 1,
+      backgroundColor: "#fff",
+      overflow: "hidden",
+      borderRadius: 12,
+      minHeight: 180,
+    },
+  });

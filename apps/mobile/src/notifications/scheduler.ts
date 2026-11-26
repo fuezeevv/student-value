@@ -1,3 +1,5 @@
+import { sessionGeneration, isCurrentSession } from "../auth/session-lifecycle";
+import type { CachedTask } from "@studentvalue/mobile-contracts";
 import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
 import type { ScheduledNotificationRecord } from "@studentvalue/mobile-contracts";
@@ -27,8 +29,14 @@ export async function setupNotificationChannels(): Promise<void> {
   channelConfigured = true;
 }
 
-export function buildNotificationIdentifier(taskId: string, deadlineId: string): string {
-  return `deadline-${taskId}-${deadlineId}`;
+export function buildNotificationIdentifier(
+  taskId: string,
+  deadlineId: string,
+  userId?: string,
+): string {
+  return userId
+    ? `deadline:${encodeURIComponent(userId)}:${encodeURIComponent(taskId)}:${encodeURIComponent(deadlineId)}`
+    : `deadline-${taskId}-${deadlineId}`;
 }
 
 export async function requestNotificationPermissions(): Promise<boolean> {
@@ -59,14 +67,18 @@ export function parseMoscowDeadline(deadlineStr: string): Date | null {
   if (isoMatch) {
     const [, y, m, d] = isoMatch;
     // 23:59:59.999 MSK = 20:59:59.999 UTC
-    return new Date(Date.UTC(Number(y), Number(m) - 1, Number(d), 20, 59, 59, 999));
+    return new Date(
+      Date.UTC(Number(y), Number(m) - 1, Number(d), 20, 59, 59, 999),
+    );
   }
 
   // DD.MM.YYYY
   const ruMatch = deadlineStr.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
   if (ruMatch) {
     const [, d, m, y] = ruMatch;
-    return new Date(Date.UTC(Number(y), Number(m) - 1, Number(d), 20, 59, 59, 999));
+    return new Date(
+      Date.UTC(Number(y), Number(m) - 1, Number(d), 20, 59, 59, 999),
+    );
   }
 
   return null;
@@ -74,38 +86,15 @@ export function parseMoscowDeadline(deadlineStr: string): Date | null {
 
 /**
  * Computes trigger time in UTC based on Moscow deadline:
- * 1. Default: 24h before deadline at 10:00 Moscow time (07:00 UTC).
+ * 1. Default: the previous day at 10:00 Moscow time (07:00 UTC).
  * 2. If 10:00 MSK 1-day prior has passed, but deadline is still in the future:
  *    trigger 2 hours before the deadline.
  * 3. If deadline is already past, returns null (never schedules reminders for past deadlines).
  */
-export function calculateReminderTriggerTime(
-  deadlineDate: Date,
-  nowMs = Date.now(),
-): Date | null {
-  const deadlineMs = deadlineDate.getTime();
-  if (deadlineMs <= nowMs) {
-    // Deadline is already in the past; do not schedule
-    return null;
-  }
+export { deadlineReminderTime as calculateReminderTriggerTime } from "@studentvalue/mobile-contracts";
+import { deadlineReminderTime as calculateReminderTriggerTime } from "@studentvalue/mobile-contracts";
 
-  // 1 day before at 10:00 MSK (07:00 UTC)
-  const oneDayBefore = new Date(deadlineMs - 24 * 3600 * 1000);
-  oneDayBefore.setUTCHours(7, 0, 0, 0);
-
-  if (oneDayBefore.getTime() > nowMs) {
-    return oneDayBefore;
-  }
-
-  // If 1-day-before has already passed, check 2 hours before deadline
-  const twoHoursBefore = new Date(deadlineMs - 2 * 3600 * 1000);
-  if (twoHoursBefore.getTime() > nowMs) {
-    return twoHoursBefore;
-  }
-
-  // If deadline is less than 2 hours away, notify immediately (within 10 seconds)
-  return new Date(nowMs + 10 * 1000);
-}
+const reminderVersions = new Map<string, number>();
 
 export async function scheduleDeadlineReminder(params: {
   userId: string;
@@ -114,36 +103,41 @@ export async function scheduleDeadlineReminder(params: {
   taskTitle: string;
   subjectName: string;
   deadlineDateStr: string; // ISO or DD.MM.YYYY / YYYY-MM-DD
-  testSecondsOverride?: number; // STRICTLY FOR TEST HARNESS ONLY
+  requestPermission?: boolean;
 }): Promise<ScheduledNotificationRecord | null> {
+  const generation = sessionGeneration();
+  const versionKey = JSON.stringify([params.userId, params.taskId]);
+  const version = (reminderVersions.get(versionKey) ?? 0) + 1;
+  reminderVersions.set(versionKey, version);
+  const valid = () =>
+    isCurrentSession(generation) &&
+    reminderVersions.get(versionKey) === version;
+  const deadlineUtc = parseMoscowDeadline(params.deadlineDateStr);
+  if (!deadlineUtc) return null;
+  const triggerDate = calculateReminderTriggerTime(deadlineUtc);
+  if (!triggerDate) return null;
   await setupNotificationChannels();
-  const hasPermission = await requestNotificationPermissions();
+  const hasPermission =
+    params.requestPermission === false
+      ? (await Notifications.getPermissionsAsync()).status === "granted"
+      : await requestNotificationPermissions();
+  if (!valid()) return null;
   if (!hasPermission) {
     console.warn("Notification permissions not granted");
     return null;
   }
 
-  const identifier = buildNotificationIdentifier(params.taskId, params.deadlineId);
+  const identifier =
+    buildNotificationIdentifier(
+      params.taskId,
+      params.deadlineId,
+      params.userId,
+    ) + `:session:${generation}:request:${version}`;
 
   // Cancel any existing notification with this identifier to prevent duplicates
   await Notifications.cancelScheduledNotificationAsync(identifier);
 
-  let triggerDate: Date | null = null;
-  if (params.testSecondsOverride !== undefined) {
-    triggerDate = new Date(Date.now() + params.testSecondsOverride * 1000);
-  } else {
-    const deadlineUtc = parseMoscowDeadline(params.deadlineDateStr);
-    if (!deadlineUtc) {
-      console.warn("Invalid deadline format:", params.deadlineDateStr);
-      return null;
-    }
-    triggerDate = calculateReminderTriggerTime(deadlineUtc);
-    if (!triggerDate) {
-      // Deadline has already passed
-      return null;
-    }
-  }
-
+  if (!valid()) return null;
   const title = `Дедлайн: ${params.subjectName}`;
   const body = `Срок сдачи «${params.taskTitle}» наступает скоро!`;
 
@@ -165,6 +159,10 @@ export async function scheduleDeadlineReminder(params: {
     },
   });
 
+  if (!valid()) {
+    await Notifications.cancelScheduledNotificationAsync(identifier);
+    return null;
+  }
   const record: ScheduledNotificationRecord = {
     id: identifier,
     userId: params.userId,
@@ -180,6 +178,11 @@ export async function scheduleDeadlineReminder(params: {
 
   const repo = getTimetableRepository();
   await repo.saveScheduledNotification(record);
+  if (!valid()) {
+    await Notifications.cancelScheduledNotificationAsync(identifier);
+    await repo.deleteScheduledNotification(identifier);
+    return null;
+  }
   return record;
 }
 
@@ -188,14 +191,21 @@ export async function cancelDeadlineReminder(
   taskId: string,
   deadlineId: string,
 ): Promise<void> {
-  const identifier = buildNotificationIdentifier(taskId, deadlineId);
-  try {
-    await Notifications.cancelScheduledNotificationAsync(identifier);
-  } catch (err) {
-    console.warn("Could not cancel native notification:", err);
-  }
+  const versionKey = JSON.stringify([userId, taskId]);
+  reminderVersions.set(versionKey, (reminderVersions.get(versionKey) ?? 0) + 1);
   const repo = getTimetableRepository();
-  await repo.deleteScheduledNotification(identifier);
+  const records = await repo.getScheduledNotificationsForTask(userId, taskId);
+  const identifiers = new Set([
+    buildNotificationIdentifier(taskId, deadlineId, userId),
+    buildNotificationIdentifier(taskId, deadlineId),
+    ...records
+      .filter((record) => record.deadlineId === deadlineId)
+      .map((record) => record.id),
+  ]);
+  for (const identifier of identifiers) {
+    await Notifications.cancelScheduledNotificationAsync(identifier);
+    await repo.deleteScheduledNotification(identifier);
+  }
 }
 
 /**
@@ -210,7 +220,11 @@ export async function rescheduleDeadlineReminder(params: {
   subjectName: string;
   newDeadlineDateStr: string;
 }): Promise<ScheduledNotificationRecord | null> {
-  await cancelDeadlineReminder(params.userId, params.taskId, params.oldDeadlineId);
+  await cancelDeadlineReminder(
+    params.userId,
+    params.taskId,
+    params.oldDeadlineId,
+  );
   return scheduleDeadlineReminder({
     userId: params.userId,
     taskId: params.taskId,
@@ -219,4 +233,91 @@ export async function rescheduleDeadlineReminder(params: {
     subjectName: params.subjectName,
     deadlineDateStr: params.newDeadlineDateStr,
   });
+}
+
+export async function activeReminderFlags(
+  userId: string,
+  tasks: CachedTask[],
+): Promise<Record<string, boolean>> {
+  if ((await Notifications.getPermissionsAsync()).status !== "granted")
+    return {};
+  const nativeIds = new Set(
+    (await Notifications.getAllScheduledNotificationsAsync()).map(
+      (item) => item.identifier,
+    ),
+  );
+  const flags: Record<string, boolean> = {};
+  const repo = getTimetableRepository();
+  for (const task of tasks) {
+    const records = await repo.getScheduledNotificationsForTask(
+      userId,
+      task.id,
+    );
+    flags[task.id] = records.some(
+      (record) =>
+        record.deadlineId === task.deadlineId &&
+        record.status === "SCHEDULED" &&
+        Date.parse(record.triggerTime) > Date.now() &&
+        nativeIds.has(record.id),
+    );
+  }
+  return flags;
+}
+
+/** Reconcile only the selected group's previously cached/now-authorized tasks.
+ * Other groups' alarms remain untouched. Existing opt-ins follow changed IDs. */
+export async function reconcileTaskReminders(
+  userId: string,
+  previous: CachedTask[],
+  current: CachedTask[],
+  completed: Set<string>,
+): Promise<void> {
+  const generation = sessionGeneration();
+  const repo = getTimetableRepository();
+  const targets = new Map(current.map((task) => [task.id, task]));
+  for (const taskId of new Set(
+    [...previous, ...current].map((task) => task.id),
+  )) {
+    if (!isCurrentSession(generation)) return;
+    const records = await repo.getScheduledNotificationsForTask(userId, taskId);
+    const target = targets.get(taskId);
+    if (!target || completed.has(taskId)) {
+      const versionKey = JSON.stringify([userId, taskId]);
+      reminderVersions.set(
+        versionKey,
+        (reminderVersions.get(versionKey) ?? 0) + 1,
+      );
+    }
+    if (!records.length) continue;
+    const expired = records.filter(
+      (record) =>
+        !target?.deadlineId ||
+        !target.deadlineDate ||
+        completed.has(taskId) ||
+        record.deadlineId !== target.deadlineId,
+    );
+    if (!expired.length) continue;
+    for (const record of expired) {
+      if (!isCurrentSession(generation)) return;
+      await Notifications.cancelScheduledNotificationAsync(record.id);
+      await repo.deleteScheduledNotification(record.id);
+    }
+    if (
+      target?.deadlineId &&
+      target.deadlineDate &&
+      !completed.has(taskId) &&
+      !records.some((record) => record.deadlineId === target.deadlineId)
+    ) {
+      if (!isCurrentSession(generation)) return;
+      await scheduleDeadlineReminder({
+        userId,
+        taskId: target.id,
+        deadlineId: target.deadlineId,
+        taskTitle: target.title,
+        subjectName: target.subject,
+        deadlineDateStr: target.deadlineDate,
+        requestPermission: false,
+      });
+    }
+  }
 }

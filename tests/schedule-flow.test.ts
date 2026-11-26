@@ -26,12 +26,23 @@ it("selects the next teaching day after classes end, not the first past class", 
   expect(scheduleFlow(days, "2026-11-17", "12:00").focus).toBeNull();
 });
 it("shows a current final class until the confirmed 90-minute duration ends", () => {
+  const active = scheduleFlow(days.slice(0, 1), "2026-11-13", "13:29");
+  expect(active.focus).toBe(active.current);
   expect(
     scheduleFlow(days.slice(0, 1), "2026-11-13", "13:29").focus?.lesson.start,
   ).toBe("12:00");
   expect(
     scheduleFlow(days.slice(0, 1), "2026-11-13", "13:30").focus,
   ).toBeNull();
+});
+it("uses the next scheduled date when today's known timetable is empty", () => {
+  const flow = scheduleFlow(
+    [{ date: "2026-11-15", lessons: [] }, ...days],
+    "2026-11-15",
+    "14:00",
+  );
+  expect(flow.focus?.date).toBe("2026-11-16");
+  expect(flow.current).toBeNull();
 });
 it("orders concurrent lessons consistently without losing alternatives", () => {
   const flow = scheduleFlow(

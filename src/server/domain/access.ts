@@ -49,9 +49,13 @@ export async function taskVisibilityWhere(
   };
 }
 
-export async function requireTaskAudience(user: SessionUser, taskId: string) {
-  const where = await taskVisibilityWhere(user);
-  const task = await prisma.task.findFirst({
+export async function requireTaskAudience(
+  user: SessionUser,
+  taskId: string,
+  db: Prisma.TransactionClient = prisma,
+) {
+  const where = await taskVisibilityWhere(user, db);
+  const task = await db.task.findFirst({
     where: { AND: [where, { id: taskId }] },
   });
   if (!task)

@@ -22,6 +22,7 @@ it("shows full formats and building names without repeating the building inside 
   expect(lessonType("Лаб")).toBe("Лабораторная");
   expect(teachingRoom("3-507")).toBe("Третий корпус · аудитория 507");
   expect(teachingRoom("3 к. · 3-507")).toBe("Третий корпус · аудитория 507");
+  expect(teachingRoom("3 к. 3-507")).toBe("Третий корпус · аудитория 507");
   expect(teachingRoom("3-й учебный корпус · 507")).toBe(
     "Третий корпус · аудитория 507",
   );

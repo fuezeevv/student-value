@@ -1,3 +1,8 @@
+import {
+  useTheme,
+  useThemedStyles,
+  type Palette,
+} from "../theme/ThemeProvider";
 import React from "react";
 import {
   Modal,
@@ -37,6 +42,9 @@ export const GroupPickerModal: React.FC<GroupPickerModalProps> = ({
   onSelectOrigin,
   onClose,
 }) => {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(createStyles);
+
   return (
     <Modal
       visible={visible}
@@ -90,10 +98,7 @@ export const GroupPickerModal: React.FC<GroupPickerModalProps> = ({
                     </Text>
                   </View>
                   <Text
-                    style={[
-                      styles.codeText,
-                      isSelected && styles.codeSelected,
-                    ]}
+                    style={[styles.codeText, isSelected && styles.codeSelected]}
                   >
                     {g.code}
                   </Text>
@@ -148,140 +153,141 @@ export const GroupPickerModal: React.FC<GroupPickerModalProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.65)",
-    justifyContent: "flex-end",
-  },
-  sheet: {
-    backgroundColor: "#0d1627",
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    borderWidth: 1,
-    borderColor: "#1d2d47",
-    padding: 20,
-    paddingBottom: 34,
-  },
-  handle: {
-    width: 36,
-    height: 4,
-    backgroundColor: "rgba(255, 255, 255, 0.2)",
-    borderRadius: 2,
-    alignSelf: "center",
-    marginBottom: 16,
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#ffffff",
-    textAlign: "center",
-    marginBottom: 4,
-  },
-  subtitle: {
-    fontSize: 12,
-    color: "#8a9bb5",
-    textAlign: "center",
-    marginBottom: 16,
-  },
-  grid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-between",
-    marginBottom: 16,
-  },
-  groupButton: {
-    width: "48%",
-    backgroundColor: "rgba(255, 255, 255, 0.04)",
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.08)",
-    borderRadius: 14,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    marginBottom: 10,
-    minHeight: 52,
-    justifyContent: "center",
-  },
-  groupButtonSelected: {
-    backgroundColor: "rgba(99, 102, 241, 0.18)",
-    borderColor: "#6366f1",
-  },
-  labelRow: {
-    flexDirection: "row",
-    alignItems: "baseline",
-    marginBottom: 2,
-  },
-  trackText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#8a9bb5",
-    marginRight: 6,
-  },
-  labelText: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#ffffff",
-  },
-  textSelected: {
-    color: "#a5b4fc",
-  },
-  codeText: {
-    fontSize: 11,
-    color: "#5b6e8a",
-    fontFamily: "monospace",
-  },
-  codeSelected: {
-    color: "#818cf8",
-  },
-  originSection: {
-    borderTopWidth: 1,
-    borderTopColor: "rgba(255, 255, 255, 0.08)",
-    paddingTop: 12,
-    marginBottom: 16,
-  },
-  originTitle: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#8a9bb5",
-    marginBottom: 8,
-  },
-  originRow: {
-    flexDirection: "column",
-    gap: 6,
-  },
-  originButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    backgroundColor: "rgba(255, 255, 255, 0.04)",
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.08)",
-    minHeight: 44,
-    justifyContent: "center",
-  },
-  originButtonSelected: {
-    backgroundColor: "rgba(99, 102, 241, 0.15)",
-    borderColor: "#6366f1",
-  },
-  originButtonText: {
-    fontSize: 12,
-    color: "#8a9bb5",
-  },
-  originButtonTextSelected: {
-    color: "#a5b4fc",
-    fontWeight: "600",
-  },
-  closeButton: {
-    backgroundColor: "rgba(255, 255, 255, 0.08)",
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: "center",
-    minHeight: 48,
-    justifyContent: "center",
-  },
-  closeButtonText: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#ffffff",
-  },
-});
+const createStyles = (colors: Palette) =>
+  StyleSheet.create({
+    backdrop: {
+      flex: 1,
+      backgroundColor: "rgba(0, 0, 0, 0.65)",
+      justifyContent: "flex-end",
+    },
+    sheet: {
+      backgroundColor: "#0d1627",
+      borderTopLeftRadius: 24,
+      borderTopRightRadius: 24,
+      borderWidth: 1,
+      borderColor: "#1d2d47",
+      padding: 20,
+      paddingBottom: 34,
+    },
+    handle: {
+      width: 36,
+      height: 4,
+      backgroundColor: "rgba(255, 255, 255, 0.2)",
+      borderRadius: 2,
+      alignSelf: "center",
+      marginBottom: 16,
+    },
+    title: {
+      fontSize: 18,
+      fontWeight: "700",
+      color: colors.text,
+      textAlign: "center",
+      marginBottom: 4,
+    },
+    subtitle: {
+      fontSize: 12,
+      color: colors.muted,
+      textAlign: "center",
+      marginBottom: 16,
+    },
+    grid: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      justifyContent: "space-between",
+      marginBottom: 16,
+    },
+    groupButton: {
+      width: "48%",
+      backgroundColor: colors.soft,
+      borderWidth: 1,
+      borderColor: colors.line,
+      borderRadius: 14,
+      paddingVertical: 12,
+      paddingHorizontal: 14,
+      marginBottom: 10,
+      minHeight: 52,
+      justifyContent: "center",
+    },
+    groupButtonSelected: {
+      backgroundColor: "rgba(99, 102, 241, 0.18)",
+      borderColor: "#6366f1",
+    },
+    labelRow: {
+      flexDirection: "row",
+      alignItems: "baseline",
+      marginBottom: 2,
+    },
+    trackText: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: colors.muted,
+      marginRight: 6,
+    },
+    labelText: {
+      fontSize: 15,
+      fontWeight: "700",
+      color: colors.text,
+    },
+    textSelected: {
+      color: colors.link,
+    },
+    codeText: {
+      fontSize: 11,
+      color: "#5b6e8a",
+      fontFamily: "monospace",
+    },
+    codeSelected: {
+      color: "#818cf8",
+    },
+    originSection: {
+      borderTopWidth: 1,
+      borderTopColor: colors.line,
+      paddingTop: 12,
+      marginBottom: 16,
+    },
+    originTitle: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: colors.muted,
+      marginBottom: 8,
+    },
+    originRow: {
+      flexDirection: "column",
+      gap: 6,
+    },
+    originButton: {
+      paddingVertical: 8,
+      paddingHorizontal: 12,
+      borderRadius: 8,
+      backgroundColor: colors.soft,
+      borderWidth: 1,
+      borderColor: colors.line,
+      minHeight: 44,
+      justifyContent: "center",
+    },
+    originButtonSelected: {
+      backgroundColor: "rgba(99, 102, 241, 0.15)",
+      borderColor: "#6366f1",
+    },
+    originButtonText: {
+      fontSize: 12,
+      color: colors.muted,
+    },
+    originButtonTextSelected: {
+      color: colors.link,
+      fontWeight: "600",
+    },
+    closeButton: {
+      backgroundColor: colors.soft,
+      borderRadius: 12,
+      paddingVertical: 14,
+      alignItems: "center",
+      minHeight: 48,
+      justifyContent: "center",
+    },
+    closeButtonText: {
+      fontSize: 15,
+      fontWeight: "600",
+      color: colors.onAccent,
+    },
+  });

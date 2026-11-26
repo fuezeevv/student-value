@@ -214,6 +214,7 @@ export default async function TodayPage({
         sourceUrl={ruzResult.data ? sourceUrl(ruzResult.data) : undefined}
         nowMoscowTime={nowMoscowTime}
         todayDateStr={todayDateStr}
+        requestedDay={params.week}
       />
 
       {/* Secondary: Announcements & Updates if available */}

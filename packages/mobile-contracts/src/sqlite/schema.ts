@@ -126,9 +126,24 @@ export const MIGRATIONS = [
         ON cached_tasks (group_code);
     `,
   },
+  {
+    version: 6,
+    sql: `
+      CREATE TABLE IF NOT EXISTS scoped_cached_tasks (
+        scope_key TEXT NOT NULL,
+        group_code TEXT NOT NULL,
+        id TEXT NOT NULL,
+        payload_json TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        PRIMARY KEY (scope_key, group_code, id)
+      );
+    `,
+  },
 ];
 
-export async function applySqliteMigrations(db: SqliteDatabase): Promise<number> {
+export async function applySqliteMigrations(
+  db: SqliteDatabase,
+): Promise<number> {
   // Ensure migrations table exists
   await db.exec(`
     CREATE TABLE IF NOT EXISTS schema_migrations (
