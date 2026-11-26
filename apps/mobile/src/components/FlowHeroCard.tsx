@@ -18,7 +18,7 @@ type FlowHeroCardProps = {
   isToday: boolean;
   isLoaded: boolean;
   totalLessonsToday: number;
-  current?: { attachedToFocus: boolean; subject: string; progress: number };
+  currentProgress?: number;
   following?: { lesson: MobileLesson; dateLabel?: string };
   stale: boolean;
   loading: boolean;
@@ -39,7 +39,7 @@ export function FlowHeroCard({
   isToday,
   isLoaded,
   totalLessonsToday,
-  current,
+  currentProgress,
   following,
   stale,
   loading,
@@ -52,7 +52,7 @@ export function FlowHeroCard({
   onNextDay,
   onResetToday,
 }: FlowHeroCardProps) {
-  const { colors } = useTheme();
+  const { isDark } = useTheme();
   const styles = useThemedStyles(createStyles);
   const emptyTitle = !isLoaded
     ? loading
@@ -71,7 +71,7 @@ export function FlowHeroCard({
           ? "Можно открыть другой день или перейти к работам."
           : null;
 
-  const progress = current && (
+  const progress = currentProgress !== undefined && (
     <View
       style={styles.progressTrack}
       accessible
@@ -80,10 +80,10 @@ export function FlowHeroCard({
       accessibilityValue={{
         min: 0,
         max: 100,
-        now: Math.round(current.progress),
+        now: Math.round(currentProgress),
       }}
     >
-      <View style={[styles.progressBar, { width: `${current.progress}%` }]} />
+      <View style={[styles.progressBar, { width: `${currentProgress}%` }]} />
     </View>
   );
 
@@ -97,16 +97,18 @@ export function FlowHeroCard({
             accessibilityRole="button"
             accessibilityLabel="Предыдущий день"
           >
-            <Text style={styles.arrowText}>‹</Text>
+            <Text style={[styles.arrowText, isDark && styles.darkDate]}>‹</Text>
           </Pressable>
-          <Text style={styles.date}>{dateLabel}</Text>
+          <Text style={[styles.date, isDark && styles.darkDate]}>
+            {dateLabel}
+          </Text>
           <Pressable
             onPress={onNextDay}
             style={styles.dayArrow}
             accessibilityRole="button"
             accessibilityLabel="Следующий день"
           >
-            <Text style={styles.arrowText}>›</Text>
+            <Text style={[styles.arrowText, isDark && styles.darkDate]}>›</Text>
           </Pressable>
         </View>
         {!isToday && (
@@ -115,7 +117,9 @@ export function FlowHeroCard({
             style={styles.action}
             accessibilityRole="button"
           >
-            <Text style={styles.actionText}>Сегодня</Text>
+            <Text style={[styles.actionText, isDark && styles.darkDate]}>
+              Сегодня
+            </Text>
           </Pressable>
         )}
       </View>
@@ -123,9 +127,16 @@ export function FlowHeroCard({
       <View style={styles.center}>
         {lesson ? (
           <>
-            {focusDayLabel && <Text style={styles.muted}>{focusDayLabel}</Text>}
+            <Text style={styles.eyebrow}>
+              {focusDayLabel ??
+                (currentProgress !== undefined
+                  ? "Текущая пара"
+                  : isToday
+                    ? "Ближайшая пара"
+                    : "Первая пара")}
+            </Text>
             <Text style={styles.time}>{lesson.start}</Text>
-            {current?.attachedToFocus && (
+            {currentProgress !== undefined && (
               <View style={styles.underTime}>{progress}</View>
             )}
             <Text style={styles.subject}>{lesson.subject}</Text>
@@ -139,13 +150,13 @@ export function FlowHeroCard({
             )}
             {lesson.note && <Text style={styles.muted}>{lesson.note}</Text>}
             <Pressable
-              style={styles.action}
+              style={[styles.action, styles.subjectAction]}
               onPress={() => onOpenSubject(lesson)}
               accessibilityRole="button"
               accessibilityLabel={`Открыть предмет ${lesson.subject}`}
             >
               <Text style={styles.actionText}>Открыть предмет</Text>
-              <ArrowUpRightIcon size={14} color={colors.link} />
+              <ArrowUpRightIcon size={14} color="#273ca7" />
             </Pressable>
           </>
         ) : (
@@ -157,14 +168,6 @@ export function FlowHeroCard({
       </View>
 
       <View style={styles.bottom}>
-        {current && !current.attachedToFocus && (
-          <View style={styles.current}>
-            <Text style={styles.muted} numberOfLines={2}>
-              {current.subject}
-            </Text>
-            {progress}
-          </View>
-        )}
         {following && onOpenFollowing && (
           <Pressable
             onPress={onOpenFollowing}
@@ -173,14 +176,14 @@ export function FlowHeroCard({
             accessibilityLabel={`Открыть день: ${following.dateLabel ?? dateLabel}, ${following.lesson.start}, ${following.lesson.subject}`}
           >
             <View style={styles.followingContent}>
-              <Text style={styles.type}>
+              <Text style={styles.eyebrow}>
                 {following.dateLabel ?? "Дальше"} · {following.lesson.start}
               </Text>
               <Text style={styles.followingTitle} numberOfLines={2}>
                 {following.lesson.subject}
               </Text>
             </View>
-            <ChevronDownIcon size={16} color={colors.muted} />
+            <ChevronDownIcon size={16} color="#414c74" />
           </Pressable>
         )}
         {stale && <Text style={styles.cache}>Сохранённое расписание РУЗ</Text>}
@@ -190,9 +193,11 @@ export function FlowHeroCard({
           accessibilityRole="button"
         >
           <Text style={styles.actionText}>
-            {lesson || totalLessonsToday ? "Все пары на день" : "Расписание и сроки"}
+            {lesson || totalLessonsToday
+              ? "Все пары на день"
+              : "Расписание и сроки"}
           </Text>
-          <ChevronDownIcon size={16} color={colors.link} />
+          <ChevronDownIcon size={16} color="#273ca7" />
         </Pressable>
       </View>
     </View>
@@ -201,7 +206,9 @@ export function FlowHeroCard({
 
 const createStyles = (colors: Palette) =>
   StyleSheet.create({
-    container: { paddingHorizontal: 20, paddingVertical: 10 },
+    container: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 4 },
+    darkDate: { color: "#f0f3ff" },
+    eyebrow: { fontSize: 14, fontWeight: "600", color: "#3d476a" },
     dateBlock: { alignItems: "center" },
     dateNav: {
       flexDirection: "row",
@@ -224,32 +231,37 @@ const createStyles = (colors: Palette) =>
       textAlign: "center",
     },
     center: {
-      alignItems: "center",
       justifyContent: "center",
       flexGrow: 1,
-      paddingVertical: 10,
-      gap: 5,
+      paddingHorizontal: 22,
+      paddingVertical: 22,
+      marginVertical: 5,
+      backgroundColor: "rgba(245,247,255,0.92)",
+      borderRadius: 27,
+      borderWidth: 1,
+      borderColor: "rgba(255,255,255,0.8)",
+      gap: 6,
     },
     time: {
-      fontFamily: "monospace",
-      fontSize: 58,
-      fontWeight: "300",
+      fontVariant: ["tabular-nums"],
+      fontSize: 60,
+      fontWeight: "800",
       letterSpacing: -3,
-      color: colors.text,
-      textAlign: "center",
+      color: "#161e3a",
+      textAlign: "left",
     },
-    underTime: { width: "60%", maxWidth: 220, marginBottom: 7 },
+    underTime: { width: "100%", marginBottom: 7 },
     progressTrack: {
       width: "100%",
       height: 4,
       marginTop: 4,
       borderRadius: 2,
-      backgroundColor: colors.line,
+      backgroundColor: "#c1c9e8",
       overflow: "hidden",
     },
     progressBar: {
       height: "100%",
-      backgroundColor: colors.danger,
+      backgroundColor: "#922454",
       borderRadius: 2,
     },
     subject: {
@@ -257,15 +269,15 @@ const createStyles = (colors: Palette) =>
       fontSize: 24,
       fontWeight: "700",
       lineHeight: 30,
-      textAlign: "center",
-      color: colors.text,
+      textAlign: "left",
+      color: "#161e3a",
     },
-    type: { fontSize: 13, fontWeight: "600", color: colors.danger },
-    room: { color: colors.text, fontSize: 15, textAlign: "center" },
-    muted: { color: colors.muted, fontSize: 14, textAlign: "center" },
+    type: { fontSize: 13, fontWeight: "700", color: "#334597" },
+    room: { color: "#303a59", fontSize: 15 },
+    muted: { color: "#485373", fontSize: 13 },
     emptyTitle: {
-      color: colors.text,
-      textAlign: "center",
+      color: "#161e3a",
+      textAlign: "left",
       fontSize: 22,
       fontWeight: "700",
     },
@@ -275,7 +287,7 @@ const createStyles = (colors: Palette) =>
       flexDirection: "row",
       alignItems: "center",
       gap: 10,
-      backgroundColor: colors.soft,
+      backgroundColor: "rgba(245,247,255,0.77)",
       paddingHorizontal: 14,
       paddingVertical: 10,
       borderRadius: 13,
@@ -283,12 +295,12 @@ const createStyles = (colors: Palette) =>
     followingContent: { flex: 1 },
     followingTitle: {
       marginTop: 3,
-      color: colors.text,
+      color: "#161e3a",
       fontSize: 14,
       fontWeight: "600",
     },
     cache: {
-      color: colors.muted,
+      color: "#414c74",
       fontSize: 11,
       textAlign: "center",
       marginTop: 4,
@@ -301,5 +313,6 @@ const createStyles = (colors: Palette) =>
       gap: 6,
       paddingHorizontal: 8,
     },
-    actionText: { color: colors.link, fontSize: 14, fontWeight: "600" },
+    subjectAction: { alignSelf: "flex-start", paddingHorizontal: 0 },
+    actionText: { color: "#273ca7", fontSize: 14, fontWeight: "700" },
   });

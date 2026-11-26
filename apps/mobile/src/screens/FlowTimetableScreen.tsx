@@ -1,3 +1,4 @@
+import Svg, { Defs, LinearGradient, Rect, Stop } from "react-native-svg";
 import { focusScope } from "../focus/storage";
 import { useNetInfo } from "@react-native-community/netinfo";
 import { BrandMark, OfflineMark } from "../components/BrandMark";
@@ -269,25 +270,21 @@ export const FlowTimetableScreen: React.FC = () => {
     [days, todayStr, nowMoscowMin, lookahead.week, liveFlow],
   );
   const focus = isSelectedToday
-    ? flow.focus
+    ? (flow.current ?? flow.focus)
     : lessons[0]
       ? { date: selectedDate, lesson: lessons[0] }
       : null;
   const following = isSelectedToday
-    ? flow.following[0]
+    ? flow.current && flow.focus !== flow.current
+      ? (flow.focus ?? undefined)
+      : flow.following[0]
     : lessons[1]
       ? { date: selectedDate, lesson: lessons[1] }
       : undefined;
-  const current =
+  const currentProgress =
     isSelectedToday && flow.current
-      ? {
-          attachedToFocus: flow.current === focus,
-          subject: flow.current.lesson.subject,
-          progress: calculateLessonProgress(
-            flow.current.lesson.start,
-            nowMoscowMin,
-          ).progressPercent,
-        }
+      ? calculateLessonProgress(flow.current.lesson.start, nowMoscowMin)
+          .progressPercent
       : undefined;
   const shownWeek =
     focus && weekStartFor(focus.date) !== weekStart
@@ -1043,50 +1040,88 @@ export const FlowTimetableScreen: React.FC = () => {
               />
             }
           >
-            <View
-              onLayout={(event) =>
-                setHeroHeight(event.nativeEvent.layout.height)
-              }
-            >
-              <FlowHeroCard
-                lesson={focus?.lesson ?? null}
-                focusDayLabel={
-                  focus && focus.date !== selectedDate
-                    ? formatFlowDate(focus.date)
-                    : undefined
+            <View>
+              <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+                <Svg width="100%" height="100%">
+                  <Defs>
+                    <LinearGradient
+                      id="flowSky"
+                      x1="0%"
+                      y1="0%"
+                      x2="18%"
+                      y2="100%"
+                    >
+                      <Stop
+                        offset="0"
+                        stopColor={isDark ? colors.canvas : "#d0dbff"}
+                      />
+                      <Stop
+                        offset="0.48"
+                        stopColor={isDark ? "#526dd2" : "#adbef7"}
+                      />
+                      <Stop offset="1" stopColor="#e6eaff" />
+                    </LinearGradient>
+                  </Defs>
+                  <Rect width="100%" height="100%" fill="url(#flowSky)" />
+                </Svg>
+              </View>
+              <View
+                onLayout={(event) =>
+                  setHeroHeight(event.nativeEvent.layout.height)
                 }
-                dateLabel={formatFlowDate(selectedDate)}
-                isToday={isSelectedToday}
-                isLoaded={isLoaded}
-                totalLessonsToday={lessons.length}
-                current={current}
-                following={
-                  following && {
-                    lesson: following.lesson,
-                    dateLabel:
-                      following.date === selectedDate
-                        ? undefined
-                        : formatFlowDate(following.date),
-                  }
-                }
-                stale={isStale}
-                loading={isSyncing || lookahead.syncing}
-                error={
-                  isLoaded
-                    ? needNextWeek
-                      ? lookahead.error
+              >
+                <FlowHeroCard
+                  lesson={focus?.lesson ?? null}
+                  focusDayLabel={
+                    focus && focus.date !== selectedDate
+                      ? formatFlowDate(focus.date)
                       : undefined
-                    : timetable.error
-                }
-                containerHeight={containerHeight}
-                onOpenSubject={handleOpenLesson}
-                onPrevDay={handlePrevDay}
-                onNextDay={handleNextDay}
-                onResetToday={handleResetToday}
-                onScrollCuePress={() => openDaySchedule(focus?.date)}
-                onOpenFollowing={
-                  following ? () => openDaySchedule(following.date) : undefined
-                }
+                  }
+                  dateLabel={formatFlowDate(selectedDate)}
+                  isToday={isSelectedToday}
+                  isLoaded={isLoaded}
+                  totalLessonsToday={lessons.length}
+                  currentProgress={currentProgress}
+                  following={
+                    following && {
+                      lesson: following.lesson,
+                      dateLabel:
+                        following.date === selectedDate
+                          ? undefined
+                          : formatFlowDate(following.date),
+                    }
+                  }
+                  stale={isStale}
+                  loading={isSyncing || lookahead.syncing}
+                  error={
+                    isLoaded
+                      ? needNextWeek
+                        ? lookahead.error
+                        : undefined
+                      : timetable.error
+                  }
+                  containerHeight={Math.max(0, containerHeight - 148)}
+                  onOpenSubject={handleOpenLesson}
+                  onPrevDay={handlePrevDay}
+                  onNextDay={handleNextDay}
+                  onResetToday={handleResetToday}
+                  onScrollCuePress={() => openDaySchedule(focus?.date)}
+                  onOpenFollowing={
+                    following
+                      ? () => openDaySchedule(following.date)
+                      : undefined
+                  }
+                />
+              </View>
+
+              <DaySwitcher
+                days={daySwitcherDays}
+                selectedDate={selectedDate}
+                onSelectDate={setSelectedDate}
+                onPrevWeek={handlePrevWeek}
+                onNextWeek={handleNextWeek}
+                monthYearLabel={monthYearLabel}
+                weekParity={weekParityLabel}
               />
             </View>
 
@@ -1099,20 +1134,6 @@ export const FlowTimetableScreen: React.FC = () => {
                   : undefined,
               ]}
             >
-              {/* Day & Week Switcher at top of schedule view */}
-              <DaySwitcher
-                days={daySwitcherDays}
-                selectedDate={selectedDate}
-                onSelectDate={setSelectedDate}
-                onPrevDay={handlePrevDay}
-                onNextDay={handleNextDay}
-                onPrevWeek={handlePrevWeek}
-                onNextWeek={handleNextWeek}
-                onResetToday={handleResetToday}
-                monthYearLabel={monthYearLabel}
-                weekParity={weekParityLabel}
-                isTodaySelected={selectedDate === todayStr}
-              />
               <ComparedSchedule
                 date={selectedDate}
                 primaryLabel={selectedGroup}
